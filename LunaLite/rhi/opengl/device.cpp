@@ -208,6 +208,28 @@ BufferHandle OpenGLDevice::createBuffer(const BufferDesc& desc, const void* data
     return static_cast<BufferHandle>(m_buffers.size());
 }
 
+void OpenGLDevice::updateBuffer(BufferHandle buffer, const void* data, size_t size)
+{
+    auto* glBuffer = getBuffer(buffer);
+    if (glBuffer == nullptr || data == nullptr || size > glBuffer->size) {
+        return;
+    }
+
+    glNamedBufferSubData(glBuffer->id, 0, static_cast<GLsizeiptr>(size), data);
+}
+
+void OpenGLDevice::destroyBuffer(BufferHandle buffer)
+{
+    auto* glBuffer = getBuffer(buffer);
+    if (glBuffer == nullptr) {
+        return;
+    }
+
+    glDeleteBuffers(1, &glBuffer->id);
+    glBuffer->id = 0;
+    glBuffer->size = 0;
+}
+
 ShaderHandle OpenGLDevice::createShader(const ShaderDesc& desc)
 {
     GLuint shader = glCreateShader(toGLShaderStage(desc.stage));
@@ -224,6 +246,17 @@ ShaderHandle OpenGLDevice::createShader(const ShaderDesc& desc)
 
     m_shaders.push_back(OpenGLShader{.id = shader, .stage = desc.stage});
     return static_cast<ShaderHandle>(m_shaders.size());
+}
+
+void OpenGLDevice::destroyShader(ShaderHandle shader)
+{
+    auto* glShader = getShader(shader);
+    if (glShader == nullptr) {
+        return;
+    }
+
+    glDeleteShader(glShader->id);
+    glShader->id = 0;
 }
 
 PipelineHandle OpenGLDevice::createPipeline(const PipelineDesc& desc)
@@ -268,6 +301,19 @@ PipelineHandle OpenGLDevice::createPipeline(const PipelineDesc& desc)
     return static_cast<PipelineHandle>(m_pipelines.size());
 }
 
+void OpenGLDevice::destroyPipeline(PipelineHandle pipeline)
+{
+    auto* glPipeline = getPipeline(pipeline);
+    if (glPipeline == nullptr) {
+        return;
+    }
+
+    glDeleteVertexArrays(1, &glPipeline->vao);
+    glDeleteProgram(glPipeline->program);
+    glPipeline->vao = 0;
+    glPipeline->program = 0;
+}
+
 CommandContext& OpenGLDevice::getImmediateCmdContext()
 {
     return *m_context;
@@ -275,6 +321,15 @@ CommandContext& OpenGLDevice::getImmediateCmdContext()
 
 OpenGLBuffer* OpenGLDevice::getBuffer(BufferHandle handle)
 {
+    if (handle == 0 || handle > m_buffers.size()) {
+        return nullptr;
+    }
+
+    auto& buffer = m_buffers[handle - 1];
+    if (buffer.id == 0) {
+        return nullptr;
+    }
+
     return &m_buffers[handle - 1];
 }
 

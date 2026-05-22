@@ -1,20 +1,51 @@
 #pragma once
-#include "../renderer/interface/triangle.h"
+#include "entity.h"
 
-#include <vector>
+#include <entt/entt.hpp>
+#include <utility>
 
 namespace lunalite::scene {
 class Scene {
 public:
     Scene() = default;
-    void addTriangle(renderer::interface::Triangle triangle);
 
-    const std::vector<renderer::interface::Triangle>& getTriangles() const
+    Entity createEntity();
+
+    template <typename T, typename... Args>
+    T& addComponent(Entity entity, Args&&... args)
     {
-        return m_triangles;
+        return m_registry.emplace<T>(entity.getHandle(), std::forward<Args>(args)...);
+    }
+
+    template <typename T>
+    T& getComponent(Entity entity)
+    {
+        return m_registry.get<T>(entity.getHandle());
+    }
+
+    template <typename T>
+    const T& getComponent(Entity entity) const
+    {
+        return m_registry.get<T>(entity.getHandle());
+    }
+
+    template <typename T>
+    bool hasComponent(Entity entity) const
+    {
+        return m_registry.all_of<T>(entity.getHandle());
+    }
+
+    entt::registry& getRegistry()
+    {
+        return m_registry;
+    }
+
+    const entt::registry& getRegistry() const
+    {
+        return m_registry;
     }
 
 private:
-    std::vector<renderer::interface::Triangle> m_triangles;
+    entt::registry m_registry;
 };
 } // namespace lunalite::scene

@@ -1,10 +1,14 @@
+#include "../asset/asset_database.h"
+#include "../asset/mesh_asset_loader.h"
 #include "../renderer/default_renderer/renderer.h"
-#include "../renderer/interface/triangle.h"
 #include "../rhi/backend_factory.h"
-#include "../rhi/opengl/instance.h"
+#include "../scene/components.h"
 #include "../scene/scene.h"
 #include "../scene/scene_renderer.h"
 #include "window.h"
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 int main()
 {
@@ -22,30 +26,25 @@ int main()
         return -1;
     }
 
+    lunalite::asset::AssetDatabase assets;
+    const auto cubeHandle = lunalite::asset::MeshAssetLoader::loadObj("../../../assets/cube.obj", assets);
     lunalite::scene::Scene scene;
-    scene.addTriangle(lunalite::renderer::interface::Triangle{
-        lunalite::renderer::interface::Vertex{
-            .position = {0.0f, 0.5f, 0.0f},
-            .normal = {0.0f, 0.0f, 1.0f},
-            .uv = {0.0f, 0.0f},
-            .color = {1.0f, 0.1f, 0.1f},
-        },
-        lunalite::renderer::interface::Vertex{
-            .position = {-0.5f, -0.5f, 0.0f},
-            .normal = {0.0f, 0.0f, 1.0f},
-            .uv = {0.0f, 0.0f},
-            .color = {0.1f, 1.0f, 0.1f},
-        },
-        lunalite::renderer::interface::Vertex{
-            .position = {0.5f, -0.5f, 0.0f},
-            .normal = {0.0f, 0.0f, 1.0f},
-            .uv = {0.0f, 0.0f},
-            .color = {0.1f, 0.3f, 1.0f},
-        },
-    });
 
     lunalite::renderer::Renderer renderer(*instance);
-    lunalite::scene::SceneRenderer scene_renderer(renderer);
+    lunalite::scene::SceneRenderer scene_renderer(renderer, assets);
+
+    {
+        auto entity = scene.createEntity();
+        scene.addComponent<lunalite::scene::TransformComponent>(entity);
+        auto& meshComp = scene.addComponent<lunalite::scene::MeshComponent>(entity);
+        meshComp.mesh = cubeHandle;
+    }
+
+    {
+        auto entity = scene.createEntity();
+        auto& light = scene.addComponent<lunalite::scene::DirectionalLightComponent>(entity);
+        light.direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
+    }
 
     while (!window.shouldClose()) {
         window.onUpdate();

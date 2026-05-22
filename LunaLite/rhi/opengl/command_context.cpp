@@ -16,7 +16,7 @@ void OpenGLCommandContext::beginFrame() {}
 void OpenGLCommandContext::clear(float r, float g, float b, float a)
 {
     glClearColor(r, g, b, a);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void OpenGLCommandContext::bindPipeline(PipelineHandle pipeline)
@@ -41,6 +41,16 @@ void OpenGLCommandContext::bindVertexBuffer(BufferHandle buffer)
     }
 
     glVertexArrayVertexBuffer(glPipeline->vao, 0, glBuffer->id, 0, glPipeline->vertex_layout.stride);
+}
+
+void OpenGLCommandContext::bindUniformBuffer(BufferHandle buffer, uint32_t binding)
+{
+    auto* glBuffer = m_device.getBuffer(buffer);
+    if (glBuffer == nullptr) {
+        return;
+    }
+
+    glBindBufferBase(GL_UNIFORM_BUFFER, binding, glBuffer->id);
 }
 
 void OpenGLCommandContext::draw(uint32_t vertex_count, uint32_t first_vertex)

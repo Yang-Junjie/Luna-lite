@@ -12,30 +12,30 @@ public:
 
     explicit operator uint64_t() const
     {
-        return m_UUID;
+        return m_uuid;
     }
 
     bool operator==(const UUID& other) const
     {
-        return m_UUID == other.m_UUID;
+        return m_uuid == other.m_uuid;
     }
 
     bool operator!=(const UUID& other) const
     {
-        return m_UUID != other.m_UUID;
+        return m_uuid != other.m_uuid;
     }
 
     std::string toString() const
     {
-        return std::to_string(m_UUID);
+        return std::to_string(m_uuid);
     }
 
     bool isValid() const
     {
-        return m_UUID != 0;
+        return m_uuid != 0;
     }
 
 private:
-    uint64_t m_UUID;
+    uint64_t m_uuid;
 };
 } // namespace lunalite::core

@@ -14,6 +14,7 @@ public:
     void clear(float r, float g, float b, float a) override;
     void bindPipeline(PipelineHandle pipeline) override;
     void bindVertexBuffer(BufferHandle buffer) override;
+    void bindUniformBuffer(BufferHandle buffer, uint32_t binding) override;
     void draw(uint32_t vertex_count, uint32_t first_vertex = 0) override;
     void endFrame() override;
     void present() override;

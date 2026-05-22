@@ -36,8 +36,15 @@ public:
     ~OpenGLDevice() override;
 
     BufferHandle createBuffer(const BufferDesc& desc, const void* data) override;
+    void updateBuffer(BufferHandle buffer, const void* data, size_t size) override;
+    void destroyBuffer(BufferHandle buffer) override;
+
     ShaderHandle createShader(const ShaderDesc& desc) override;
+    void destroyShader(ShaderHandle shader) override;
+
     PipelineHandle createPipeline(const PipelineDesc& desc) override;
+    void destroyPipeline(PipelineHandle pipeline) override;
+
     CommandContext& getImmediateCmdContext() override;
 
     OpenGLBuffer* getBuffer(BufferHandle handle);

@@ -17,12 +17,12 @@ UUID::UUID()
 {
     auto& rng = getRng();
     do {
-        m_UUID = rng();
-    } while (m_UUID == 0);
+        m_uuid = rng();
+    } while (m_uuid == 0);
 }
 
 UUID::UUID(uint64_t uuid)
-    : m_UUID(uuid)
+    : m_uuid(uuid)
 {}
 
 } // namespace lunalite::core

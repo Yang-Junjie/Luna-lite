@@ -40,8 +40,8 @@ enum class ShaderStage {
 
 enum class BufferType {
     VertexBuffer,
-    IndexBuffer
-    // UniformBuffer
+    IndexBuffer,
+    UniformBuffer
 };
 
 enum class BufferUsage {

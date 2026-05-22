@@ -25,6 +25,9 @@ bool OpenGLInstance::init(WindowHandle window)
     }
 
     glfwSwapInterval(1);
+
+    glEnable(GL_DEPTH_TEST);
+
     m_device = std::make_unique<OpenGLDevice>(m_native_window);
     return true;
 }

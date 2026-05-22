@@ -16,5 +16,9 @@ set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/glfw)
 add_subdirectory(third_party/glad)
 add_subdirectory(third_party/glm)
+add_subdirectory(third_party/entt)
+
+add_library(tiny_obj_loader INTERFACE)
+target_include_directories(tiny_obj_loader INTERFACE third_party/tiny_obj_loader)
 
 add_subdirectory(LunaLite)
