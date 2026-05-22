@@ -1,9 +1,12 @@
 add_library(LunaLiteRHI
     opengl/instance.cpp
+    opengl/device.cpp
+    opengl/command_context.cpp
+    backend_factory.cpp
 )
-
 target_link_libraries(LunaLiteRHI
     PUBLIC
         glfw
         glad::glad
+        glm::glm
 )

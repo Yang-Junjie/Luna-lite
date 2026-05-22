@@ -1,3 +1,4 @@
+#include "device.h"
 #include "instance.h"
 
 #include <glad/glad.h>
@@ -5,11 +6,18 @@
 
 namespace lunalite::rhi {
 
-bool OpenGLInstance::initialize(WindowHandle window)
-{
-    m_nativeWindow = window.nativeWindow;
+OpenGLInstance::~OpenGLInstance() = default;
 
-    auto* glfwWindow = static_cast<GLFWwindow*>(m_nativeWindow);
+
+bool OpenGLInstance::init(WindowHandle window)
+{
+    m_native_window = window.native_window;
+
+    auto* glfwWindow = static_cast<GLFWwindow*>(m_native_window);
+    if (glfwWindow == nullptr) {
+        return false;
+    }
+
     glfwMakeContextCurrent(glfwWindow);
 
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
@@ -17,23 +25,24 @@ bool OpenGLInstance::initialize(WindowHandle window)
     }
 
     glfwSwapInterval(1);
+    m_device = std::make_unique<OpenGLDevice>(m_native_window);
     return true;
 }
 
 void OpenGLInstance::shutdown()
 {
-    m_nativeWindow = nullptr;
-}
-
-void OpenGLInstance::present()
-{
-    auto* glfwWindow = static_cast<GLFWwindow*>(m_nativeWindow);
-    glfwSwapBuffers(glfwWindow);
+    m_device.reset();
+    m_native_window = nullptr;
 }
 
 void OpenGLInstance::resize(uint32_t width, uint32_t height)
 {
     glViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
+}
+
+Device* OpenGLInstance::getDevice()
+{
+    return m_device.get();
 }
 
 } // namespace lunalite::rhi

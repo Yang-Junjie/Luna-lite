@@ -1,0 +1,54 @@
+#pragma once
+#include "../interface/device.h"
+#include "../interface/rhi_types.h"
+
+#include <cstddef>
+
+#include <glad/glad.h>
+#include <memory>
+#include <vector>
+
+namespace lunalite::rhi {
+
+class OpenGLCommandContext;
+
+struct OpenGLBuffer {
+    GLuint id = 0;
+    BufferType type = BufferType::VertexBuffer;
+    size_t size = 0;
+};
+
+struct OpenGLShader {
+    GLuint id = 0;
+    ShaderStage stage = ShaderStage::Vertex;
+};
+
+struct OpenGLPipeline {
+    GLuint program = 0;
+    GLuint vao = 0;
+    GLenum topology = GL_TRIANGLES;
+    VertexLayoutDesc vertex_layout;
+};
+
+class OpenGLDevice final : public Device {
+public:
+    explicit OpenGLDevice(void* native_window);
+    ~OpenGLDevice() override;
+
+    BufferHandle createBuffer(const BufferDesc& desc, const void* data) override;
+    ShaderHandle createShader(const ShaderDesc& desc) override;
+    PipelineHandle createPipeline(const PipelineDesc& desc) override;
+    CommandContext& getImmediateCmdContext() override;
+
+    OpenGLBuffer* getBuffer(BufferHandle handle);
+    OpenGLShader* getShader(ShaderHandle handle);
+    OpenGLPipeline* getPipeline(PipelineHandle handle);
+
+private:
+    std::vector<OpenGLBuffer> m_buffers;
+    std::vector<OpenGLShader> m_shaders;
+    std::vector<OpenGLPipeline> m_pipelines;
+    std::unique_ptr<OpenGLCommandContext> m_context;
+};
+
+} // namespace lunalite::rhi
