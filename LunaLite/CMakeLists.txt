@@ -29,7 +29,6 @@ target_link_libraries(LunaLiteRenderer
         glm::glm
         LunaLiteRHI
         LunaLiteSoftRasterizationRenderer
-        LunaLitePathTracingRenderer
 )
 
 add_library(LunaLiteSoftRasterizationRenderer

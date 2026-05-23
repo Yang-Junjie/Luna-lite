@@ -1,9 +1,7 @@
-#include "renderer_controller.h"
-
 #include "../default_renderer/renderer.h"
 #include "../interface/renderer.h"
-#include "../path_tracing_renderer/path_tracing_renderer.h"
 #include "../soft_rasterization_renderer/soft_rasterization_renderer.h"
+#include "renderer_controller.h"
 
 namespace lunalite::renderer {
 
@@ -57,8 +55,6 @@ std::unique_ptr<interface::Renderer> RendererController::createRenderer(interfac
             return std::make_unique<Renderer>(m_rhi);
         case interface::RendererKind::SoftRasterization:
             return std::make_unique<SoftRasterizationRenderer>(m_width, m_height);
-        case interface::RendererKind::PathTracing:
-            return std::make_unique<PathTracingRenderer>(m_width, m_height);
     }
 
     return std::make_unique<Renderer>(m_rhi);

@@ -7,6 +7,10 @@
 #include <glm/geometric.hpp>
 #include <glm/glm.hpp>
 
+namespace lunalite::core {
+class Application;
+}
+
 namespace lunalite::runtime {
 DemoLayer::DemoLayer()
     : Layer("DemoLayer")
@@ -30,12 +34,14 @@ void DemoLayer::onAttach()
         auto& light = m_scene.addComponent<scene::DirectionalLightComponent>(entity);
         light.direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
     }
+
+    core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
 }
 
 void DemoLayer::onUpdate(core::Timestep dt)
 {
     auto& transform = m_scene.getComponent<scene::TransformComponent>(m_model_entity);
-    transform.rotation.y += dt.getMilliseconds() * 0.01f;
+    transform.rotation.y += dt.getMilliseconds() * 0.1f;
 }
 
 void DemoLayer::onRender()

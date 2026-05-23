@@ -175,13 +175,16 @@ bool SoftRasterizationRenderer::projectVertex(const interface::Vertex& vertex,
 
 void SoftRasterizationRenderer::updateFrameImage()
 {
-    for (size_t i = 0; i < m_color_buffer.size(); ++i) {
-        const auto& color = m_color_buffer[i];
-        const auto offset = i * 4;
-        m_present_buffer[offset + 0] = toByte(color.r);
-        m_present_buffer[offset + 1] = toByte(color.g);
-        m_present_buffer[offset + 2] = toByte(color.b);
-        m_present_buffer[offset + 3] = 255;
+    for (uint32_t y = 0; y < m_height; ++y) {
+        const auto source_y = m_height - 1 - y;
+        for (uint32_t x = 0; x < m_width; ++x) {
+            const auto& color = m_color_buffer[pixelIndex(x, source_y)];
+            const auto offset = (static_cast<size_t>(y) * m_width + x) * 4;
+            m_present_buffer[offset + 0] = toByte(color.r);
+            m_present_buffer[offset + 1] = toByte(color.g);
+            m_present_buffer[offset + 2] = toByte(color.b);
+            m_present_buffer[offset + 3] = 255;
+        }
     }
 
     m_frame_image = interface::FrameImage{
