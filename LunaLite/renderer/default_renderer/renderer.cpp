@@ -9,6 +9,16 @@
 namespace lunalite::renderer {
 namespace {
 
+size_t growBufferCapacity(size_t current, size_t required)
+{
+    size_t capacity = current > 0 ? current : 256;
+    while (capacity < required) {
+        capacity *= 2;
+    }
+
+    return capacity;
+}
+
 constexpr const char* geometryVertexShaderSource = R"(
 #version 450 core
 
@@ -597,63 +607,95 @@ void Renderer::flushFrameUniforms()
 
 Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& mesh)
 {
-    if (mesh.vertices.size() > std::numeric_limits<uint32_t>::max() ||
-        mesh.indices.size() > std::numeric_limits<uint32_t>::max()) {
+    const auto& vertices = mesh.getVertices();
+    const auto& indices = mesh.getIndices();
+
+    if (vertices.size() > std::numeric_limits<uint32_t>::max() ||
+        indices.size() > std::numeric_limits<uint32_t>::max()) {
         return nullptr;
     }
 
     const auto key = getMeshCacheKey(mesh);
     auto& gpu_mesh = m_mesh_gpu_cache[key];
 
-    const auto vertex_buffer_size = mesh.vertices.size() * sizeof(interface::Vertex);
-    const auto index_buffer_size = mesh.indices.size() * sizeof(uint32_t);
+    const auto vertex_buffer_size = vertices.size() * sizeof(interface::Vertex);
+    const auto index_buffer_size = indices.size() * sizeof(uint32_t);
+    const auto vertex_version = mesh.getVertexVersion();
+    const auto index_version = mesh.getIndexVersion();
+    const auto vertex_changed =
+        gpu_mesh.uploaded_vertex_version != 0 && gpu_mesh.uploaded_vertex_version != vertex_version;
+    const auto index_changed = gpu_mesh.uploaded_index_version != 0 && gpu_mesh.uploaded_index_version != index_version;
 
-    if (gpu_mesh.vertex_buffer == 0 || gpu_mesh.vertex_buffer_size != vertex_buffer_size) {
-        if (gpu_mesh.vertex_buffer != 0) {
+    if (gpu_mesh.vertex_buffer == 0 || gpu_mesh.vertex_buffer_capacity < vertex_buffer_size ||
+        (vertex_changed && !gpu_mesh.vertex_buffer_dynamic)) {
+        if (gpu_mesh.vertex_buffer == 0) {
+            gpu_mesh.vertex_buffer_capacity = vertex_buffer_size;
+            gpu_mesh.vertex_buffer_dynamic = false;
+        } else {
             m_device->destroyBuffer(gpu_mesh.vertex_buffer);
+            gpu_mesh.vertex_buffer_capacity = growBufferCapacity(gpu_mesh.vertex_buffer_capacity, vertex_buffer_size);
+            gpu_mesh.vertex_buffer_dynamic = true;
         }
 
-        gpu_mesh.vertex_buffer_size = vertex_buffer_size;
         gpu_mesh.vertex_buffer = m_device->createBuffer(
             rhi::BufferDesc{
                 .type = rhi::BufferType::VertexBuffer,
-                .usage = rhi::BufferUsage::Static,
-                .size = gpu_mesh.vertex_buffer_size,
+                .usage = gpu_mesh.vertex_buffer_dynamic ? rhi::BufferUsage::Dynamic : rhi::BufferUsage::Static,
+                .size = gpu_mesh.vertex_buffer_capacity,
             },
-            mesh.vertices.data());
+            nullptr);
+        gpu_mesh.uploaded_vertex_version = 0;
     }
 
-    if (!mesh.indices.empty() && (gpu_mesh.index_buffer == 0 || gpu_mesh.index_buffer_size != index_buffer_size)) {
-        if (gpu_mesh.index_buffer != 0) {
+    if (gpu_mesh.uploaded_vertex_version != vertex_version) {
+        m_device->updateBuffer(gpu_mesh.vertex_buffer, vertices.data(), vertex_buffer_size);
+        gpu_mesh.uploaded_vertex_version = vertex_version;
+    }
+
+    if (!indices.empty() && (gpu_mesh.index_buffer == 0 || gpu_mesh.index_buffer_capacity < index_buffer_size ||
+                             (index_changed && !gpu_mesh.index_buffer_dynamic))) {
+        if (gpu_mesh.index_buffer == 0) {
+            gpu_mesh.index_buffer_capacity = index_buffer_size;
+            gpu_mesh.index_buffer_dynamic = false;
+        } else {
             m_device->destroyBuffer(gpu_mesh.index_buffer);
+            gpu_mesh.index_buffer_capacity = growBufferCapacity(gpu_mesh.index_buffer_capacity, index_buffer_size);
+            gpu_mesh.index_buffer_dynamic = true;
         }
 
-        gpu_mesh.index_buffer_size = index_buffer_size;
         gpu_mesh.index_buffer = m_device->createBuffer(
             rhi::BufferDesc{
                 .type = rhi::BufferType::IndexBuffer,
-                .usage = rhi::BufferUsage::Static,
-                .size = gpu_mesh.index_buffer_size,
+                .usage = gpu_mesh.index_buffer_dynamic ? rhi::BufferUsage::Dynamic : rhi::BufferUsage::Static,
+                .size = gpu_mesh.index_buffer_capacity,
             },
-            mesh.indices.data());
-    } else if (mesh.indices.empty() && gpu_mesh.index_buffer != 0) {
-        m_device->destroyBuffer(gpu_mesh.index_buffer);
-        gpu_mesh.index_buffer = 0;
-        gpu_mesh.index_buffer_size = 0;
+            nullptr);
+        gpu_mesh.uploaded_index_version = 0;
     }
 
-    gpu_mesh.vertex_count = static_cast<uint32_t>(mesh.vertices.size());
-    gpu_mesh.index_count = static_cast<uint32_t>(mesh.indices.size());
+    if (!indices.empty() && gpu_mesh.uploaded_index_version != index_version) {
+        m_device->updateBuffer(gpu_mesh.index_buffer, indices.data(), index_buffer_size);
+        gpu_mesh.uploaded_index_version = index_version;
+    } else if (indices.empty() && gpu_mesh.index_buffer != 0) {
+        m_device->destroyBuffer(gpu_mesh.index_buffer);
+        gpu_mesh.index_buffer = 0;
+        gpu_mesh.index_buffer_dynamic = false;
+        gpu_mesh.index_buffer_capacity = 0;
+        gpu_mesh.uploaded_index_version = 0;
+    }
+
+    gpu_mesh.vertex_count = static_cast<uint32_t>(vertices.size());
+    gpu_mesh.index_count = static_cast<uint32_t>(indices.size());
     return &gpu_mesh;
 }
 
 uint64_t Renderer::getMeshCacheKey(const interface::Mesh& mesh) const
 {
     const auto handle = static_cast<uint64_t>(mesh.handle);
-
     if (handle == 0) {
-        throw std::runtime_error("Mesh handle is zero, cannot generate cache key.");
+        throw std::runtime_error("Mesh has invalid handle (0), cannot generate cache key.");
     }
+
     return handle;
 }
 

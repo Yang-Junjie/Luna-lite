@@ -26,7 +26,9 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
         return AssetHandle{0};
     }
 
-    auto mesh = std::make_shared<renderer::interface::Mesh>();
+    std::vector<renderer::interface::Vertex> vertices;
+    std::vector<uint32_t> indices;
+
     for (const auto& shape : shapes) {
         for (size_t i = 0; i + 2 < shape.mesh.indices.size(); i += 3) {
             const auto& index0 = shape.mesh.indices[i + 0];
@@ -47,20 +49,24 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
                 vertex2.normal = surfaceNormal;
             }
 
-            mesh->vertices.push_back(vertex0);
-            mesh->indices.push_back(static_cast<uint32_t>(mesh->vertices.size() - 1));
+            vertices.push_back(vertex0);
+            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
 
-            mesh->vertices.push_back(vertex1);
-            mesh->indices.push_back(static_cast<uint32_t>(mesh->vertices.size() - 1));
+            vertices.push_back(vertex1);
+            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
 
-            mesh->vertices.push_back(vertex2);
-            mesh->indices.push_back(static_cast<uint32_t>(mesh->vertices.size() - 1));
+            vertices.push_back(vertex2);
+            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
         }
     }
 
-    if (mesh->vertices.empty()) {
+    if (vertices.empty()) {
         return AssetHandle{0};
     }
+
+    auto mesh = std::make_shared<renderer::interface::Mesh>();
+    mesh->setVertices(std::move(vertices));
+    mesh->setIndices(std::move(indices));
 
     return AssetDatabase::get().add(std::move(mesh));
 }

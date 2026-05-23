@@ -2,10 +2,10 @@
 #include "../../rhi/interface/instance.h"
 #include "../interface/renderer.h"
 
-#include <glm/glm.hpp>
-
 #include <cstddef>
 #include <cstdint>
+
+#include <glm/glm.hpp>
 #include <unordered_map>
 
 namespace lunalite::renderer {
@@ -46,8 +46,14 @@ private:
     struct MeshGpuData {
         rhi::BufferHandle vertex_buffer{0};
         rhi::BufferHandle index_buffer{0};
-        size_t vertex_buffer_size{0};
-        size_t index_buffer_size{0};
+
+        bool vertex_buffer_dynamic{false};
+        bool index_buffer_dynamic{false};
+        size_t vertex_buffer_capacity{0};
+        size_t index_buffer_capacity{0};
+        uint64_t uploaded_vertex_version{0};
+        uint64_t uploaded_index_version{0};
+
         uint32_t vertex_count{0};
         uint32_t index_count{0};
     };
