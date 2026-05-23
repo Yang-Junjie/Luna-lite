@@ -1,7 +1,28 @@
 #include "device.h"
 #include "gl_convert.h"
 
+#include <cstddef>
+
 namespace lunalite::rhi {
+namespace {
+size_t textureFormatBytesPerPixel(TextureFormat format)
+{
+    switch (format) {
+        case TextureFormat::RGBA8:
+            return 4;
+        case TextureFormat::RGBA16F:
+            return 8;
+        case TextureFormat::RGBA32F:
+            return 16;
+        case TextureFormat::Depth24Stencil8:
+            return 4;
+        case TextureFormat::Depth32F:
+            return 4;
+    }
+
+    return 4;
+}
+} // namespace
 
 TextureHandle OpenGLDevice::createTexture(const TextureDesc& desc)
 {
@@ -20,6 +41,41 @@ TextureHandle OpenGLDevice::createTexture(const TextureDesc& desc)
 
     m_textures.push_back(OpenGLTexture{.id = texture, .desc = desc, .is_swapchain_backbuffer = false});
     return static_cast<TextureHandle>(m_textures.size());
+}
+
+void OpenGLDevice::updateTexture(TextureHandle texture, const TextureUploadDesc& desc)
+{
+    auto* glTexture = getTexture(texture);
+    if (glTexture == nullptr || glTexture->is_swapchain_backbuffer || desc.data == nullptr || desc.width == 0 ||
+        desc.height == 0 || desc.x + desc.width > glTexture->desc.width || desc.y + desc.height > glTexture->desc.height) {
+        return;
+    }
+
+    const auto bytesPerPixel = textureFormatBytesPerPixel(desc.format);
+    const auto rowPitch = desc.row_pitch == 0 ? static_cast<size_t>(desc.width) * bytesPerPixel : desc.row_pitch;
+    if (rowPitch % bytesPerPixel != 0) {
+        return;
+    }
+
+    GLint previousAlignment = 4;
+    GLint previousRowLength = 0;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+    glGetIntegerv(GL_UNPACK_ROW_LENGTH, &previousRowLength);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(rowPitch / bytesPerPixel));
+    glTextureSubImage2D(glTexture->id,
+                        0,
+                        static_cast<GLint>(desc.x),
+                        static_cast<GLint>(desc.y),
+                        static_cast<GLsizei>(desc.width),
+                        static_cast<GLsizei>(desc.height),
+                        toGLTextureUploadFormat(desc.format),
+                        toGLTextureUploadType(desc.format),
+                        desc.data);
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, previousRowLength);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
 }
 
 void OpenGLDevice::destroyTexture(TextureHandle texture)

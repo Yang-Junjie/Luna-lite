@@ -1,10 +1,12 @@
 #include "../LunaLite/asset/asset_database.h"
 #include "../LunaLite/asset/mesh_asset_loader.h"
+#include "../LunaLite/renderer/interface/frame_image.h"
 #include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/renderer/soft_rasterization_renderer/soft_rasterization_renderer.h"
 
 #include <filesystem>
 #include <iostream>
+#include <variant>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -39,8 +41,7 @@ int main()
         return 1;
     }
 
-    const std::filesystem::path output_path = "soft_rasterization_renderer_frame.ppm";
-    renderer::SoftRasterizationRenderer renderer(512, 512, output_path);
+    renderer::SoftRasterizationRenderer renderer(512, 512);
 
     const auto camera_pos = glm::vec3(3.0f, 2.0f, 5.0f);
     const auto view = glm::lookAt(camera_pos, glm::vec3{0.0f}, glm::vec3{0.0f, 1.0f, 0.0f});
@@ -56,6 +57,16 @@ int main()
     renderer.renderMesh(*mesh, model);
     renderer.endFrame();
 
-    std::cout << "Tiny renderer wrote " << output_path.string() << "\n";
+    const auto& frame_image = renderer.getFrameImage();
+    const auto* cpu_storage = std::get_if<renderer::interface::CpuFrameStorage>(&frame_image.storage);
+    if (frame_image.width != 512 || frame_image.height != 512 ||
+        frame_image.format != renderer::interface::FrameImageFormat::RGBA8_UNorm ||
+        frame_image.color_space != renderer::interface::FrameImageColorSpace::Linear || cpu_storage == nullptr ||
+        cpu_storage->pixels == nullptr || cpu_storage->row_pitch != 512u * 4u) {
+        std::cerr << "Soft rasterization renderer produced an invalid frame image.\n";
+        return 1;
+    }
+
+    std::cout << "Soft rasterization renderer produced a CPU frame image.\n";
     return 0;
 }

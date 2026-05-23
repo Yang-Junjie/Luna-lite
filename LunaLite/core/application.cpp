@@ -1,6 +1,7 @@
 #include "application.h"
 
-#include "../renderer/default_renderer/renderer.h"
+#include "../renderer/controller/renderer_controller.h"
+#include "../renderer/frame_presenter/rhi_frame_presenter.h"
 #include "../rhi/backend_factory.h"
 #include "../scene/scene_renderer.h"
 #include "layer.h"
@@ -63,6 +64,7 @@ void Application::run()
         }
 
         m_scene_renderer->endFrame();
+        m_frame_presenter->present(m_renderer_controller->getFrameImage());
     }
 }
 
@@ -79,6 +81,12 @@ void Application::pushLayer(std::unique_ptr<Layer> layer)
 void Application::pushOverlay(std::unique_ptr<Layer> overlay)
 {
     m_layer_stack.pushOverlay(std::move(overlay));
+}
+
+void Application::switchRenderer(renderer::interface::RendererKind kind)
+{
+    m_renderer_controller->switchRenderer(kind);
+    m_scene_renderer->setRenderer(m_renderer_controller->getRenderer());
 }
 
 scene::SceneRenderer& Application::getSceneRenderer()
@@ -104,14 +112,17 @@ void Application::initialize(const ApplicationCreateInfo& info)
         throw std::runtime_error("Failed to initialize RHI instance.");
     }
 
-    m_renderer = std::make_unique<renderer::Renderer>(*m_rhi);
-    m_scene_renderer.reset(new scene::SceneRenderer(*m_renderer));
+    m_renderer_controller =
+        std::make_unique<renderer::RendererController>(*m_rhi, info.width, info.height, info.renderer_kind);
+    m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_rhi->getDevice(), *m_rhi->getSwapchain());
+    m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
 }
 
 void Application::shutdown()
 {
     m_scene_renderer.reset();
-    m_renderer.reset();
+    m_frame_presenter.reset();
+    m_renderer_controller.reset();
 
     if (m_rhi) {
         m_rhi->shutdown();

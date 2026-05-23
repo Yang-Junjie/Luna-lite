@@ -1,6 +1,7 @@
 #pragma once
 #include "rhi_types.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace lunalite::rhi {
@@ -8,6 +9,7 @@ namespace lunalite::rhi {
 enum class TextureFormat {
     RGBA8,
     RGBA16F,
+    RGBA32F,
     Depth24Stencil8,
     Depth32F
 };
@@ -71,6 +73,16 @@ struct TextureViewDesc {
     uint32_t mip_level_count{1};
     uint32_t base_array_layer{0};
     uint32_t array_layer_count{1};
+};
+
+struct TextureUploadDesc {
+    uint32_t x{0};
+    uint32_t y{0};
+    uint32_t width{0};
+    uint32_t height{0};
+    TextureFormat format{TextureFormat::RGBA8};
+    const void* data{nullptr};
+    size_t row_pitch{0};
 };
 
 } // namespace lunalite::rhi

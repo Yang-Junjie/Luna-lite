@@ -1,4 +1,5 @@
 #pragma once
+#include "frame_image.h"
 #include "mesh.h"
 
 #include <glm/glm.hpp>
@@ -17,5 +18,6 @@ public:
                                      const glm::vec3& diffuse,
                                      const glm::vec3& specular) = 0;
     virtual void renderMesh(const Mesh& mesh, const glm::mat4& transform) = 0;
+    virtual const FrameImage& getFrameImage() const = 0;
 };
 } // namespace lunalite::renderer::interface

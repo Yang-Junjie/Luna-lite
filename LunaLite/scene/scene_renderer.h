@@ -13,6 +13,7 @@ namespace lunalite::scene {
 class SceneRenderer {
 public:
     ~SceneRenderer() = default;
+    void setRenderer(renderer::interface::Renderer& renderer);
     void render(const Scene& scene);
 
 private:
@@ -25,6 +26,6 @@ private:
     void endFrame();
 
 private:
-    renderer::interface::Renderer& m_renderer;
+    renderer::interface::Renderer* m_renderer{nullptr};
 };
 } // namespace lunalite::scene

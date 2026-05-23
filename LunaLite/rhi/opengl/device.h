@@ -89,6 +89,7 @@ public:
     void destroyBuffer(BufferHandle buffer) override;
 
     TextureHandle createTexture(const TextureDesc& desc) override;
+    void updateTexture(TextureHandle texture, const TextureUploadDesc& desc) override;
     void destroyTexture(TextureHandle texture) override;
 
     TextureViewHandle createTextureView(const TextureViewDesc& desc) override;

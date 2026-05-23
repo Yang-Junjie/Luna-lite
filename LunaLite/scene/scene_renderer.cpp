@@ -10,17 +10,22 @@
 namespace lunalite::scene {
 
 SceneRenderer::SceneRenderer(renderer::interface::Renderer& renderer)
-    : m_renderer(renderer)
+    : m_renderer(&renderer)
 {}
+
+void SceneRenderer::setRenderer(renderer::interface::Renderer& renderer)
+{
+    m_renderer = &renderer;
+}
 
 void SceneRenderer::beginFrame()
 {
-    m_renderer.beginFrame();
+    m_renderer->beginFrame();
 }
 
 void SceneRenderer::endFrame()
 {
-    m_renderer.endFrame();
+    m_renderer->endFrame();
 }
 
 void SceneRenderer::render(const Scene& scene)
@@ -30,7 +35,7 @@ void SceneRenderer::render(const Scene& scene)
         const auto lightView = scene.getRegistry().view<const DirectionalLightComponent>();
         if (!lightView.empty()) {
             const auto& light = lightView.get<const DirectionalLightComponent>(*lightView.begin());
-            m_renderer.setDirectionalLight(light.direction, light.ambient, light.diffuse, light.specular);
+            m_renderer->setDirectionalLight(light.direction, light.ambient, light.diffuse, light.specular);
         }
     }
 
@@ -42,7 +47,7 @@ void SceneRenderer::render(const Scene& scene)
         const auto view = glm::lookAt(cameraPos, target, up);
         const auto proj = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
 
-        m_renderer.setViewProjection(view, proj, cameraPos);
+        m_renderer->setViewProjection(view, proj, cameraPos);
     }
 
     const auto view = scene.getRegistry().view<const TransformComponent, const MeshComponent>();
@@ -54,7 +59,7 @@ void SceneRenderer::render(const Scene& scene)
             continue;
         }
 
-        m_renderer.renderMesh(*mesh, transform.getTransform());
+        m_renderer->renderMesh(*mesh, transform.getTransform());
     }
 }
 } // namespace lunalite::scene

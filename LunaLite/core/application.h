@@ -1,6 +1,7 @@
 #pragma once
 #include "layer_stack.h"
 #include "window.h"
+#include "../renderer/interface/renderer_kind.h"
 #include "../rhi/interface/rhi_types.h"
 
 #include <cstdint>
@@ -8,7 +9,8 @@
 #include <string>
 
 namespace lunalite::renderer {
-class Renderer;
+class RHIFramePresenter;
+class RendererController;
 }
 
 namespace lunalite::rhi {
@@ -27,6 +29,7 @@ struct ApplicationCreateInfo {
     uint32_t width{1280};
     uint32_t height{720};
     rhi::BackendType backend{rhi::BackendType::OpenGL};
+    renderer::interface::RendererKind renderer_kind{renderer::interface::RendererKind::Default};
 };
 
 class Application {
@@ -40,6 +43,7 @@ public:
     void close();
     void pushLayer(std::unique_ptr<Layer> layer);
     void pushOverlay(std::unique_ptr<Layer> overlay);
+    void switchRenderer(renderer::interface::RendererKind kind);
 
     scene::SceneRenderer& getSceneRenderer();
 
@@ -53,7 +57,8 @@ private:
     std::unique_ptr<rhi::Instance> m_rhi;
     std::unique_ptr<Window> m_window;
 
-    std::unique_ptr<renderer::Renderer> m_renderer;
+    std::unique_ptr<renderer::RendererController> m_renderer_controller;
+    std::unique_ptr<renderer::RHIFramePresenter> m_frame_presenter;
     std::unique_ptr<scene::SceneRenderer> m_scene_renderer;
 
     LayerStack m_layer_stack;

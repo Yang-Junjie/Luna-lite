@@ -19,13 +19,17 @@ target_link_libraries(LunaLiteRHI
 )
 
 add_library(LunaLiteRenderer
+    renderer/controller/renderer_controller.cpp
     renderer/default_renderer/renderer.cpp
+    renderer/frame_presenter/rhi_frame_presenter.cpp
 )
 
 target_link_libraries(LunaLiteRenderer
     PUBLIC
         glm::glm
         LunaLiteRHI
+        LunaLiteSoftRasterizationRenderer
+        LunaLitePathTracingRenderer
 )
 
 add_library(LunaLiteSoftRasterizationRenderer

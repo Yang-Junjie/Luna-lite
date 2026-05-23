@@ -23,6 +23,8 @@ GLenum toGLBlendOp(BlendOp op);
 GLenum toGLFilterMode(FilterMode mode);
 GLenum toGLAddressMode(AddressMode mode);
 GLenum toGLTextureInternalFormat(TextureFormat format);
+GLenum toGLTextureUploadFormat(TextureFormat format);
+GLenum toGLTextureUploadType(TextureFormat format);
 GLenum toGLAttachment(TextureFormat format);
 bool isDepthFormat(TextureFormat format);
 uint32_t vertexFormatComponentCount(VertexFormat format);

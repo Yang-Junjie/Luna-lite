@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 #include <limits>
 #include <random>
 
@@ -15,12 +14,6 @@ namespace {
 constexpr float kEpsilon = 1e-4f;
 constexpr float kPi = 3.14159265358979323846f;
 
-uint8_t toByte(float value)
-{
-    const auto clamped = std::clamp(value, 0.0f, 1.0f);
-    return static_cast<uint8_t>(std::lround(clamped * 255.0f));
-}
-
 glm::vec3 skyColor(const glm::vec3& direction)
 {
     const auto t = 0.5f * (direction.y + 1.0f);
@@ -29,12 +22,14 @@ glm::vec3 skyColor(const glm::vec3& direction)
 
 } // namespace
 
-PathTracingRenderer::PathTracingRenderer(uint32_t width, uint32_t height, std::filesystem::path output_path)
+PathTracingRenderer::PathTracingRenderer(uint32_t width, uint32_t height)
     : m_width(std::max(1u, width)),
       m_height(std::max(1u, height)),
-      m_output_path(std::move(output_path)),
-      m_framebuffer(static_cast<size_t>(m_width) * m_height)
-{}
+      m_framebuffer(static_cast<size_t>(m_width) * m_height),
+      m_present_buffer(static_cast<size_t>(m_width) * m_height)
+{
+    updateFrameImage();
+}
 
 void PathTracingRenderer::beginFrame()
 {
@@ -45,7 +40,7 @@ void PathTracingRenderer::beginFrame()
 void PathTracingRenderer::endFrame()
 {
     renderFrame();
-    writePpm();
+    updateFrameImage();
 }
 
 void PathTracingRenderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
@@ -111,6 +106,11 @@ void PathTracingRenderer::renderMesh(const interface::Mesh& mesh, const glm::mat
     }
 }
 
+const interface::FrameImage& PathTracingRenderer::getFrameImage() const
+{
+    return m_frame_image;
+}
+
 void PathTracingRenderer::clearFrame()
 {
     std::fill(m_framebuffer.begin(), m_framebuffer.end(), glm::vec3{0.0f});
@@ -143,6 +143,25 @@ void PathTracingRenderer::renderFrame()
             m_framebuffer[pixelIndex(x, y)] = pixel_color;
         }
     }
+}
+
+void PathTracingRenderer::updateFrameImage()
+{
+    for (size_t i = 0; i < m_framebuffer.size(); ++i) {
+        m_present_buffer[i] = glm::vec4{m_framebuffer[i], 1.0f};
+    }
+
+    m_frame_image = interface::FrameImage{
+        .width = m_width,
+        .height = m_height,
+        .format = interface::FrameImageFormat::RGBA32_Float,
+        .color_space = interface::FrameImageColorSpace::Linear,
+        .storage =
+            interface::CpuFrameStorage{
+                .pixels = m_present_buffer.data(),
+                .row_pitch = static_cast<size_t>(m_width) * sizeof(glm::vec4),
+            },
+    };
 }
 
 glm::vec3 PathTracingRenderer::tracePath(const Ray& initial_ray, std::mt19937& rng) const
@@ -296,34 +315,6 @@ glm::vec3 PathTracingRenderer::sampleCosineHemisphere(const glm::vec3& normal, s
 glm::vec3 PathTracingRenderer::background(const glm::vec3& direction) const
 {
     return skyColor(direction);
-}
-
-void PathTracingRenderer::writePpm() const
-{
-    std::ofstream file(m_output_path, std::ios::binary);
-    if (!file) {
-        return;
-    }
-
-    file << "P6\n" << m_width << " " << m_height << "\n255\n";
-    for (const auto& color : m_framebuffer) {
-        const glm::vec3 clamped{
-            std::clamp(color.r, 0.0f, 1.0f),
-            std::clamp(color.g, 0.0f, 1.0f),
-            std::clamp(color.b, 0.0f, 1.0f),
-        };
-        const glm::vec3 mapped{
-            std::pow(clamped.r, 1.0f / 2.2f),
-            std::pow(clamped.g, 1.0f / 2.2f),
-            std::pow(clamped.b, 1.0f / 2.2f),
-        };
-        const uint8_t pixel[] = {
-            toByte(mapped.r),
-            toByte(mapped.g),
-            toByte(mapped.b),
-        };
-        file.write(reinterpret_cast<const char*>(pixel), sizeof(pixel));
-    }
 }
 
 size_t PathTracingRenderer::pixelIndex(uint32_t x, uint32_t y) const

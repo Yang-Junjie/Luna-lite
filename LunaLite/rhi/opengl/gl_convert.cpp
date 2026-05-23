@@ -167,6 +167,8 @@ GLenum toGLTextureInternalFormat(TextureFormat format)
             return GL_RGBA8;
         case TextureFormat::RGBA16F:
             return GL_RGBA16F;
+        case TextureFormat::RGBA32F:
+            return GL_RGBA32F;
         case TextureFormat::Depth24Stencil8:
             return GL_DEPTH24_STENCIL8;
         case TextureFormat::Depth32F:
@@ -174,6 +176,40 @@ GLenum toGLTextureInternalFormat(TextureFormat format)
     }
 
     return GL_RGBA8;
+}
+
+GLenum toGLTextureUploadFormat(TextureFormat format)
+{
+    switch (format) {
+        case TextureFormat::RGBA8:
+        case TextureFormat::RGBA16F:
+        case TextureFormat::RGBA32F:
+            return GL_RGBA;
+        case TextureFormat::Depth24Stencil8:
+            return GL_DEPTH_STENCIL;
+        case TextureFormat::Depth32F:
+            return GL_DEPTH_COMPONENT;
+    }
+
+    return GL_RGBA;
+}
+
+GLenum toGLTextureUploadType(TextureFormat format)
+{
+    switch (format) {
+        case TextureFormat::RGBA8:
+            return GL_UNSIGNED_BYTE;
+        case TextureFormat::RGBA16F:
+            return GL_HALF_FLOAT;
+        case TextureFormat::RGBA32F:
+            return GL_FLOAT;
+        case TextureFormat::Depth24Stencil8:
+            return GL_UNSIGNED_INT_24_8;
+        case TextureFormat::Depth32F:
+            return GL_FLOAT;
+    }
+
+    return GL_UNSIGNED_BYTE;
 }
 
 GLenum toGLAttachment(TextureFormat format)
@@ -185,6 +221,7 @@ GLenum toGLAttachment(TextureFormat format)
             return GL_DEPTH_ATTACHMENT;
         case TextureFormat::RGBA8:
         case TextureFormat::RGBA16F:
+        case TextureFormat::RGBA32F:
             return GL_COLOR_ATTACHMENT0;
     }
 

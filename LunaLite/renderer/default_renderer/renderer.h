@@ -1,5 +1,6 @@
 #pragma once
 #include "../../rhi/interface/instance.h"
+#include "../interface/frame_image.h"
 #include "../interface/renderer.h"
 
 #include <cstddef>
@@ -21,6 +22,7 @@ public:
                              const glm::vec3& diffuse,
                              const glm::vec3& specular) override;
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
+    const interface::FrameImage& getFrameImage() const override;
 
     struct alignas(16) FrameUniforms {
         glm::mat4 view{1.0f};
@@ -66,11 +68,13 @@ private:
         rhi::TextureHandle normal_texture{0};
         rhi::TextureHandle material_texture{0};
         rhi::TextureHandle depth_texture{0};
+        rhi::TextureHandle final_color_texture{0};
 
         rhi::TextureViewHandle albedo_view{0};
         rhi::TextureViewHandle normal_view{0};
         rhi::TextureViewHandle material_view{0};
         rhi::TextureViewHandle depth_view{0};
+        rhi::TextureViewHandle final_color_view{0};
 
         rhi::BindGroupHandle lighting_bind_group{0};
     };
@@ -99,6 +103,7 @@ private:
     GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
     ObjectUniforms m_objectUniforms;
+    interface::FrameImage m_frame_image;
     bool m_frame_uniforms_dirty{true};
     std::unordered_map<uint64_t, MeshGpuData> m_mesh_gpu_cache;
 };

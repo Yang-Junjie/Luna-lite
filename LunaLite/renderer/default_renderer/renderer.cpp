@@ -352,6 +352,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         m_gbuffer.normal_view,
         m_gbuffer.material_view,
         m_gbuffer.depth_view,
+        m_gbuffer.final_color_view,
     };
     for (const auto view : views) {
         if (view != 0) {
@@ -364,6 +365,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         m_gbuffer.normal_texture,
         m_gbuffer.material_texture,
         m_gbuffer.depth_texture,
+        m_gbuffer.final_color_texture,
     };
     for (const auto texture : textures) {
         if (texture != 0) {
@@ -397,6 +399,12 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         .format = rhi::TextureFormat::Depth24Stencil8,
         .usage = rhi::TextureUsage::DepthStencil | rhi::TextureUsage::Sampled,
     });
+    m_gbuffer.final_color_texture = m_device->createTexture(rhi::TextureDesc{
+        .width = width,
+        .height = height,
+        .format = rhi::TextureFormat::RGBA8,
+        .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+    });
 
     m_gbuffer.albedo_view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = m_gbuffer.albedo_texture,
@@ -417,6 +425,11 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         .texture = m_gbuffer.depth_texture,
         .format = rhi::TextureFormat::Depth24Stencil8,
         .aspect = rhi::TextureAspect::DepthStencil,
+    });
+    m_gbuffer.final_color_view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = m_gbuffer.final_color_texture,
+        .format = rhi::TextureFormat::RGBA8,
+        .aspect = rhi::TextureAspect::Color,
     });
 
     m_gbuffer.lighting_bind_group = m_device
@@ -461,6 +474,18 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
                                                         },
                                                     },
                                             });
+
+    m_frame_image = interface::FrameImage{
+        .width = width,
+        .height = height,
+        .format = interface::FrameImageFormat::RGBA8_UNorm,
+        .color_space = interface::FrameImageColorSpace::Linear,
+        .storage =
+            interface::GpuFrameStorage{
+                .texture = m_gbuffer.final_color_texture,
+                .view = m_gbuffer.final_color_view,
+            },
+    };
 }
 
 void Renderer::beginFrame()
@@ -535,7 +560,7 @@ void Renderer::endFrame()
 
     rhi::RenderPassBeginInfo lightingPass;
     lightingPass.color_attachments.push_back(rhi::ColorAttachmentDesc{
-        .view = m_swapchain->getCurrentColorTextureView(),
+        .view = m_gbuffer.final_color_view,
         .load_op = rhi::LoadOp::Clear,
         .store_op = rhi::StoreOp::Store,
         .clear_color = rhi::ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
@@ -548,8 +573,15 @@ void Renderer::endFrame()
     m_cmd->setBindGroup(0, m_gbuffer.lighting_bind_group);
     m_cmd->draw(3);
     m_cmd->endRenderPass();
+
+    const rhi::TextureBarrier finalColorBarrier{
+        .texture = m_gbuffer.final_color_texture,
+        .old_state = rhi::ResourceState::RenderTarget,
+        .new_state = rhi::ResourceState::ShaderRead,
+    };
+    m_cmd->resourceBarrier(&finalColorBarrier, 1);
+
     m_cmd->end();
-    m_swapchain->present();
 }
 
 void Renderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
@@ -593,6 +625,11 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
     } else {
         m_cmd->draw(gpu_mesh->vertex_count);
     }
+}
+
+const interface::FrameImage& Renderer::getFrameImage() const
+{
+    return m_frame_image;
 }
 
 void Renderer::flushFrameUniforms()

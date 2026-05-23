@@ -18,6 +18,7 @@ public:
     virtual void destroyBuffer(BufferHandle buffer) = 0;
 
     virtual TextureHandle createTexture(const TextureDesc& desc) = 0;
+    virtual void updateTexture(TextureHandle texture, const TextureUploadDesc& desc) = 0;
     virtual void destroyTexture(TextureHandle texture) = 0;
 
     virtual TextureViewHandle createTextureView(const TextureViewDesc& desc) = 0;

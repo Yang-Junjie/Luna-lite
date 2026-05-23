@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 #include <limits>
 
 #include <glm/geometric.hpp>
@@ -24,13 +23,15 @@ uint8_t toByte(float value)
 
 } // namespace
 
-SoftRasterizationRenderer::SoftRasterizationRenderer(uint32_t width, uint32_t height, std::filesystem::path output_path)
+SoftRasterizationRenderer::SoftRasterizationRenderer(uint32_t width, uint32_t height)
     : m_width(width),
       m_height(height),
-      m_output_path(std::move(output_path)),
       m_color_buffer(static_cast<size_t>(width) * height),
+      m_present_buffer(static_cast<size_t>(width) * height * 4),
       m_depth_buffer(static_cast<size_t>(width) * height)
-{}
+{
+    updateFrameImage();
+}
 
 void SoftRasterizationRenderer::beginFrame()
 {
@@ -40,7 +41,7 @@ void SoftRasterizationRenderer::beginFrame()
 
 void SoftRasterizationRenderer::endFrame()
 {
-    writePpm();
+    updateFrameImage();
 }
 
 void SoftRasterizationRenderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
@@ -97,6 +98,11 @@ void SoftRasterizationRenderer::renderMesh(const interface::Mesh& mesh, const gl
     for (uint32_t i = 0; static_cast<size_t>(i) + 2 < vertices.size(); i += 3) {
         drawTriangle(i, i + 1, i + 2);
     }
+}
+
+const interface::FrameImage& SoftRasterizationRenderer::getFrameImage() const
+{
+    return m_frame_image;
 }
 
 void SoftRasterizationRenderer::rasterizeTriangle(const ScreenVertex& v0, const ScreenVertex& v1, const ScreenVertex& v2)
@@ -167,22 +173,28 @@ bool SoftRasterizationRenderer::projectVertex(const interface::Vertex& vertex,
     return true;
 }
 
-void SoftRasterizationRenderer::writePpm() const
+void SoftRasterizationRenderer::updateFrameImage()
 {
-    std::ofstream file(m_output_path, std::ios::binary);
-    if (!file) {
-        return;
+    for (size_t i = 0; i < m_color_buffer.size(); ++i) {
+        const auto& color = m_color_buffer[i];
+        const auto offset = i * 4;
+        m_present_buffer[offset + 0] = toByte(color.r);
+        m_present_buffer[offset + 1] = toByte(color.g);
+        m_present_buffer[offset + 2] = toByte(color.b);
+        m_present_buffer[offset + 3] = 255;
     }
 
-    file << "P6\n" << m_width << " " << m_height << "\n255\n";
-    for (const auto& color : m_color_buffer) {
-        const uint8_t pixel[] = {
-            toByte(color.r),
-            toByte(color.g),
-            toByte(color.b),
-        };
-        file.write(reinterpret_cast<const char*>(pixel), sizeof(pixel));
-    }
+    m_frame_image = interface::FrameImage{
+        .width = m_width,
+        .height = m_height,
+        .format = interface::FrameImageFormat::RGBA8_UNorm,
+        .color_space = interface::FrameImageColorSpace::Linear,
+        .storage =
+            interface::CpuFrameStorage{
+                .pixels = m_present_buffer.data(),
+                .row_pitch = static_cast<size_t>(m_width) * 4,
+            },
+    };
 }
 
 uint32_t SoftRasterizationRenderer::pixelIndex(uint32_t x, uint32_t y) const

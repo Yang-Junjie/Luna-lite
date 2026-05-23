@@ -14,13 +14,13 @@ DemoLayer::DemoLayer()
 
 void DemoLayer::onAttach()
 {
-    const auto cubeHandle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
+    const auto cubeHandle = asset::MeshAssetLoader::loadObj("../../assets/cube.obj");
 
     {
         auto entity = m_scene.createEntity();
         m_model_entity = entity;
         auto& transformComp = m_scene.addComponent<scene::TransformComponent>(entity);
-        transformComp.scale = glm::vec3(8.0f, 8.0f, 8.0f);
+        transformComp.scale = glm::vec3(1.0f, 1.0f, 1.0f);
         auto& meshComp = m_scene.addComponent<scene::MeshComponent>(entity);
         meshComp.mesh = cubeHandle;
     }
