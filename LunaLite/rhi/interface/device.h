@@ -1,9 +1,11 @@
 
 #pragma once
+#include "bind_group.h"
 #include "buffer.h"
 #include "command_list.h"
 #include "pipeline.h"
 #include "rhi_types.h"
+#include "sampler.h"
 #include "shader.h"
 #include "texture.h"
 
@@ -20,6 +22,19 @@ public:
 
     virtual TextureViewHandle createTextureView(const TextureViewDesc& desc) = 0;
     virtual void destroyTextureView(TextureViewHandle view) = 0;
+
+    virtual SamplerHandle createSampler(const SamplerDesc& desc) = 0;
+    virtual void destroySampler(SamplerHandle sampler) = 0;
+
+    virtual BindGroupLayoutHandle createBindGroupLayout(const BindGroupLayoutDesc& desc) = 0;
+    virtual void destroyBindGroupLayout(BindGroupLayoutHandle layout) = 0;
+
+    virtual BindGroupHandle createBindGroup(const BindGroupDesc& desc) = 0;
+    virtual void updateBindGroup(BindGroupHandle group, const BindGroupDesc& desc) = 0;
+    virtual void destroyBindGroup(BindGroupHandle group) = 0;
+
+    virtual PipelineLayoutHandle createPipelineLayout(const PipelineLayoutDesc& desc) = 0;
+    virtual void destroyPipelineLayout(PipelineLayoutHandle layout) = 0;
 
     virtual ShaderHandle createShader(const ShaderDesc& desc) = 0;
     virtual void destroyShader(ShaderHandle shader) = 0;

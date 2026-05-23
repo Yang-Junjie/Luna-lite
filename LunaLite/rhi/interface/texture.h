@@ -37,6 +37,24 @@ constexpr TextureUsage& operator|=(TextureUsage& lhs, TextureUsage rhs)
     return lhs;
 }
 
+enum class TextureAspect : uint32_t {
+    None = 0,
+    Color = 1 << 0,
+    Depth = 1 << 1,
+    Stencil = 1 << 2,
+    DepthStencil = Depth | Stencil
+};
+
+constexpr TextureAspect operator|(TextureAspect lhs, TextureAspect rhs)
+{
+    return static_cast<TextureAspect>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+}
+
+constexpr TextureAspect operator&(TextureAspect lhs, TextureAspect rhs)
+{
+    return static_cast<TextureAspect>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+}
+
 struct TextureDesc {
     uint32_t width{1};
     uint32_t height{1};
@@ -48,6 +66,11 @@ struct TextureDesc {
 struct TextureViewDesc {
     TextureHandle texture{0};
     TextureFormat format{TextureFormat::RGBA8};
+    TextureAspect aspect{TextureAspect::Color};
+    uint32_t base_mip_level{0};
+    uint32_t mip_level_count{1};
+    uint32_t base_array_layer{0};
+    uint32_t array_layer_count{1};
 };
 
 } // namespace lunalite::rhi

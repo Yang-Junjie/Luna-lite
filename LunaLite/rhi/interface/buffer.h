@@ -8,7 +8,8 @@ namespace lunalite::rhi {
 enum class BufferType {
     VertexBuffer,
     IndexBuffer,
-    UniformBuffer
+    UniformBuffer,
+    StorageBuffer
 };
 
 enum class BufferUsage {

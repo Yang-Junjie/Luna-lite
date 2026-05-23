@@ -23,6 +23,16 @@ void logProgramError(GLuint program)
 
 PipelineHandle OpenGLDevice::createPipeline(const PipelineDesc& desc)
 {
+    if (getPipelineLayout(desc.layout) == nullptr) {
+        std::printf("OpenGL pipeline creation failed: invalid pipeline layout handle.\n");
+        return 0;
+    }
+
+    if (desc.render_target_state.color_targets.empty() && !desc.render_target_state.has_depth_stencil) {
+        std::printf("OpenGL pipeline creation failed: render target state has no attachments.\n");
+        return 0;
+    }
+
     const auto* vertexShader = getShader(desc.vertex_shader);
     const auto* fragmentShader = getShader(desc.fragment_shader);
     if (vertexShader == nullptr || fragmentShader == nullptr) {
@@ -67,9 +77,10 @@ PipelineHandle OpenGLDevice::createPipeline(const PipelineDesc& desc)
         .vao = vao,
         .topology = toGLTopology(desc.topology),
         .vertex_layout = desc.vertex_layout,
+        .layout = desc.layout,
+        .render_target_state = desc.render_target_state,
         .depth_state = desc.depth_state,
         .raster_state = desc.raster_state,
-        .blend_state = desc.blend_state,
     });
     return static_cast<PipelineHandle>(m_pipelines.size());
 }

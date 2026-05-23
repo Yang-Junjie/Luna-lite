@@ -4,6 +4,10 @@
 
 #include <glm/glm.hpp>
 
+#include <cstddef>
+#include <cstdint>
+#include <unordered_map>
+
 namespace lunalite::renderer {
 class Renderer : public interface::Renderer {
 public:
@@ -19,30 +23,77 @@ public:
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
 
     struct alignas(16) FrameUniforms {
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::vec3 cameraPos;
-        float _pad0;
-        glm::vec3 lightDir;
-        float _pad1;
-        glm::vec3 lightAmbient;
-        float _pad2;
-        glm::vec3 lightDiffuse;
-        float _pad3;
-        glm::vec3 lightSpecular;
-        float _pad4;
+        glm::mat4 view{1.0f};
+        glm::mat4 projection{1.0f};
+        glm::vec3 cameraPos{0.0f};
+        float _pad0{0.0f};
+        glm::vec3 lightDir{0.0f, -1.0f, 0.0f};
+        float _pad1{0.0f};
+        glm::vec3 lightAmbient{0.05f, 0.05f, 0.05f};
+        float _pad2{0.0f};
+        glm::vec3 lightDiffuse{0.8f, 0.8f, 0.8f};
+        float _pad3{0.0f};
+        glm::vec3 lightSpecular{1.0f, 1.0f, 1.0f};
+        float _pad4{0.0f};
+    };
+
+    struct alignas(16) ObjectUniforms {
+        glm::mat4 model{1.0f};
+        glm::mat4 normalMatrix{1.0f};
     };
 
 private:
+    struct MeshGpuData {
+        rhi::BufferHandle vertex_buffer{0};
+        rhi::BufferHandle index_buffer{0};
+        size_t vertex_buffer_size{0};
+        size_t index_buffer_size{0};
+        uint32_t vertex_count{0};
+        uint32_t index_count{0};
+    };
+
+    struct GBuffer {
+        uint32_t width{0};
+        uint32_t height{0};
+
+        rhi::TextureHandle albedo_texture{0};
+        rhi::TextureHandle normal_texture{0};
+        rhi::TextureHandle material_texture{0};
+        rhi::TextureHandle depth_texture{0};
+
+        rhi::TextureViewHandle albedo_view{0};
+        rhi::TextureViewHandle normal_view{0};
+        rhi::TextureViewHandle material_view{0};
+        rhi::TextureViewHandle depth_view{0};
+
+        rhi::BindGroupHandle lighting_bind_group{0};
+    };
+
+    void ensureGBuffer(uint32_t width, uint32_t height);
+    void flushFrameUniforms();
+    MeshGpuData* getOrCreateMeshGpuData(const interface::Mesh& mesh);
+    uint64_t getMeshCacheKey(const interface::Mesh& mesh) const;
+
     rhi::Device* m_device{nullptr};
     rhi::Swapchain* m_swapchain{nullptr};
     rhi::CommandList* m_cmd{nullptr};
-    rhi::PipelineHandle m_pipeline{0};
-    rhi::BufferHandle m_mesh_vertex_buffer{0};
-    size_t m_mesh_vertex_buffer_size{0};
-    rhi::BufferHandle m_mesh_index_buffer{0};
-    size_t m_mesh_index_buffer_size{0};
+
+    rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{0};
+    rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{0};
+
+    rhi::PipelineLayoutHandle m_geometry_pipeline_layout{0};
+    rhi::PipelineLayoutHandle m_lighting_pipeline_layout{0};
+    rhi::PipelineHandle m_geometry_pipeline{0};
+    rhi::PipelineHandle m_lighting_pipeline{0};
+
     rhi::BufferHandle m_frameUniformBuffer{0};
+    rhi::BufferHandle m_objectUniformBuffer{0};
+    rhi::BindGroupHandle m_geometry_bind_group{0};
+    rhi::SamplerHandle m_gbuffer_sampler{0};
+    GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
+    ObjectUniforms m_objectUniforms;
+    bool m_frame_uniforms_dirty{true};
+    std::unordered_map<uint64_t, MeshGpuData> m_mesh_gpu_cache;
 };
 } // namespace lunalite::renderer

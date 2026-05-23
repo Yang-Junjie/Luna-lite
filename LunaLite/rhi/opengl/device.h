@@ -28,9 +28,10 @@ struct OpenGLPipeline {
     GLuint vao{0};
     GLenum topology{GL_TRIANGLES};
     VertexLayoutDesc vertex_layout;
+    PipelineLayoutHandle layout{0};
+    RenderTargetState render_target_state{};
     DepthState depth_state{};
     RasterState raster_state{};
-    BlendState blend_state{};
 };
 
 struct OpenGLTexture {
@@ -42,6 +43,40 @@ struct OpenGLTexture {
 struct OpenGLTextureView {
     TextureHandle texture{0};
     TextureFormat format{TextureFormat::RGBA8};
+    TextureAspect aspect{TextureAspect::Color};
+    uint32_t base_mip_level{0};
+    uint32_t mip_level_count{1};
+    uint32_t base_array_layer{0};
+    uint32_t array_layer_count{1};
+};
+
+struct OpenGLSampler {
+    GLuint id{0};
+    SamplerDesc desc{};
+};
+
+struct OpenGLBindGroupLayout {
+    BindGroupLayoutDesc desc{};
+    bool valid{true};
+};
+
+struct OpenGLBindGroup {
+    BindGroupLayoutHandle layout{0};
+    std::vector<BindGroupEntry> entries;
+};
+
+struct OpenGLPipelineLayout {
+    PipelineLayoutDesc desc{};
+    bool valid{true};
+};
+
+struct OpenGLFramebuffer {
+    GLuint id{0};
+    std::vector<TextureViewHandle> color_views;
+    bool has_depth_stencil{false};
+    TextureViewHandle depth_stencil_view{0};
+    uint32_t width{0};
+    uint32_t height{0};
 };
 
 class OpenGLDevice final : public Device {
@@ -59,6 +94,19 @@ public:
     TextureViewHandle createTextureView(const TextureViewDesc& desc) override;
     void destroyTextureView(TextureViewHandle view) override;
 
+    SamplerHandle createSampler(const SamplerDesc& desc) override;
+    void destroySampler(SamplerHandle sampler) override;
+
+    BindGroupLayoutHandle createBindGroupLayout(const BindGroupLayoutDesc& desc) override;
+    void destroyBindGroupLayout(BindGroupLayoutHandle layout) override;
+
+    BindGroupHandle createBindGroup(const BindGroupDesc& desc) override;
+    void updateBindGroup(BindGroupHandle group, const BindGroupDesc& desc) override;
+    void destroyBindGroup(BindGroupHandle group) override;
+
+    PipelineLayoutHandle createPipelineLayout(const PipelineLayoutDesc& desc) override;
+    void destroyPipelineLayout(PipelineLayoutHandle layout) override;
+
     ShaderHandle createShader(const ShaderDesc& desc) override;
     void destroyShader(ShaderHandle shader) override;
 
@@ -70,17 +118,27 @@ public:
     OpenGLBuffer* getBuffer(BufferHandle handle);
     OpenGLTexture* getTexture(TextureHandle handle);
     OpenGLTextureView* getTextureView(TextureViewHandle handle);
+    OpenGLSampler* getSampler(SamplerHandle handle);
+    OpenGLBindGroupLayout* getBindGroupLayout(BindGroupLayoutHandle handle);
+    OpenGLBindGroup* getBindGroup(BindGroupHandle handle);
+    OpenGLPipelineLayout* getPipelineLayout(PipelineLayoutHandle handle);
     OpenGLShader* getShader(ShaderHandle handle);
     OpenGLPipeline* getPipeline(PipelineHandle handle);
 
+    GLuint getFramebuffer(const RenderPassBeginInfo& info);
     TextureViewHandle createSwapchainTextureView(TextureFormat format);
 
 private:
     std::vector<OpenGLBuffer> m_buffers;
     std::vector<OpenGLTexture> m_textures;
     std::vector<OpenGLTextureView> m_texture_views;
+    std::vector<OpenGLSampler> m_samplers;
+    std::vector<OpenGLBindGroupLayout> m_bind_group_layouts;
+    std::vector<OpenGLBindGroup> m_bind_groups;
+    std::vector<OpenGLPipelineLayout> m_pipeline_layouts;
     std::vector<OpenGLShader> m_shaders;
     std::vector<OpenGLPipeline> m_pipelines;
+    std::vector<OpenGLFramebuffer> m_framebuffers;
     std::unique_ptr<OpenGLCommandList> m_command_list;
 };
 

@@ -5,6 +5,7 @@
 #include "../scene/scene_renderer.h"
 #include "layer.h"
 
+#include <chrono>
 #include <stdexcept>
 
 namespace lunalite::core {
@@ -42,11 +43,17 @@ Application& Application::get()
 
 void Application::run()
 {
+    auto lastFrameTime = std::chrono::steady_clock::now();
+
     while (m_is_running && !m_window->shouldClose()) {
+        const auto currentFrameTime = std::chrono::steady_clock::now();
+        const std::chrono::duration<float> deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
         m_window->onUpdate();
 
         for (auto& layer : m_layer_stack) {
-            layer->onUpdate(0.0f);
+            layer->onUpdate(deltaTime.count());
         }
 
         m_scene_renderer->beginFrame();

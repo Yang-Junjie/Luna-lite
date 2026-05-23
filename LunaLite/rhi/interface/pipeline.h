@@ -1,5 +1,8 @@
 #pragma once
+#include "bind_group.h"
 #include "rhi_types.h"
+#include "shader.h"
+#include "texture.h"
 
 #include <cstdint>
 #include <vector>
@@ -108,14 +111,57 @@ struct BlendState {
     BlendOp alpha_op{BlendOp::Add};
 };
 
+enum class ColorWriteMask : uint32_t {
+    None = 0,
+    R = 1 << 0,
+    G = 1 << 1,
+    B = 1 << 2,
+    A = 1 << 3,
+    All = 0xF
+};
+
+constexpr ColorWriteMask operator|(ColorWriteMask lhs, ColorWriteMask rhs)
+{
+    return static_cast<ColorWriteMask>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+}
+
+constexpr ColorWriteMask operator&(ColorWriteMask lhs, ColorWriteMask rhs)
+{
+    return static_cast<ColorWriteMask>(static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+}
+
+struct ColorTargetState {
+    TextureFormat format{TextureFormat::RGBA8};
+    BlendState blend{};
+    ColorWriteMask write_mask{ColorWriteMask::All};
+};
+
+struct RenderTargetState {
+    std::vector<ColorTargetState> color_targets;
+    bool has_depth_stencil{false};
+    TextureFormat depth_stencil_format{TextureFormat::Depth24Stencil8};
+};
+
+struct PushConstantRange {
+    ShaderStageFlags stages{shaderStageFlag(ShaderStage::Vertex) | shaderStageFlag(ShaderStage::Fragment)};
+    uint32_t offset{0};
+    uint32_t size{0};
+};
+
+struct PipelineLayoutDesc {
+    std::vector<BindGroupLayoutHandle> bind_group_layouts;
+    std::vector<PushConstantRange> push_constants;
+};
+
 struct PipelineDesc {
     PrimitiveTopology topology;
     VertexLayoutDesc vertex_layout;
+    PipelineLayoutHandle layout{0};
     ShaderHandle vertex_shader;
     ShaderHandle fragment_shader;
+    RenderTargetState render_target_state{};
     DepthState depth_state{};
     RasterState raster_state{};
-    BlendState blend_state{};
 };
 
 } // namespace lunalite::rhi

@@ -136,6 +136,30 @@ GLenum toGLBlendOp(BlendOp op)
     return GL_FUNC_ADD;
 }
 
+GLenum toGLFilterMode(FilterMode mode)
+{
+    switch (mode) {
+        case FilterMode::Nearest:
+            return GL_NEAREST;
+        case FilterMode::Linear:
+            return GL_LINEAR;
+    }
+
+    return GL_LINEAR;
+}
+
+GLenum toGLAddressMode(AddressMode mode)
+{
+    switch (mode) {
+        case AddressMode::Repeat:
+            return GL_REPEAT;
+        case AddressMode::ClampToEdge:
+            return GL_CLAMP_TO_EDGE;
+    }
+
+    return GL_CLAMP_TO_EDGE;
+}
+
 GLenum toGLTextureInternalFormat(TextureFormat format)
 {
     switch (format) {

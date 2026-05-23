@@ -26,6 +26,16 @@ size_t indexFormatSize(IndexFormat format)
 
     return sizeof(uint32_t);
 }
+
+uint32_t flattenedBinding(uint32_t set, uint32_t binding)
+{
+    return set * 16 + binding;
+}
+
+GLboolean colorWriteEnabled(ColorWriteMask mask, ColorWriteMask channel)
+{
+    return (mask & channel) != ColorWriteMask::None ? GL_TRUE : GL_FALSE;
+}
 } // namespace
 
 void OpenGLCommandList::begin()
@@ -46,8 +56,6 @@ void OpenGLCommandList::beginRenderPass(const RenderPassBeginInfo& info)
 
     bool uses_swapchain = false;
     bool uses_offscreen_texture = false;
-    GLuint framebuffer = 0;
-
     const auto inspectAttachment = [&](TextureViewHandle view, const char* label) {
         const auto* glView = m_device.getTextureView(view);
         const auto* glTexture = glView ? m_device.getTexture(glView->texture) : nullptr;
@@ -80,45 +88,10 @@ void OpenGLCommandList::beginRenderPass(const RenderPassBeginInfo& info)
         return;
     }
 
-    if (!uses_swapchain) {
-        glCreateFramebuffers(1, &framebuffer);
-        m_render_pass_fbo = framebuffer;
-
-        std::vector<GLenum> drawBuffers;
-        drawBuffers.reserve(info.color_attachments.size());
-
-        for (size_t i = 0; i < info.color_attachments.size(); ++i) {
-            const auto* colorView = m_device.getTextureView(info.color_attachments[i].view);
-            const auto* colorTexture = colorView ? m_device.getTexture(colorView->texture) : nullptr;
-            if (colorTexture != nullptr) {
-                const auto attachment = static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + i);
-                glNamedFramebufferTexture(framebuffer, attachment, colorTexture->id, 0);
-                drawBuffers.push_back(attachment);
-            }
-        }
-
-        if (drawBuffers.empty()) {
-            glNamedFramebufferDrawBuffer(framebuffer, GL_NONE);
-            glNamedFramebufferReadBuffer(framebuffer, GL_NONE);
-        } else {
-            glNamedFramebufferDrawBuffers(framebuffer, static_cast<GLsizei>(drawBuffers.size()), drawBuffers.data());
-            glNamedFramebufferReadBuffer(framebuffer, drawBuffers.front());
-        }
-
-        if (info.has_depth_stencil_attachment) {
-            const auto* depthView = m_device.getTextureView(info.depth_stencil_attachment.view);
-            const auto* depthTexture = depthView ? m_device.getTexture(depthView->texture) : nullptr;
-            if (depthTexture != nullptr) {
-                glNamedFramebufferTexture(framebuffer, toGLAttachment(depthView->format), depthTexture->id, 0);
-            }
-        }
-
-        if (glCheckNamedFramebufferStatus(framebuffer, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            std::printf("OpenGL render pass begin failed: framebuffer is incomplete.\n");
-            glDeleteFramebuffers(1, &framebuffer);
-            m_render_pass_fbo = 0;
-            return;
-        }
+    const GLuint framebuffer = uses_swapchain ? 0 : m_device.getFramebuffer(info);
+    if (!uses_swapchain && framebuffer == 0) {
+        std::printf("OpenGL render pass begin failed: framebuffer is incomplete.\n");
+        return;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -159,11 +132,6 @@ void OpenGLCommandList::beginRenderPass(const RenderPassBeginInfo& info)
 void OpenGLCommandList::endRenderPass()
 {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    if (m_render_pass_fbo != 0) {
-        glDeleteFramebuffers(1, &m_render_pass_fbo);
-        m_render_pass_fbo = 0;
-    }
 }
 
 void OpenGLCommandList::setPipeline(PipelineHandle pipeline)
@@ -193,16 +161,110 @@ void OpenGLCommandList::setPipeline(PipelineHandle pipeline)
     }
     glFrontFace(toGLFrontFace(glPipeline->raster_state.front_face));
 
-    if (glPipeline->blend_state.enabled) {
-        glEnable(GL_BLEND);
-        glBlendFuncSeparate(toGLBlendFactor(glPipeline->blend_state.src_color),
-                            toGLBlendFactor(glPipeline->blend_state.dst_color),
-                            toGLBlendFactor(glPipeline->blend_state.src_alpha),
-                            toGLBlendFactor(glPipeline->blend_state.dst_alpha));
-        glBlendEquationSeparate(toGLBlendOp(glPipeline->blend_state.color_op),
-                                toGLBlendOp(glPipeline->blend_state.alpha_op));
-    } else {
-        glDisable(GL_BLEND);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(glPipeline->render_target_state.color_targets.size()); ++i) {
+        const auto& target = glPipeline->render_target_state.color_targets[i];
+        glColorMaski(i,
+                     colorWriteEnabled(target.write_mask, ColorWriteMask::R),
+                     colorWriteEnabled(target.write_mask, ColorWriteMask::G),
+                     colorWriteEnabled(target.write_mask, ColorWriteMask::B),
+                     colorWriteEnabled(target.write_mask, ColorWriteMask::A));
+
+        if (target.blend.enabled) {
+            glEnablei(GL_BLEND, i);
+            glBlendFuncSeparatei(i,
+                                 toGLBlendFactor(target.blend.src_color),
+                                 toGLBlendFactor(target.blend.dst_color),
+                                 toGLBlendFactor(target.blend.src_alpha),
+                                 toGLBlendFactor(target.blend.dst_alpha));
+            glBlendEquationSeparatei(i,
+                                     toGLBlendOp(target.blend.color_op),
+                                     toGLBlendOp(target.blend.alpha_op));
+        } else {
+            glDisablei(GL_BLEND, i);
+        }
+    }
+}
+
+void OpenGLCommandList::setBindGroup(uint32_t set, BindGroupHandle group)
+{
+    auto* glPipeline = m_device.getPipeline(m_current_pipeline);
+    auto* glGroup = m_device.getBindGroup(group);
+    if (glPipeline == nullptr || glGroup == nullptr) {
+        return;
+    }
+
+    auto* pipelineLayout = m_device.getPipelineLayout(glPipeline->layout);
+    if (pipelineLayout == nullptr || set >= pipelineLayout->desc.bind_group_layouts.size()
+        || pipelineLayout->desc.bind_group_layouts[set] != glGroup->layout) {
+        return;
+    }
+
+    for (const auto& entry : glGroup->entries) {
+        const auto binding = flattenedBinding(set, entry.binding);
+
+        switch (entry.type) {
+            case BindingType::UniformBuffer: {
+                auto* glBuffer = m_device.getBuffer(entry.buffer.buffer);
+                if (glBuffer == nullptr || glBuffer->type != BufferType::UniformBuffer) {
+                    break;
+                }
+
+                if (entry.buffer.size > 0) {
+                    glBindBufferRange(GL_UNIFORM_BUFFER,
+                                      binding,
+                                      glBuffer->id,
+                                      static_cast<GLintptr>(entry.buffer.offset),
+                                      static_cast<GLsizeiptr>(entry.buffer.size));
+                } else {
+                    glBindBufferBase(GL_UNIFORM_BUFFER, binding, glBuffer->id);
+                }
+                break;
+            }
+            case BindingType::StorageBuffer: {
+                auto* glBuffer = m_device.getBuffer(entry.buffer.buffer);
+                if (glBuffer == nullptr || glBuffer->type != BufferType::StorageBuffer) {
+                    break;
+                }
+
+                if (entry.buffer.size > 0) {
+                    glBindBufferRange(GL_SHADER_STORAGE_BUFFER,
+                                      binding,
+                                      glBuffer->id,
+                                      static_cast<GLintptr>(entry.buffer.offset),
+                                      static_cast<GLsizeiptr>(entry.buffer.size));
+                } else {
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, glBuffer->id);
+                }
+                break;
+            }
+            case BindingType::SampledTexture: {
+                auto* glView = m_device.getTextureView(entry.texture_view);
+                auto* glTexture = glView ? m_device.getTexture(glView->texture) : nullptr;
+                if (glTexture != nullptr && !glTexture->is_swapchain_backbuffer) {
+                    glBindTextureUnit(binding, glTexture->id);
+                }
+                break;
+            }
+            case BindingType::Sampler: {
+                auto* glSampler = m_device.getSampler(entry.sampler);
+                if (glSampler != nullptr) {
+                    glBindSampler(binding, glSampler->id);
+                }
+                break;
+            }
+            case BindingType::CombinedImageSampler: {
+                auto* glView = m_device.getTextureView(entry.texture_view);
+                auto* glTexture = glView ? m_device.getTexture(glView->texture) : nullptr;
+                auto* glSampler = m_device.getSampler(entry.sampler);
+                if (glTexture != nullptr && !glTexture->is_swapchain_backbuffer) {
+                    glBindTextureUnit(binding, glTexture->id);
+                }
+                if (glSampler != nullptr) {
+                    glBindSampler(binding, glSampler->id);
+                }
+                break;
+            }
+        }
     }
 }
 
@@ -240,6 +302,15 @@ void OpenGLCommandList::setUniformBuffer(uint32_t binding, BufferHandle buffer)
     }
 
     glBindBufferBase(GL_UNIFORM_BUFFER, binding, glBuffer->id);
+}
+
+void OpenGLCommandList::resourceBarrier(const TextureBarrier* barriers, uint32_t count)
+{
+    if (barriers == nullptr || count == 0) {
+        return;
+    }
+
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
 }
 
 void OpenGLCommandList::draw(uint32_t vertex_count, uint32_t first_vertex)

@@ -1,6 +1,7 @@
 #pragma once
 #include "../interface/buffer.h"
 #include "../interface/pipeline.h"
+#include "../interface/sampler.h"
 #include "../interface/shader.h"
 #include "../interface/texture.h"
 
@@ -19,6 +20,8 @@ GLenum toGLFrontFace(FrontFace face);
 GLenum toGLCompareOp(CompareOp op);
 GLenum toGLBlendFactor(BlendFactor factor);
 GLenum toGLBlendOp(BlendOp op);
+GLenum toGLFilterMode(FilterMode mode);
+GLenum toGLAddressMode(AddressMode mode);
 GLenum toGLTextureInternalFormat(TextureFormat format);
 GLenum toGLAttachment(TextureFormat format);
 bool isDepthFormat(TextureFormat format);

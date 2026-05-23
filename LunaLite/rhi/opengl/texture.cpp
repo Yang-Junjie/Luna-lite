@@ -40,7 +40,15 @@ TextureViewHandle OpenGLDevice::createTextureView(const TextureViewDesc& desc)
         return 0;
     }
 
-    m_texture_views.push_back(OpenGLTextureView{.texture = desc.texture, .format = desc.format});
+    m_texture_views.push_back(OpenGLTextureView{
+        .texture = desc.texture,
+        .format = desc.format,
+        .aspect = desc.aspect,
+        .base_mip_level = desc.base_mip_level,
+        .mip_level_count = desc.mip_level_count,
+        .base_array_layer = desc.base_array_layer,
+        .array_layer_count = desc.array_layer_count,
+    });
     return static_cast<TextureViewHandle>(m_texture_views.size());
 }
 
@@ -65,7 +73,11 @@ TextureViewHandle OpenGLDevice::createSwapchainTextureView(TextureFormat format)
     });
 
     const auto texture = static_cast<TextureHandle>(m_textures.size());
-    m_texture_views.push_back(OpenGLTextureView{.texture = texture, .format = format});
+    m_texture_views.push_back(OpenGLTextureView{
+        .texture = texture,
+        .format = format,
+        .aspect = isDepthFormat(format) ? TextureAspect::DepthStencil : TextureAspect::Color,
+    });
     return static_cast<TextureViewHandle>(m_texture_views.size());
 }
 
