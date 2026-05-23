@@ -28,7 +28,7 @@ bool OpenGLInstance::init(WindowHandle window)
 
     glEnable(GL_DEPTH_TEST);
 
-    m_device = std::make_unique<OpenGLDevice>(m_native_window);
+    m_device = std::make_unique<OpenGLDevice>();
     return true;
 }
 
@@ -41,6 +41,16 @@ void OpenGLInstance::shutdown()
 void OpenGLInstance::resize(uint32_t width, uint32_t height)
 {
     glViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
+}
+
+void OpenGLInstance::present()
+{
+    auto* glfwWindow = static_cast<GLFWwindow*>(m_native_window);
+    if (glfwWindow == nullptr) {
+        return;
+    }
+
+    glfwSwapBuffers(glfwWindow);
 }
 
 Device* OpenGLInstance::getDevice()

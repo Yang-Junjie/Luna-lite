@@ -15,6 +15,7 @@ public:
     virtual bool init(WindowHandle window) = 0;
     virtual void shutdown() = 0;
     virtual void resize(uint32_t width, uint32_t height) = 0;
+    virtual void present() = 0;
     virtual Device* getDevice() = 0;
 };
 } // namespace lunalite::rhi

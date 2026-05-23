@@ -1,6 +1,6 @@
 
 #pragma once
-#include "command_context.h"
+#include "command_list.h"
 #include "rhi_types.h"
 
 namespace lunalite::rhi {
@@ -17,6 +17,6 @@ public:
     virtual PipelineHandle createPipeline(const PipelineDesc& desc) = 0;
     virtual void destroyPipeline(PipelineHandle pipeline) = 0;
 
-    virtual CommandContext& getImmediateCmdContext() = 0;
+    virtual CommandList& getCommandList() = 0;
 };
 } // namespace lunalite::rhi

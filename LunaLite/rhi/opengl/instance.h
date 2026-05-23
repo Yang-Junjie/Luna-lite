@@ -28,6 +28,7 @@ public:
     bool init(WindowHandle window) override;
     void shutdown() override;
     void resize(uint32_t width, uint32_t height) override;
+    void present() override;
     Device* getDevice() override;
 
 private:

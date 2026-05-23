@@ -1,7 +1,7 @@
 add_library(LunaLiteRHI
     rhi/opengl/instance.cpp
     rhi/opengl/device.cpp
-    rhi/opengl/command_context.cpp
+    rhi/opengl/command_list.cpp
     rhi/backend_factory.cpp
 )
 

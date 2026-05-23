@@ -10,7 +10,7 @@
 
 namespace lunalite::rhi {
 
-class OpenGLCommandContext;
+class OpenGLCommandList;
 
 struct OpenGLBuffer {
     GLuint id{0};
@@ -32,7 +32,7 @@ struct OpenGLPipeline {
 
 class OpenGLDevice final : public Device {
 public:
-    explicit OpenGLDevice(void* native_window);
+    OpenGLDevice();
     ~OpenGLDevice() override;
 
     BufferHandle createBuffer(const BufferDesc& desc, const void* data) override;
@@ -45,7 +45,7 @@ public:
     PipelineHandle createPipeline(const PipelineDesc& desc) override;
     void destroyPipeline(PipelineHandle pipeline) override;
 
-    CommandContext& getImmediateCmdContext() override;
+    CommandList& getCommandList() override;
 
     OpenGLBuffer* getBuffer(BufferHandle handle);
     OpenGLShader* getShader(ShaderHandle handle);
@@ -55,7 +55,7 @@ private:
     std::vector<OpenGLBuffer> m_buffers;
     std::vector<OpenGLShader> m_shaders;
     std::vector<OpenGLPipeline> m_pipelines;
-    std::unique_ptr<OpenGLCommandContext> m_context;
+    std::unique_ptr<OpenGLCommandList> m_command_list;
 };
 
 } // namespace lunalite::rhi

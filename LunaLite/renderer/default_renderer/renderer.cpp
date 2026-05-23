@@ -89,9 +89,10 @@ void main()
 } // namespace
 
 Renderer::Renderer(rhi::Instance& rhi)
-    : m_device(rhi.getDevice())
+    : m_rhi(&rhi),
+      m_device(rhi.getDevice())
 {
-    m_cmd = &m_device->getImmediateCmdContext();
+    m_cmd = &m_device->getCommandList();
 
     const auto vertexShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
@@ -146,15 +147,33 @@ Renderer::Renderer(rhi::Instance& rhi)
 
 void Renderer::beginFrame()
 {
-    m_cmd->beginFrame();
-    m_cmd->clear(0.08f, 0.09f, 0.11f, 1.0f);
-    m_cmd->bindPipeline(m_pipeline);
+    rhi::RenderPassBeginInfo pass;
+    pass.color_attachments.push_back(rhi::ColorAttachmentDesc{
+        .view = 0,
+        .load_op = rhi::LoadOp::Clear,
+        .store_op = rhi::StoreOp::Store,
+        .clear_color = rhi::ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
+    });
+    pass.has_depth_stencil_attachment = true;
+    pass.depth_stencil_attachment = rhi::DepthStencilAttachmentDesc{
+        .view = 0,
+        .depth_load_op = rhi::LoadOp::Clear,
+        .depth_store_op = rhi::StoreOp::Store,
+        .clear_depth = 1.0f,
+    };
+    pass.width = 1'280;
+    pass.height = 720;
+
+    m_cmd->begin();
+    m_cmd->beginRenderPass(pass);
+    m_cmd->setPipeline(m_pipeline);
 }
 
 void Renderer::endFrame()
 {
-    m_cmd->endFrame();
-    m_cmd->present();
+    m_cmd->endRenderPass();
+    m_cmd->end();
+    m_rhi->present();
 }
 
 void Renderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
@@ -178,7 +197,7 @@ void Renderer::setDirectionalLight(const glm::vec3& direction,
 void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
 {
     m_device->updateBuffer(m_frameUniformBuffer, &m_frameUniforms, sizeof(FrameUniforms));
-    m_cmd->bindUniformBuffer(m_frameUniformBuffer, 0);
+    m_cmd->setUniformBuffer(0, m_frameUniformBuffer);
 
     std::vector<interface::Vertex> vertices;
     vertices.reserve(mesh.indices.empty() ? mesh.vertices.size() : mesh.indices.size());
@@ -213,7 +232,7 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
     }
 
     m_device->updateBuffer(m_mesh_vertex_buffer, vertices.data(), requiredSize);
-    m_cmd->bindVertexBuffer(m_mesh_vertex_buffer);
+    m_cmd->setVertexBuffer(0, m_mesh_vertex_buffer);
     m_cmd->draw(static_cast<uint32_t>(vertices.size()));
 }
 

@@ -1,4 +1,4 @@
-#include "command_context.h"
+#include "command_list.h"
 #include "device.h"
 
 #include <cstdio>
@@ -176,13 +176,13 @@ void logProgramError(GLuint program)
 
 } // namespace
 
-OpenGLDevice::OpenGLDevice(void* nativeWindow)
-    : m_context(std::make_unique<OpenGLCommandContext>(*this, nativeWindow))
+OpenGLDevice::OpenGLDevice()
+    : m_command_list(std::make_unique<OpenGLCommandList>(*this))
 {}
 
 OpenGLDevice::~OpenGLDevice()
 {
-    m_context.reset();
+    m_command_list.reset();
 
     for (auto& pipeline : m_pipelines) {
         glDeleteVertexArrays(1, &pipeline.vao);
@@ -314,9 +314,9 @@ void OpenGLDevice::destroyPipeline(PipelineHandle pipeline)
     glPipeline->program = 0;
 }
 
-CommandContext& OpenGLDevice::getImmediateCmdContext()
+CommandList& OpenGLDevice::getCommandList()
 {
-    return *m_context;
+    return *m_command_list;
 }
 
 OpenGLBuffer* OpenGLDevice::getBuffer(BufferHandle handle)

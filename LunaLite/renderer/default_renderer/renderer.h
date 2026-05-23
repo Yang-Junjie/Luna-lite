@@ -34,8 +34,9 @@ public:
     };
 
 private:
+    rhi::Instance* m_rhi{nullptr};
     rhi::Device* m_device{nullptr};
-    rhi::CommandContext* m_cmd{nullptr};
+    rhi::CommandList* m_cmd{nullptr};
     rhi::PipelineHandle m_pipeline{0};
     rhi::BufferHandle m_mesh_vertex_buffer{0};
     size_t m_mesh_vertex_buffer_size{0};
