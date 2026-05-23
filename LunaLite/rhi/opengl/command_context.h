@@ -21,8 +21,8 @@ public:
 
 private:
     OpenGLDevice& m_device;
-    void* m_native_window = nullptr;
-    PipelineHandle m_current_pipeline = 0;
+    void* m_native_window{nullptr};
+    PipelineHandle m_current_pipeline{0};
 };
 
 } // namespace lunalite::rhi

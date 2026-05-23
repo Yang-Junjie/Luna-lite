@@ -35,12 +35,12 @@ public:
     };
 
 private:
-    rhi::Device* m_device = nullptr;
-    rhi::CommandContext* m_cmd = nullptr;
-    rhi::PipelineHandle m_pipeline = 0;
-    rhi::BufferHandle m_mesh_vertex_buffer = 0;
-    size_t m_mesh_vertex_buffer_size = 0;
-    rhi::BufferHandle m_frameUniformBuffer = 0;
+    rhi::Device* m_device{nullptr};
+    rhi::CommandContext* m_cmd{nullptr};
+    rhi::PipelineHandle m_pipeline{0};
+    rhi::BufferHandle m_mesh_vertex_buffer{0};
+    size_t m_mesh_vertex_buffer_size{0};
+    rhi::BufferHandle m_frameUniformBuffer{0};
     FrameUniforms m_frameUniforms;
 };
 } // namespace lunalite::renderer

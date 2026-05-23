@@ -5,9 +5,11 @@ namespace lunalite::scene {
 class Entity {
 public:
     Entity() = default;
+
     explicit Entity(entt::entity handle)
         : m_handle(handle)
     {}
+
     Entity(const Entity&) = default;
 
     entt::entity getHandle() const

@@ -27,7 +27,7 @@ int main()
     }
 
     lunalite::asset::AssetDatabase assets;
-    const auto cubeHandle = lunalite::asset::MeshAssetLoader::loadObj("../../../assets/cube.obj", assets);
+    const auto cubeHandle = lunalite::asset::MeshAssetLoader::loadObj("../../assets/cube.obj", assets);
     lunalite::scene::Scene scene;
 
     lunalite::renderer::Renderer renderer(*instance);

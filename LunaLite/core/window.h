@@ -8,11 +8,12 @@
 #include <string>
 
 namespace lunalite::core {
+
 class WindowCreateInfo {
 public:
-    uint32_t width = 800;
-    uint32_t height = 600;
-    std::string title = "LunaLite";
+    uint32_t width{800};
+    uint32_t height{600};
+    std::string title{"LunaLite"};
 
     rhi::WindowRequirements requirements;
 };
@@ -39,7 +40,7 @@ public:
     bool shouldClose();
 
 private:
-    std::unique_ptr<GLFWwindow, GLFWWindowDeleter> m_window = nullptr;
+    std::unique_ptr<GLFWwindow, GLFWWindowDeleter> m_window{nullptr};
     WindowCreateInfo m_info;
 };
 

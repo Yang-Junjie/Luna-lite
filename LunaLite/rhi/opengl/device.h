@@ -13,20 +13,20 @@ namespace lunalite::rhi {
 class OpenGLCommandContext;
 
 struct OpenGLBuffer {
-    GLuint id = 0;
-    BufferType type = BufferType::VertexBuffer;
-    size_t size = 0;
+    GLuint id{0};
+    BufferType type{BufferType::VertexBuffer};
+    size_t size{0};
 };
 
 struct OpenGLShader {
-    GLuint id = 0;
-    ShaderStage stage = ShaderStage::Vertex;
+    GLuint id{0};
+    ShaderStage stage{ShaderStage::Vertex};
 };
 
 struct OpenGLPipeline {
-    GLuint program = 0;
-    GLuint vao = 0;
-    GLenum topology = GL_TRIANGLES;
+    GLuint program{0};
+    GLuint vao{0};
+    GLenum topology{GL_TRIANGLES};
     VertexLayoutDesc vertex_layout;
 };
 

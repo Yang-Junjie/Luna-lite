@@ -31,7 +31,7 @@ public:
     Device* getDevice() override;
 
 private:
-    void* m_native_window = nullptr;
+    void* m_native_window{nullptr};
     std::unique_ptr<Device> m_device;
 };
 

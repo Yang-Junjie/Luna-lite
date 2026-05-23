@@ -1,9 +1,9 @@
+#include "../renderer/interface/mesh.h"
+#include "components.h"
 #include "scene_renderer.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include "../renderer/interface/mesh.h"
-#include "components.h"
 
 namespace lunalite::scene {
 
