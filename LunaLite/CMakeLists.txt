@@ -28,6 +28,24 @@ target_link_libraries(LunaLiteRenderer
         LunaLiteRHI
 )
 
+add_library(LunaLiteSoftRasterizationRenderer
+    renderer/soft_rasterization_renderer/soft_rasterization_renderer.cpp
+)
+
+target_link_libraries(LunaLiteSoftRasterizationRenderer
+    PUBLIC
+        glm::glm
+)
+
+add_library(LunaLitePathTracingRenderer
+    renderer/path_tracing_renderer/path_tracing_renderer.cpp
+)
+
+target_link_libraries(LunaLitePathTracingRenderer
+    PUBLIC
+        glm::glm
+)
+
 add_library(LunaLite STATIC
     core/entry_point.cpp
     core/application.cpp

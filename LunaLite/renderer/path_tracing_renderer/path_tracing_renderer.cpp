@@ -1,0 +1,334 @@
+#include "path_tracing_renderer.h"
+
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <limits>
+#include <random>
+
+#include <glm/geometric.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
+
+namespace lunalite::renderer {
+namespace {
+
+constexpr float kEpsilon = 1e-4f;
+constexpr float kPi = 3.14159265358979323846f;
+
+uint8_t toByte(float value)
+{
+    const auto clamped = std::clamp(value, 0.0f, 1.0f);
+    return static_cast<uint8_t>(std::lround(clamped * 255.0f));
+}
+
+glm::vec3 skyColor(const glm::vec3& direction)
+{
+    const auto t = 0.5f * (direction.y + 1.0f);
+    return (1.0f - t) * glm::vec3{0.08f, 0.09f, 0.11f} + t * glm::vec3{0.45f, 0.60f, 0.85f};
+}
+
+} // namespace
+
+PathTracingRenderer::PathTracingRenderer(uint32_t width, uint32_t height, std::filesystem::path output_path)
+    : m_width(std::max(1u, width)),
+      m_height(std::max(1u, height)),
+      m_output_path(std::move(output_path)),
+      m_framebuffer(static_cast<size_t>(m_width) * m_height)
+{}
+
+void PathTracingRenderer::beginFrame()
+{
+    clearFrame();
+    m_triangles.clear();
+}
+
+void PathTracingRenderer::endFrame()
+{
+    renderFrame();
+    writePpm();
+}
+
+void PathTracingRenderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
+{
+    m_view = view;
+    m_projection = proj;
+    m_inverse_view = glm::inverse(view);
+    m_inverse_projection = glm::inverse(proj);
+    m_camera_pos = cameraPos;
+}
+
+void PathTracingRenderer::setDirectionalLight(const glm::vec3& direction,
+                                              const glm::vec3& ambient,
+                                              const glm::vec3& diffuse,
+                                              const glm::vec3& specular)
+{
+    m_light_direction = direction;
+    m_light_ambient = ambient;
+    m_light_diffuse = diffuse;
+    m_light_specular = specular;
+}
+
+void PathTracingRenderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
+{
+    const auto& vertices = mesh.getVertices();
+    const auto& indices = mesh.getIndices();
+    if (vertices.empty()) {
+        return;
+    }
+
+    const auto normal_matrix = glm::transpose(glm::inverse(transform));
+    const auto pushTriangle = [&](uint32_t i0, uint32_t i1, uint32_t i2) {
+        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+            return;
+        }
+
+        const auto& v0 = vertices[i0];
+        const auto& v1 = vertices[i1];
+        const auto& v2 = vertices[i2];
+
+        Triangle tri;
+        tri.p0 = glm::vec3(transform * glm::vec4(v0.position, 1.0f));
+        tri.p1 = glm::vec3(transform * glm::vec4(v1.position, 1.0f));
+        tri.p2 = glm::vec3(transform * glm::vec4(v2.position, 1.0f));
+        tri.n0 = glm::normalize(glm::mat3(normal_matrix) * v0.normal);
+        tri.n1 = glm::normalize(glm::mat3(normal_matrix) * v1.normal);
+        tri.n2 = glm::normalize(glm::mat3(normal_matrix) * v2.normal);
+        tri.c0 = v0.color;
+        tri.c1 = v1.color;
+        tri.c2 = v2.color;
+        m_triangles.push_back(tri);
+    };
+
+    if (!indices.empty()) {
+        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+            pushTriangle(indices[i], indices[i + 1], indices[i + 2]);
+        }
+        return;
+    }
+
+    for (uint32_t i = 0; static_cast<size_t>(i) + 2 < vertices.size(); i += 3) {
+        pushTriangle(i, i + 1, i + 2);
+    }
+}
+
+void PathTracingRenderer::clearFrame()
+{
+    std::fill(m_framebuffer.begin(), m_framebuffer.end(), glm::vec3{0.0f});
+}
+
+void PathTracingRenderer::renderFrame()
+{
+    if (m_triangles.empty()) {
+        for (uint32_t y = 0; y < m_height; ++y) {
+            for (uint32_t x = 0; x < m_width; ++x) {
+                m_framebuffer[pixelIndex(x, y)] = skyColor(glm::vec3{0.0f, 0.0f, 1.0f});
+            }
+        }
+        return;
+    }
+
+    std::uniform_real_distribution<float> jitter(0.0f, 1.0f);
+    for (uint32_t y = 0; y < m_height; ++y) {
+        for (uint32_t x = 0; x < m_width; ++x) {
+            std::mt19937 rng(0x9E3779B9u ^ (x * 73856093u) ^ (y * 19349663u));
+            glm::vec3 pixel_color{0.0f};
+
+            for (uint32_t sample = 0; sample < m_samples_per_pixel; ++sample) {
+                const float u = (static_cast<float>(x) + jitter(rng)) / static_cast<float>(m_width);
+                const float v = (static_cast<float>(y) + jitter(rng)) / static_cast<float>(m_height);
+                pixel_color += tracePath(generateCameraRay(u, v), rng);
+            }
+
+            pixel_color /= static_cast<float>(m_samples_per_pixel);
+            m_framebuffer[pixelIndex(x, y)] = pixel_color;
+        }
+    }
+}
+
+glm::vec3 PathTracingRenderer::tracePath(const Ray& initial_ray, std::mt19937& rng) const
+{
+    glm::vec3 radiance{0.0f};
+    glm::vec3 throughput{1.0f};
+    Ray ray = initial_ray;
+
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    for (uint32_t bounce = 0; bounce < m_max_bounces; ++bounce) {
+        Hit hit;
+        if (!intersectScene(ray, hit)) {
+            radiance += throughput * background(ray.direction);
+            break;
+        }
+
+        const auto light_dir = glm::normalize(-m_light_direction);
+        const auto view_dir = glm::normalize(m_camera_pos - hit.position);
+        const auto half_vec = glm::normalize(light_dir + view_dir);
+        const auto ndotl = std::max(glm::dot(hit.normal, light_dir), 0.0f);
+        const auto spec = std::pow(std::max(glm::dot(hit.normal, half_vec), 0.0f), 32.0f);
+        const glm::vec3 direct = hit.albedo * (m_light_ambient + m_light_diffuse * ndotl) +
+                                 m_light_specular * spec * 0.15f;
+        radiance += throughput * direct;
+
+        throughput *= hit.albedo;
+        if (bounce + 1 >= m_max_bounces) {
+            break;
+        }
+
+        const auto max_throughput = std::max({throughput.r, throughput.g, throughput.b});
+        if (bounce > 0 && max_throughput < 0.05f) {
+            if (dist(rng) > max_throughput) {
+                break;
+            }
+            throughput /= std::max(max_throughput, 1e-3f);
+        }
+
+        ray.origin = hit.position + hit.normal * kEpsilon;
+        ray.direction = sampleCosineHemisphere(hit.normal, rng);
+    }
+
+    return radiance;
+}
+
+bool PathTracingRenderer::intersectScene(const Ray& ray, Hit& hit) const
+{
+    bool has_hit = false;
+    float best_t = std::numeric_limits<float>::max();
+    float best_u = 0.0f;
+    float best_v = 0.0f;
+    const Triangle* best_triangle = nullptr;
+
+    for (const auto& triangle : m_triangles) {
+        float t = 0.0f;
+        float u = 0.0f;
+        float v = 0.0f;
+        if (!intersectTriangle(ray, triangle, t, u, v)) {
+            continue;
+        }
+
+        if (t < best_t) {
+            best_t = t;
+            best_u = u;
+            best_v = v;
+            best_triangle = &triangle;
+            has_hit = true;
+        }
+    }
+
+    if (!has_hit || best_triangle == nullptr) {
+        return false;
+    }
+
+    const auto w = 1.0f - best_u - best_v;
+    hit.t = best_t;
+    hit.position = ray.origin + ray.direction * best_t;
+    hit.normal = glm::normalize(w * best_triangle->n0 + best_u * best_triangle->n1 + best_v * best_triangle->n2);
+    hit.albedo = w * best_triangle->c0 + best_u * best_triangle->c1 + best_v * best_triangle->c2;
+    return true;
+}
+
+bool PathTracingRenderer::intersectTriangle(const Ray& ray, const Triangle& triangle, float& t, float& u, float& v) const
+{
+    const auto edge1 = triangle.p1 - triangle.p0;
+    const auto edge2 = triangle.p2 - triangle.p0;
+    const auto pvec = glm::cross(ray.direction, edge2);
+    const auto det = glm::dot(edge1, pvec);
+    if (std::abs(det) <= kEpsilon) {
+        return false;
+    }
+
+    const auto inv_det = 1.0f / det;
+    const auto tvec = ray.origin - triangle.p0;
+    u = glm::dot(tvec, pvec) * inv_det;
+    if (u < 0.0f || u > 1.0f) {
+        return false;
+    }
+
+    const auto qvec = glm::cross(tvec, edge1);
+    v = glm::dot(ray.direction, qvec) * inv_det;
+    if (v < 0.0f || u + v > 1.0f) {
+        return false;
+    }
+
+    t = glm::dot(edge2, qvec) * inv_det;
+    return t > kEpsilon;
+}
+
+PathTracingRenderer::Ray PathTracingRenderer::generateCameraRay(float u, float v) const
+{
+    const glm::vec4 ndc{
+        u * 2.0f - 1.0f,
+        1.0f - v * 2.0f,
+        -1.0f,
+        1.0f,
+    };
+
+    auto view_space = m_inverse_projection * ndc;
+    view_space /= view_space.w;
+    const auto dir_view = glm::normalize(glm::vec3(view_space));
+    const auto dir_world = glm::normalize(glm::vec3(m_inverse_view * glm::vec4(dir_view, 0.0f)));
+
+    return Ray{
+        .origin = m_camera_pos,
+        .direction = dir_world,
+    };
+}
+
+glm::vec3 PathTracingRenderer::sampleCosineHemisphere(const glm::vec3& normal, std::mt19937& rng) const
+{
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    const float r1 = dist(rng);
+    const float r2 = dist(rng);
+    const float phi = 2.0f * kPi * r1;
+    const float radius = std::sqrt(r2);
+    const float x = std::cos(phi) * radius;
+    const float y = std::sin(phi) * radius;
+    const float z = std::sqrt(std::max(0.0f, 1.0f - r2));
+
+    glm::vec3 tangent{1.0f, 0.0f, 0.0f};
+    if (std::abs(normal.x) > 0.9f) {
+        tangent = glm::vec3{0.0f, 1.0f, 0.0f};
+    }
+    tangent = glm::normalize(glm::cross(tangent, normal));
+    const auto bitangent = glm::cross(normal, tangent);
+
+    return glm::normalize(x * tangent + y * bitangent + z * normal);
+}
+
+glm::vec3 PathTracingRenderer::background(const glm::vec3& direction) const
+{
+    return skyColor(direction);
+}
+
+void PathTracingRenderer::writePpm() const
+{
+    std::ofstream file(m_output_path, std::ios::binary);
+    if (!file) {
+        return;
+    }
+
+    file << "P6\n" << m_width << " " << m_height << "\n255\n";
+    for (const auto& color : m_framebuffer) {
+        const glm::vec3 clamped{
+            std::clamp(color.r, 0.0f, 1.0f),
+            std::clamp(color.g, 0.0f, 1.0f),
+            std::clamp(color.b, 0.0f, 1.0f),
+        };
+        const glm::vec3 mapped{
+            std::pow(clamped.r, 1.0f / 2.2f),
+            std::pow(clamped.g, 1.0f / 2.2f),
+            std::pow(clamped.b, 1.0f / 2.2f),
+        };
+        const uint8_t pixel[] = {
+            toByte(mapped.r),
+            toByte(mapped.g),
+            toByte(mapped.b),
+        };
+        file.write(reinterpret_cast<const char*>(pixel), sizeof(pixel));
+    }
+}
+
+size_t PathTracingRenderer::pixelIndex(uint32_t x, uint32_t y) const
+{
+    return static_cast<size_t>(y) * m_width + x;
+}
+
+} // namespace lunalite::renderer
