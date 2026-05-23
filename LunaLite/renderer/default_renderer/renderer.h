@@ -7,7 +7,7 @@
 namespace lunalite::renderer {
 class Renderer : public interface::Renderer {
 public:
-    explicit Renderer(rhi::Instance& rhi);
+    explicit Renderer(rhi::Instance& instance);
     ~Renderer() override = default;
     void beginFrame() override;
     void endFrame() override;
@@ -34,8 +34,8 @@ public:
     };
 
 private:
-    rhi::Instance* m_rhi{nullptr};
     rhi::Device* m_device{nullptr};
+    rhi::Swapchain* m_swapchain{nullptr};
     rhi::CommandList* m_cmd{nullptr};
     rhi::PipelineHandle m_pipeline{0};
     rhi::BufferHandle m_mesh_vertex_buffer{0};

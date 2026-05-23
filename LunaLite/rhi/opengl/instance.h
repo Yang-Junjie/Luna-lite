@@ -28,12 +28,13 @@ public:
     bool init(WindowHandle window) override;
     void shutdown() override;
     void resize(uint32_t width, uint32_t height) override;
-    void present() override;
     Device* getDevice() override;
+    Swapchain* getSwapchain() override;
 
 private:
     void* m_native_window{nullptr};
     std::unique_ptr<Device> m_device;
+    std::unique_ptr<Swapchain> m_swapchain;
 };
 
 } // namespace lunalite::rhi

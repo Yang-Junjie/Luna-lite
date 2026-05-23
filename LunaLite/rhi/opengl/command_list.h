@@ -1,6 +1,8 @@
 #pragma once
 #include "../interface/command_list.h"
 
+#include <glad/glad.h>
+
 namespace lunalite::rhi {
 
 class OpenGLDevice;
@@ -22,6 +24,7 @@ public:
 private:
     OpenGLDevice& m_device;
     PipelineHandle m_current_pipeline{0};
+    GLuint m_render_pass_fbo{0};
 };
 
 } // namespace lunalite::rhi

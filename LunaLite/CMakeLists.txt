@@ -1,7 +1,13 @@
 add_library(LunaLiteRHI
     rhi/opengl/instance.cpp
     rhi/opengl/device.cpp
+    rhi/opengl/buffer.cpp
+    rhi/opengl/texture.cpp
+    rhi/opengl/shader.cpp
+    rhi/opengl/pipeline.cpp
+    rhi/opengl/gl_convert.cpp
     rhi/opengl/command_list.cpp
+    rhi/opengl/swapchain.cpp
     rhi/backend_factory.cpp
 )
 

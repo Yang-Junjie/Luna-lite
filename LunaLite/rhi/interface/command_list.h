@@ -1,4 +1,7 @@
 #pragma once
+#include "buffer.h"
+#include "pipeline.h"
+#include "render_pass.h"
 #include "rhi_types.h"
 
 namespace lunalite::rhi {

@@ -1,5 +1,6 @@
 #include "device.h"
 #include "instance.h"
+#include "swapchain.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -28,12 +29,15 @@ bool OpenGLInstance::init(WindowHandle window)
 
     glEnable(GL_DEPTH_TEST);
 
-    m_device = std::make_unique<OpenGLDevice>();
+    auto device = std::make_unique<OpenGLDevice>();
+    m_swapchain = std::make_unique<OpenGLSwapchain>(*device, glfwWindow);
+    m_device = std::move(device);
     return true;
 }
 
 void OpenGLInstance::shutdown()
 {
+    m_swapchain.reset();
     m_device.reset();
     m_native_window = nullptr;
 }
@@ -41,21 +45,19 @@ void OpenGLInstance::shutdown()
 void OpenGLInstance::resize(uint32_t width, uint32_t height)
 {
     glViewport(0, 0, static_cast<int>(width), static_cast<int>(height));
-}
-
-void OpenGLInstance::present()
-{
-    auto* glfwWindow = static_cast<GLFWwindow*>(m_native_window);
-    if (glfwWindow == nullptr) {
-        return;
+    if (m_swapchain) {
+        m_swapchain->resize(width, height);
     }
-
-    glfwSwapBuffers(glfwWindow);
 }
 
 Device* OpenGLInstance::getDevice()
 {
     return m_device.get();
+}
+
+Swapchain* OpenGLInstance::getSwapchain()
+{
+    return m_swapchain.get();
 }
 
 } // namespace lunalite::rhi

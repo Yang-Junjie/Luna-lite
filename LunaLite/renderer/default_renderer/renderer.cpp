@@ -88,9 +88,9 @@ void main()
 
 } // namespace
 
-Renderer::Renderer(rhi::Instance& rhi)
-    : m_rhi(&rhi),
-      m_device(rhi.getDevice())
+Renderer::Renderer(rhi::Instance& instance)
+    : m_device(instance.getDevice()),
+      m_swapchain(instance.getSwapchain())
 {
     m_cmd = &m_device->getCommandList();
 
@@ -149,20 +149,20 @@ void Renderer::beginFrame()
 {
     rhi::RenderPassBeginInfo pass;
     pass.color_attachments.push_back(rhi::ColorAttachmentDesc{
-        .view = 0,
+        .view = m_swapchain->getCurrentColorTextureView(),
         .load_op = rhi::LoadOp::Clear,
         .store_op = rhi::StoreOp::Store,
         .clear_color = rhi::ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
     });
     pass.has_depth_stencil_attachment = true;
     pass.depth_stencil_attachment = rhi::DepthStencilAttachmentDesc{
-        .view = 0,
+        .view = m_swapchain->getDepthStencilTextureView(),
         .depth_load_op = rhi::LoadOp::Clear,
         .depth_store_op = rhi::StoreOp::Store,
         .clear_depth = 1.0f,
     };
-    pass.width = 1'280;
-    pass.height = 720;
+    pass.width = m_swapchain->getWidth();
+    pass.height = m_swapchain->getHeight();
 
     m_cmd->begin();
     m_cmd->beginRenderPass(pass);
@@ -173,7 +173,7 @@ void Renderer::endFrame()
 {
     m_cmd->endRenderPass();
     m_cmd->end();
-    m_rhi->present();
+    m_swapchain->present();
 }
 
 void Renderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)

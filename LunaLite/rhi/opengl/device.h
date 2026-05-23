@@ -30,6 +30,17 @@ struct OpenGLPipeline {
     VertexLayoutDesc vertex_layout;
 };
 
+struct OpenGLTexture {
+    GLuint id{0};
+    TextureDesc desc{};
+    bool is_swapchain_backbuffer{false};
+};
+
+struct OpenGLTextureView {
+    TextureHandle texture{0};
+    TextureFormat format{TextureFormat::RGBA8};
+};
+
 class OpenGLDevice final : public Device {
 public:
     OpenGLDevice();
@@ -38,6 +49,12 @@ public:
     BufferHandle createBuffer(const BufferDesc& desc, const void* data) override;
     void updateBuffer(BufferHandle buffer, const void* data, size_t size) override;
     void destroyBuffer(BufferHandle buffer) override;
+
+    TextureHandle createTexture(const TextureDesc& desc) override;
+    void destroyTexture(TextureHandle texture) override;
+
+    TextureViewHandle createTextureView(const TextureViewDesc& desc) override;
+    void destroyTextureView(TextureViewHandle view) override;
 
     ShaderHandle createShader(const ShaderDesc& desc) override;
     void destroyShader(ShaderHandle shader) override;
@@ -48,11 +65,17 @@ public:
     CommandList& getCommandList() override;
 
     OpenGLBuffer* getBuffer(BufferHandle handle);
+    OpenGLTexture* getTexture(TextureHandle handle);
+    OpenGLTextureView* getTextureView(TextureViewHandle handle);
     OpenGLShader* getShader(ShaderHandle handle);
     OpenGLPipeline* getPipeline(PipelineHandle handle);
 
+    TextureViewHandle createSwapchainTextureView(TextureFormat format);
+
 private:
     std::vector<OpenGLBuffer> m_buffers;
+    std::vector<OpenGLTexture> m_textures;
+    std::vector<OpenGLTextureView> m_texture_views;
     std::vector<OpenGLShader> m_shaders;
     std::vector<OpenGLPipeline> m_pipelines;
     std::unique_ptr<OpenGLCommandList> m_command_list;
