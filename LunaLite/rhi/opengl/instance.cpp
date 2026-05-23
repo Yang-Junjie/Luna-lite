@@ -27,8 +27,6 @@ bool OpenGLInstance::init(WindowHandle window)
 
     glfwSwapInterval(1);
 
-    glEnable(GL_DEPTH_TEST);
-
     auto device = std::make_unique<OpenGLDevice>();
     m_swapchain = std::make_unique<OpenGLSwapchain>(*device, glfwWindow);
     m_device = std::move(device);

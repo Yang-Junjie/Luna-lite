@@ -14,6 +14,18 @@ GLenum toGLBufferUsage(BufferUsage usage)
     return GL_STATIC_DRAW;
 }
 
+GLenum toGLIndexFormat(IndexFormat format)
+{
+    switch (format) {
+        case IndexFormat::UInt16:
+            return GL_UNSIGNED_SHORT;
+        case IndexFormat::UInt32:
+            return GL_UNSIGNED_INT;
+    }
+
+    return GL_UNSIGNED_INT;
+}
+
 GLenum toGLShaderStage(ShaderStage stage)
 {
     switch (stage) {
@@ -38,6 +50,90 @@ GLenum toGLTopology(PrimitiveTopology topology)
     }
 
     return GL_TRIANGLES;
+}
+
+GLenum toGLCullMode(CullMode mode)
+{
+    switch (mode) {
+        case CullMode::Front:
+            return GL_FRONT;
+        case CullMode::Back:
+            return GL_BACK;
+        case CullMode::None:
+            return GL_BACK;
+    }
+
+    return GL_BACK;
+}
+
+GLenum toGLFrontFace(FrontFace face)
+{
+    switch (face) {
+        case FrontFace::Clockwise:
+            return GL_CW;
+        case FrontFace::CounterClockwise:
+            return GL_CCW;
+    }
+
+    return GL_CCW;
+}
+
+GLenum toGLCompareOp(CompareOp op)
+{
+    switch (op) {
+        case CompareOp::Never:
+            return GL_NEVER;
+        case CompareOp::Less:
+            return GL_LESS;
+        case CompareOp::Equal:
+            return GL_EQUAL;
+        case CompareOp::LessOrEqual:
+            return GL_LEQUAL;
+        case CompareOp::Greater:
+            return GL_GREATER;
+        case CompareOp::NotEqual:
+            return GL_NOTEQUAL;
+        case CompareOp::GreaterOrEqual:
+            return GL_GEQUAL;
+        case CompareOp::Always:
+            return GL_ALWAYS;
+    }
+
+    return GL_LESS;
+}
+
+GLenum toGLBlendFactor(BlendFactor factor)
+{
+    switch (factor) {
+        case BlendFactor::Zero:
+            return GL_ZERO;
+        case BlendFactor::One:
+            return GL_ONE;
+        case BlendFactor::SrcAlpha:
+            return GL_SRC_ALPHA;
+        case BlendFactor::OneMinusSrcAlpha:
+            return GL_ONE_MINUS_SRC_ALPHA;
+        case BlendFactor::DstAlpha:
+            return GL_DST_ALPHA;
+        case BlendFactor::OneMinusDstAlpha:
+            return GL_ONE_MINUS_DST_ALPHA;
+    }
+
+    return GL_ONE;
+}
+
+GLenum toGLBlendOp(BlendOp op)
+{
+    switch (op) {
+        case BlendOp::Add:
+            return GL_FUNC_ADD;
+        case BlendOp::Subtract:
+            return GL_FUNC_SUBTRACT;
+        case BlendOp::ReverseSubtract:
+            return GL_FUNC_REVERSE_SUBTRACT;
+    }
+
+    return GL_FUNC_ADD;
 }
 
 GLenum toGLTextureInternalFormat(TextureFormat format)

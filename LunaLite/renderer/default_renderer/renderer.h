@@ -40,6 +40,8 @@ private:
     rhi::PipelineHandle m_pipeline{0};
     rhi::BufferHandle m_mesh_vertex_buffer{0};
     size_t m_mesh_vertex_buffer_size{0};
+    rhi::BufferHandle m_mesh_index_buffer{0};
+    size_t m_mesh_index_buffer_size{0};
     rhi::BufferHandle m_frameUniformBuffer{0};
     FrameUniforms m_frameUniforms;
 };

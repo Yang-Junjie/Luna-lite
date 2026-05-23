@@ -80,12 +80,30 @@ OpenGLTextureView* OpenGLDevice::getTextureView(TextureViewHandle handle)
 
 OpenGLShader* OpenGLDevice::getShader(ShaderHandle handle)
 {
-    return &m_shaders[handle - 1];
+    if (handle == 0 || handle > m_shaders.size()) {
+        return nullptr;
+    }
+
+    auto& shader = m_shaders[handle - 1];
+    if (shader.id == 0) {
+        return nullptr;
+    }
+
+    return &shader;
 }
 
 OpenGLPipeline* OpenGLDevice::getPipeline(PipelineHandle handle)
 {
-    return &m_pipelines[handle - 1];
+    if (handle == 0 || handle > m_pipelines.size()) {
+        return nullptr;
+    }
+
+    auto& pipeline = m_pipelines[handle - 1];
+    if (pipeline.program == 0 || pipeline.vao == 0) {
+        return nullptr;
+    }
+
+    return &pipeline;
 }
 
 } // namespace lunalite::rhi

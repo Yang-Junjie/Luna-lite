@@ -16,6 +16,11 @@ enum class BufferUsage {
     Dynamic
 };
 
+enum class IndexFormat {
+    UInt16,
+    UInt32
+};
+
 struct BufferDesc {
     BufferType type;
     BufferUsage usage;

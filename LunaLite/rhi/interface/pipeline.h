@@ -12,6 +12,43 @@ enum class PrimitiveTopology {
     Point
 };
 
+enum class CullMode {
+    None,
+    Front,
+    Back
+};
+
+enum class FrontFace {
+    Clockwise,
+    CounterClockwise
+};
+
+enum class CompareOp {
+    Never,
+    Less,
+    Equal,
+    LessOrEqual,
+    Greater,
+    NotEqual,
+    GreaterOrEqual,
+    Always
+};
+
+enum class BlendFactor {
+    Zero,
+    One,
+    SrcAlpha,
+    OneMinusSrcAlpha,
+    DstAlpha,
+    OneMinusDstAlpha
+};
+
+enum class BlendOp {
+    Add,
+    Subtract,
+    ReverseSubtract
+};
+
 enum class VertexFormat {
     Float1,
     Float2,
@@ -50,11 +87,35 @@ struct VertexLayoutDesc {
     std::vector<VertexAttributeDesc> attributes;
 };
 
+struct DepthState {
+    bool enabled{true};
+    bool write_enabled{true};
+    CompareOp compare{CompareOp::Less};
+};
+
+struct RasterState {
+    CullMode cull_mode{CullMode::None};
+    FrontFace front_face{FrontFace::CounterClockwise};
+};
+
+struct BlendState {
+    bool enabled{false};
+    BlendFactor src_color{BlendFactor::SrcAlpha};
+    BlendFactor dst_color{BlendFactor::OneMinusSrcAlpha};
+    BlendOp color_op{BlendOp::Add};
+    BlendFactor src_alpha{BlendFactor::One};
+    BlendFactor dst_alpha{BlendFactor::OneMinusSrcAlpha};
+    BlendOp alpha_op{BlendOp::Add};
+};
+
 struct PipelineDesc {
     PrimitiveTopology topology;
     VertexLayoutDesc vertex_layout;
     ShaderHandle vertex_shader;
     ShaderHandle fragment_shader;
+    DepthState depth_state{};
+    RasterState raster_state{};
+    BlendState blend_state{};
 };
 
 } // namespace lunalite::rhi

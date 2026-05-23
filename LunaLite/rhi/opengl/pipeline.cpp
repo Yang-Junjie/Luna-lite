@@ -25,6 +25,10 @@ PipelineHandle OpenGLDevice::createPipeline(const PipelineDesc& desc)
 {
     const auto* vertexShader = getShader(desc.vertex_shader);
     const auto* fragmentShader = getShader(desc.fragment_shader);
+    if (vertexShader == nullptr || fragmentShader == nullptr) {
+        std::printf("OpenGL pipeline creation failed: invalid shader handle.\n");
+        return 0;
+    }
 
     GLuint program = glCreateProgram();
     glAttachShader(program, vertexShader->id);
@@ -59,7 +63,14 @@ PipelineHandle OpenGLDevice::createPipeline(const PipelineDesc& desc)
     }
 
     m_pipelines.push_back(OpenGLPipeline{
-        .program = program, .vao = vao, .topology = toGLTopology(desc.topology), .vertex_layout = desc.vertex_layout});
+        .program = program,
+        .vao = vao,
+        .topology = toGLTopology(desc.topology),
+        .vertex_layout = desc.vertex_layout,
+        .depth_state = desc.depth_state,
+        .raster_state = desc.raster_state,
+        .blend_state = desc.blend_state,
+    });
     return static_cast<PipelineHandle>(m_pipelines.size());
 }
 

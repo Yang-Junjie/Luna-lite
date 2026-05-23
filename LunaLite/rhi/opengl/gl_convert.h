@@ -11,8 +11,14 @@
 namespace lunalite::rhi {
 
 GLenum toGLBufferUsage(BufferUsage usage);
+GLenum toGLIndexFormat(IndexFormat format);
 GLenum toGLShaderStage(ShaderStage stage);
 GLenum toGLTopology(PrimitiveTopology topology);
+GLenum toGLCullMode(CullMode mode);
+GLenum toGLFrontFace(FrontFace face);
+GLenum toGLCompareOp(CompareOp op);
+GLenum toGLBlendFactor(BlendFactor factor);
+GLenum toGLBlendOp(BlendOp op);
 GLenum toGLTextureInternalFormat(TextureFormat format);
 GLenum toGLAttachment(TextureFormat format);
 bool isDepthFormat(TextureFormat format);

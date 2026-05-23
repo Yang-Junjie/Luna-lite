@@ -28,6 +28,9 @@ struct OpenGLPipeline {
     GLuint vao{0};
     GLenum topology{GL_TRIANGLES};
     VertexLayoutDesc vertex_layout;
+    DepthState depth_state{};
+    RasterState raster_state{};
+    BlendState blend_state{};
 };
 
 struct OpenGLTexture {

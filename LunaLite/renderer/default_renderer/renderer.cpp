@@ -136,6 +136,15 @@ Renderer::Renderer(rhi::Instance& instance)
         },
         nullptr);
 
+    m_mesh_index_buffer_size = 0;
+    m_mesh_index_buffer = m_device->createBuffer(
+        rhi::BufferDesc{
+            .type = rhi::BufferType::IndexBuffer,
+            .usage = rhi::BufferUsage::Dynamic,
+            .size = m_mesh_index_buffer_size,
+        },
+        nullptr);
+
     m_frameUniformBuffer = m_device->createBuffer(
         rhi::BufferDesc{
             .type = rhi::BufferType::UniformBuffer,
@@ -196,21 +205,16 @@ void Renderer::setDirectionalLight(const glm::vec3& direction,
 
 void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
 {
+    for (const auto index : mesh.indices) {
+        if (index >= mesh.vertices.size()) {
+            return;
+        }
+    }
+
     m_device->updateBuffer(m_frameUniformBuffer, &m_frameUniforms, sizeof(FrameUniforms));
     m_cmd->setUniformBuffer(0, m_frameUniformBuffer);
 
-    std::vector<interface::Vertex> vertices;
-    vertices.reserve(mesh.indices.empty() ? mesh.vertices.size() : mesh.indices.size());
-
-    if (mesh.indices.empty()) {
-        vertices = mesh.vertices;
-    } else {
-        for (const auto index : mesh.indices) {
-            if (index < mesh.vertices.size()) {
-                vertices.push_back(mesh.vertices[index]);
-            }
-        }
-    }
+    auto vertices = mesh.vertices;
 
     const auto normalMatrix = glm::mat3(transform);
     for (auto& vertex : vertices) {
@@ -233,7 +237,27 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
 
     m_device->updateBuffer(m_mesh_vertex_buffer, vertices.data(), requiredSize);
     m_cmd->setVertexBuffer(0, m_mesh_vertex_buffer);
-    m_cmd->draw(static_cast<uint32_t>(vertices.size()));
+
+    if (!mesh.indices.empty()) {
+        const auto requiredIndexSize = mesh.indices.size() * sizeof(uint32_t);
+        if (requiredIndexSize > m_mesh_index_buffer_size) {
+            m_device->destroyBuffer(m_mesh_index_buffer);
+            m_mesh_index_buffer_size = requiredIndexSize;
+            m_mesh_index_buffer = m_device->createBuffer(
+                rhi::BufferDesc{
+                    .type = rhi::BufferType::IndexBuffer,
+                    .usage = rhi::BufferUsage::Dynamic,
+                    .size = m_mesh_index_buffer_size,
+                },
+                nullptr);
+        }
+
+        m_device->updateBuffer(m_mesh_index_buffer, mesh.indices.data(), requiredIndexSize);
+        m_cmd->setIndexBuffer(m_mesh_index_buffer, rhi::IndexFormat::UInt32);
+        m_cmd->drawIndexed(static_cast<uint32_t>(mesh.indices.size()));
+    } else {
+        m_cmd->draw(static_cast<uint32_t>(vertices.size()));
+    }
 }
 
 } // namespace lunalite::renderer
