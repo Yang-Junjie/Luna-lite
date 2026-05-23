@@ -8,6 +8,17 @@
 namespace lunalite::asset {
 class AssetDatabase {
 public:
+    static AssetDatabase& get()
+    {
+        static AssetDatabase instance;
+        return instance;
+    }
+
+    AssetDatabase(const AssetDatabase&) = delete;
+    AssetDatabase& operator=(const AssetDatabase&) = delete;
+    AssetDatabase(AssetDatabase&&) = delete;
+    AssetDatabase& operator=(AssetDatabase&&) = delete;
+
     template <typename T>
     AssetHandle add(std::shared_ptr<T> asset)
     {
@@ -39,6 +50,9 @@ public:
     }
 
 private:
+    AssetDatabase() = default;
+    ~AssetDatabase() = default;
+
     Asset* getAsset(AssetHandle handle)
     {
         const auto it = m_assets.find(static_cast<uint64_t>(handle));

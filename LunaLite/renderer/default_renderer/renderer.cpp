@@ -2,7 +2,6 @@
 
 #include <cstddef>
 
-#include <algorithm>
 #include <vector>
 
 namespace lunalite::renderer {
@@ -150,9 +149,6 @@ void Renderer::beginFrame()
     m_cmd->beginFrame();
     m_cmd->clear(0.08f, 0.09f, 0.11f, 1.0f);
     m_cmd->bindPipeline(m_pipeline);
-
-    m_device->updateBuffer(m_frameUniformBuffer, &m_frameUniforms, sizeof(FrameUniforms));
-    m_cmd->bindUniformBuffer(m_frameUniformBuffer, 0);
 }
 
 void Renderer::endFrame()
@@ -181,6 +177,9 @@ void Renderer::setDirectionalLight(const glm::vec3& direction,
 
 void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
 {
+    m_device->updateBuffer(m_frameUniformBuffer, &m_frameUniforms, sizeof(FrameUniforms));
+    m_cmd->bindUniformBuffer(m_frameUniformBuffer, 0);
+
     std::vector<interface::Vertex> vertices;
     vertices.reserve(mesh.indices.empty() ? mesh.vertices.size() : mesh.indices.size());
 

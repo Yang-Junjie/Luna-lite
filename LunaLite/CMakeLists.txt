@@ -22,9 +22,11 @@ target_link_libraries(LunaLiteRenderer
         LunaLiteRHI
 )
 
-add_executable(LunaLite
+add_library(LunaLite STATIC
     core/entry_point.cpp
+    core/application.cpp
     core/window.cpp
+    core/layer_stack.cpp
     core/uuid.cpp
     asset/mesh_asset_loader.cpp
     scene/scene.cpp

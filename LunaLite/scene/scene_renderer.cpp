@@ -1,4 +1,6 @@
+#include "../asset/asset_database.h"
 #include "../renderer/interface/mesh.h"
+#include "../renderer/interface/renderer.h"
 #include "components.h"
 #include "scene_renderer.h"
 
@@ -7,10 +9,19 @@
 
 namespace lunalite::scene {
 
-SceneRenderer::SceneRenderer(renderer::interface::Renderer& renderer, asset::AssetDatabase& assets)
-    : m_renderer(renderer),
-      m_assets(assets)
+SceneRenderer::SceneRenderer(renderer::interface::Renderer& renderer)
+    : m_renderer(renderer)
 {}
+
+void SceneRenderer::beginFrame()
+{
+    m_renderer.beginFrame();
+}
+
+void SceneRenderer::endFrame()
+{
+    m_renderer.endFrame();
+}
 
 void SceneRenderer::render(const Scene& scene)
 {
@@ -34,20 +45,16 @@ void SceneRenderer::render(const Scene& scene)
         m_renderer.setViewProjection(view, proj, cameraPos);
     }
 
-    m_renderer.beginFrame();
-
     const auto view = scene.getRegistry().view<const TransformComponent, const MeshComponent>();
     for (const auto entity : view) {
         const auto& transform = view.get<const TransformComponent>(entity);
         const auto& meshComponent = view.get<const MeshComponent>(entity);
-        const auto* mesh = m_assets.get<renderer::interface::Mesh>(meshComponent.mesh);
+        const auto* mesh = asset::AssetDatabase::get().get<renderer::interface::Mesh>(meshComponent.mesh);
         if (mesh == nullptr) {
             continue;
         }
 
         m_renderer.renderMesh(*mesh, transform.getTransform());
     }
-
-    m_renderer.endFrame();
 }
 } // namespace lunalite::scene

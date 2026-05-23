@@ -3,7 +3,6 @@
 #include "../interface/renderer.h"
 
 #include <glm/glm.hpp>
-#include <vector>
 
 namespace lunalite::renderer {
 class Renderer : public interface::Renderer {

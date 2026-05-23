@@ -22,3 +22,4 @@ add_library(tiny_obj_loader INTERFACE)
 target_include_directories(tiny_obj_loader INTERFACE third_party/tiny_obj_loader)
 
 add_subdirectory(LunaLite)
+add_subdirectory(runtime)

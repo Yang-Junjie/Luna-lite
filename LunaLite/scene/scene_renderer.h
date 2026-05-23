@@ -1,17 +1,30 @@
 #pragma once
-#include "../asset/asset_database.h"
-#include "../renderer/interface/renderer.h"
 #include "scene.h"
+
+namespace lunalite::core {
+class Application;
+}
+
+namespace lunalite::renderer::interface {
+class Renderer;
+}
 
 namespace lunalite::scene {
 class SceneRenderer {
 public:
-    SceneRenderer(renderer::interface::Renderer& renderer, asset::AssetDatabase& assets);
     ~SceneRenderer() = default;
     void render(const Scene& scene);
 
 private:
+    // 只有Applicaytion可以创建SceneRenderer使用beginFrame和endFrame
+    friend class core::Application;
+
+    explicit SceneRenderer(renderer::interface::Renderer& renderer);
+
+    void beginFrame();
+    void endFrame();
+
+private:
     renderer::interface::Renderer& m_renderer;
-    asset::AssetDatabase& m_assets;
 };
 } // namespace lunalite::scene
