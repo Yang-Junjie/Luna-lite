@@ -31,8 +31,4 @@ struct WindowRequirements {
     bool gl_debug_context = true;
 };
 
-struct WindowHandle {
-    void* native_window = nullptr;
-};
-
 } // namespace lunalite::rhi

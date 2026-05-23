@@ -1,14 +1,13 @@
 #pragma once
 #include "../interface/swapchain.h"
 
-struct GLFWwindow;
-
 namespace lunalite::rhi {
 class OpenGLDevice;
+class Surface;
 
 class OpenGLSwapchain final : public Swapchain {
 public:
-    OpenGLSwapchain(OpenGLDevice& device, GLFWwindow* window);
+    OpenGLSwapchain(OpenGLDevice& device, Surface& surface);
     ~OpenGLSwapchain() override = default;
 
     TextureViewHandle getCurrentColorTextureView() const override;
@@ -20,7 +19,7 @@ public:
 
 private:
     OpenGLDevice& m_device;
-    GLFWwindow* m_window{nullptr};
+    Surface& m_surface;
     TextureViewHandle m_color_view{0};
     TextureViewHandle m_depth_stencil_view{0};
     uint32_t m_width{0};

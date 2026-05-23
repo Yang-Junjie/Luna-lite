@@ -108,7 +108,7 @@ void Application::initialize(const ApplicationCreateInfo& info)
 
     m_window = std::make_unique<Window>(window_info);
 
-    if (!m_rhi->init(m_window->getRHIWindowHandle())) {
+    if (!m_rhi->init(*m_window)) {
         throw std::runtime_error("Failed to initialize RHI instance.");
     }
 

@@ -25,14 +25,14 @@ public:
         return req;
     }
 
-    bool init(WindowHandle window) override;
+    bool init(Surface& surface) override;
     void shutdown() override;
     void resize(uint32_t width, uint32_t height) override;
     Device* getDevice() override;
     Swapchain* getSwapchain() override;
 
 private:
-    void* m_native_window{nullptr};
+    Surface* m_surface{nullptr};
     std::unique_ptr<Device> m_device;
     std::unique_ptr<Swapchain> m_swapchain;
 };

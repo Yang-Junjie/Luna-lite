@@ -3,32 +3,55 @@
 #include "swapchain.h"
 
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 namespace lunalite::rhi {
 
 OpenGLInstance::~OpenGLInstance() = default;
 
+namespace {
+const OpenGLSurfaceCallbacks* s_loader_callbacks = nullptr;
 
-bool OpenGLInstance::init(WindowHandle window)
+void* loadOpenGLProc(const char* name)
 {
-    m_native_window = window.native_window;
+    if (s_loader_callbacks == nullptr || s_loader_callbacks->get_proc_address == nullptr) {
+        return nullptr;
+    }
 
-    auto* glfwWindow = static_cast<GLFWwindow*>(m_native_window);
-    if (glfwWindow == nullptr) {
+    return s_loader_callbacks->get_proc_address(s_loader_callbacks->user_data, name);
+}
+} // namespace
+
+bool OpenGLInstance::init(Surface& surface)
+{
+    const auto& desc = surface.getSurfaceDesc();
+    if (desc.backend != BackendType::OpenGL || desc.kind != SurfaceKind::OpenGLContext) {
         return false;
     }
 
-    glfwMakeContextCurrent(glfwWindow);
-
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
+    const auto& gl_surface = desc.opengl;
+    if (gl_surface.make_current == nullptr || gl_surface.get_proc_address == nullptr ||
+        gl_surface.swap_buffers == nullptr) {
         return false;
     }
 
-    glfwSwapInterval(1);
+    if (!gl_surface.make_current(gl_surface.user_data)) {
+        return false;
+    }
+
+    s_loader_callbacks = &gl_surface;
+    const int loaded = gladLoadGLLoader(reinterpret_cast<GLADloadproc>(loadOpenGLProc));
+    s_loader_callbacks = nullptr;
+    if (!loaded) {
+        return false;
+    }
+
+    if (gl_surface.set_swap_interval != nullptr) {
+        gl_surface.set_swap_interval(gl_surface.user_data, 1);
+    }
 
     auto device = std::make_unique<OpenGLDevice>();
-    m_swapchain = std::make_unique<OpenGLSwapchain>(*device, glfwWindow);
+    m_surface = &surface;
+    m_swapchain = std::make_unique<OpenGLSwapchain>(*device, surface);
     m_device = std::move(device);
     return true;
 }
@@ -37,7 +60,7 @@ void OpenGLInstance::shutdown()
 {
     m_swapchain.reset();
     m_device.reset();
-    m_native_window = nullptr;
+    m_surface = nullptr;
 }
 
 void OpenGLInstance::resize(uint32_t width, uint32_t height)

@@ -1,5 +1,6 @@
 #pragma once
 #include "../rhi/interface/rhi_types.h"
+#include "../rhi/interface/surface.h"
 
 #include <cstdint>
 
@@ -27,7 +28,7 @@ struct GLFWWindowDeleter {
     }
 };
 
-class Window {
+class Window final : public rhi::Surface {
 public:
     explicit Window(const WindowCreateInfo& info);
     ~Window();
@@ -35,13 +36,19 @@ public:
     void init();
     void onUpdate();
 
-    rhi::WindowHandle getRHIWindowHandle();
+    const rhi::SurfaceDesc& getSurfaceDesc() const override;
+    uint32_t getWidth() const override;
+    uint32_t getHeight() const override;
+    void resize(uint32_t width, uint32_t height) override;
 
     bool shouldClose();
 
 private:
     std::unique_ptr<GLFWwindow, GLFWWindowDeleter> m_window{nullptr};
     WindowCreateInfo m_info;
+    rhi::SurfaceDesc m_surface_desc{};
+    uint32_t m_width{0};
+    uint32_t m_height{0};
 };
 
 } // namespace lunalite::core

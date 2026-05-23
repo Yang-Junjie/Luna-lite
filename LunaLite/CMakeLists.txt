@@ -13,7 +13,6 @@ add_library(LunaLiteRHI
 
 target_link_libraries(LunaLiteRHI
     PUBLIC
-        glfw
         glad::glad
         glm::glm
 )

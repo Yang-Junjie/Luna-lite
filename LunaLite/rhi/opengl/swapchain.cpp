@@ -1,20 +1,24 @@
 #include "swapchain.h"
 
 #include "device.h"
-
-#include <GLFW/glfw3.h>
+#include "../interface/surface.h"
 
 namespace lunalite::rhi {
-OpenGLSwapchain::OpenGLSwapchain(OpenGLDevice& device, GLFWwindow* window)
+OpenGLSwapchain::OpenGLSwapchain(OpenGLDevice& device, Surface& surface)
     : m_device(device),
-      m_window(window),
+      m_surface(surface),
       m_color_view(m_device.createSwapchainTextureView(TextureFormat::RGBA8)),
       m_depth_stencil_view(m_device.createSwapchainTextureView(TextureFormat::Depth24Stencil8))
 {
-    int width = 0;
-    int height = 0;
-    glfwGetFramebufferSize(m_window, &width, &height);
-    resize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    uint32_t width = m_surface.getWidth();
+    uint32_t height = m_surface.getHeight();
+    const auto& gl_surface = m_surface.getSurfaceDesc().opengl;
+    if (gl_surface.get_framebuffer_size != nullptr) {
+        gl_surface.get_framebuffer_size(gl_surface.user_data, width, height);
+    }
+
+    m_surface.resize(width, height);
+    resize(width, height);
 }
 
 TextureViewHandle OpenGLSwapchain::getCurrentColorTextureView() const
@@ -45,8 +49,9 @@ void OpenGLSwapchain::resize(uint32_t width, uint32_t height)
 
 void OpenGLSwapchain::present()
 {
-    if (m_window) {
-        glfwSwapBuffers(m_window);
+    const auto& gl_surface = m_surface.getSurfaceDesc().opengl;
+    if (gl_surface.swap_buffers != nullptr) {
+        gl_surface.swap_buffers(gl_surface.user_data);
     }
 }
 } // namespace lunalite::rhi
