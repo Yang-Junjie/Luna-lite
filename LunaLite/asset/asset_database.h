@@ -1,7 +1,9 @@
 #pragma once
+#include "../core/log.h"
 #include "asset.h"
 
 #include <cstdint>
+
 #include <memory>
 #include <unordered_map>
 
@@ -19,14 +21,15 @@ public:
     AssetDatabase(AssetDatabase&&) = delete;
     AssetDatabase& operator=(AssetDatabase&&) = delete;
 
-    template <typename T>
-    AssetHandle add(std::shared_ptr<T> asset)
+    template <typename T> AssetHandle add(std::shared_ptr<T> asset)
     {
         if (asset == nullptr) {
+            LUNA_CORE_ERROR("Failed to add null asset");
             return AssetHandle{0};
         }
 
         if (!asset->handle.isValid()) {
+            LUNA_CORE_ERROR("Asset handle is invalid");
             asset->handle = AssetHandle{};
         }
 
@@ -35,15 +38,13 @@ public:
         return AssetHandle{key};
     }
 
-    template <typename T>
-    T* get(AssetHandle handle)
+    template <typename T> T* get(AssetHandle handle)
     {
         auto* asset = getAsset(handle);
         return dynamic_cast<T*>(asset);
     }
 
-    template <typename T>
-    const T* get(AssetHandle handle) const
+    template <typename T> const T* get(AssetHandle handle) const
     {
         const auto* asset = getAsset(handle);
         return dynamic_cast<const T*>(asset);
@@ -57,6 +58,7 @@ private:
     {
         const auto it = m_assets.find(static_cast<uint64_t>(handle));
         if (it == m_assets.end()) {
+            LUNA_CORE_ERROR("Failed to get asset");
             return nullptr;
         }
 
@@ -67,6 +69,7 @@ private:
     {
         const auto it = m_assets.find(static_cast<uint64_t>(handle));
         if (it == m_assets.end()) {
+            LUNA_CORE_ERROR("Failed to get asset");
             return nullptr;
         }
 

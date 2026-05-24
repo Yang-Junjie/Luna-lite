@@ -5,11 +5,11 @@
 
 namespace lunalite::renderer {
 
-RendererController::RendererController(rhi::Instance& rhi,
+RendererController::RendererController(rhi::Instance& instance,
                                        uint32_t width,
                                        uint32_t height,
                                        interface::RendererKind initial_kind)
-    : m_rhi(rhi),
+    : m_instance(instance),
       m_width(width),
       m_height(height)
 {
@@ -52,12 +52,12 @@ std::unique_ptr<interface::Renderer> RendererController::createRenderer(interfac
 {
     switch (kind) {
         case interface::RendererKind::Default:
-            return std::make_unique<Renderer>(m_rhi);
+            return std::make_unique<Renderer>(m_instance);
         case interface::RendererKind::SoftRasterization:
             return std::make_unique<SoftRasterizationRenderer>(m_width, m_height);
     }
 
-    return std::make_unique<Renderer>(m_rhi);
+    return std::make_unique<Renderer>(m_instance);
 }
 
 } // namespace lunalite::renderer

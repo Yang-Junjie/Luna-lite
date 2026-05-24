@@ -18,13 +18,13 @@ DemoLayer::DemoLayer()
 
 void DemoLayer::onAttach()
 {
-    const auto cubeHandle = asset::MeshAssetLoader::loadObj("../../assets/cube.obj");
+    const auto cubeHandle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
 
     {
         auto entity = m_scene.createEntity();
         m_model_entity = entity;
         auto& transformComp = m_scene.addComponent<scene::TransformComponent>(entity);
-        transformComp.scale = glm::vec3(1.0f, 1.0f, 1.0f);
+        transformComp.scale = glm::vec3(8.0f, 8.0f, 8.0f);
         auto& meshComp = m_scene.addComponent<scene::MeshComponent>(entity);
         meshComp.mesh = cubeHandle;
     }
@@ -41,7 +41,7 @@ void DemoLayer::onAttach()
 void DemoLayer::onUpdate(core::Timestep dt)
 {
     auto& transform = m_scene.getComponent<scene::TransformComponent>(m_model_entity);
-    transform.rotation.y += dt.getMilliseconds() * 0.1f;
+    transform.rotation.y += dt.getMilliseconds() * 0.01f;
 }
 
 void DemoLayer::onRender()

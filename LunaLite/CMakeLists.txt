@@ -28,6 +28,8 @@ target_link_libraries(LunaLiteRenderer
         glm::glm
         LunaLiteRHI
         LunaLiteSoftRasterizationRenderer
+    PRIVATE
+        spdlog::spdlog
 )
 
 add_library(LunaLiteSoftRasterizationRenderer
@@ -53,6 +55,7 @@ add_library(LunaLite STATIC
     core/application.cpp
     core/window.cpp
     core/layer_stack.cpp
+    core/log.cpp
     core/uuid.cpp
     asset/mesh_asset_loader.cpp
     scene/scene.cpp
@@ -65,6 +68,7 @@ target_link_libraries(LunaLite
         glad::glad
         glm::glm
         EnTT::EnTT
+        spdlog::spdlog
         tiny_obj_loader
         LunaLiteRHI
         LunaLiteRenderer

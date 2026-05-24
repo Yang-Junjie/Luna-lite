@@ -1,10 +1,10 @@
+#include "../../core/log.h"
 #include "renderer.h"
 
 #include <cstddef>
 #include <cstdint>
 
 #include <limits>
-#include <stdexcept>
 
 namespace lunalite::renderer {
 namespace {
@@ -647,10 +647,10 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
     const auto& vertices = mesh.getVertices();
     const auto& indices = mesh.getIndices();
 
-    if (vertices.size() > std::numeric_limits<uint32_t>::max() ||
-        indices.size() > std::numeric_limits<uint32_t>::max()) {
-        return nullptr;
-    }
+    LUNA_ASSERT(
+        vertices.size() <= std::numeric_limits<uint32_t>::max(), "Mesh has too many vertices: {}", vertices.size());
+    LUNA_ASSERT(
+        indices.size() <= std::numeric_limits<uint32_t>::max(), "Mesh has too many indices: {}", indices.size());
 
     const auto key = getMeshCacheKey(mesh);
     auto& gpu_mesh = m_mesh_gpu_cache[key];
@@ -729,9 +729,7 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
 uint64_t Renderer::getMeshCacheKey(const interface::Mesh& mesh) const
 {
     const auto handle = static_cast<uint64_t>(mesh.handle);
-    if (handle == 0) {
-        throw std::runtime_error("Mesh has invalid handle (0), cannot generate cache key.");
-    }
+    LUNA_ASSERT(handle != 0);
 
     return handle;
 }

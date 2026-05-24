@@ -4,6 +4,7 @@
 #include "../interface/renderer_kind.h"
 
 #include <cstdint>
+
 #include <memory>
 
 namespace lunalite::rhi {
@@ -18,7 +19,7 @@ namespace lunalite::renderer {
 
 class RendererController {
 public:
-    RendererController(rhi::Instance& rhi, uint32_t width, uint32_t height, interface::RendererKind initial_kind);
+    RendererController(rhi::Instance& instance, uint32_t width, uint32_t height, interface::RendererKind initial_kind);
     ~RendererController();
 
     interface::Renderer& getRenderer();
@@ -30,7 +31,7 @@ public:
 private:
     std::unique_ptr<interface::Renderer> createRenderer(interface::RendererKind kind) const;
 
-    rhi::Instance& m_rhi;
+    rhi::Instance& m_instance;
     uint32_t m_width{0};
     uint32_t m_height{0};
     interface::RendererKind m_kind{interface::RendererKind::Default};

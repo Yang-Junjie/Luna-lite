@@ -1,10 +1,10 @@
-#include "application.h"
-
 #include "../renderer/controller/renderer_controller.h"
 #include "../renderer/frame_presenter/rhi_frame_presenter.h"
 #include "../rhi/backend_factory.h"
 #include "../scene/scene_renderer.h"
+#include "application.h"
 #include "layer.h"
+#include "log.h"
 
 #include <chrono>
 #include <stdexcept>
@@ -15,11 +15,9 @@ Application* s_instance = nullptr;
 }
 
 Application::Application(const ApplicationCreateInfo& info)
-    : m_rhi(rhi::BackendFactory::createInstance(info.backend))
+    : m_instance(rhi::BackendFactory::createInstance(info.backend))
 {
-    if (s_instance != nullptr) {
-        throw std::runtime_error("Application already exists.");
-    }
+    LUNA_ASSERT(s_instance == nullptr, "Application already exists.");
 
     s_instance = this;
     initialize(info);
@@ -35,9 +33,7 @@ Application::~Application()
 
 Application& Application::get()
 {
-    if (s_instance == nullptr) {
-        throw std::runtime_error("Application has not been created.");
-    }
+    LUNA_ASSERT(s_instance != nullptr, "Application instance is null.");
 
     return *s_instance;
 }
@@ -96,25 +92,24 @@ scene::SceneRenderer& Application::getSceneRenderer()
 
 void Application::initialize(const ApplicationCreateInfo& info)
 {
-    if (!m_rhi) {
-        throw std::runtime_error("Failed to create RHI instance.");
-    }
+    LUNA_ASSERT(m_instance, "Failed to create RHI instance.");
 
     WindowCreateInfo window_info;
     window_info.width = info.width;
     window_info.height = info.height;
     window_info.title = info.name;
-    window_info.requirements = m_rhi->getWindowRequirements();
+    window_info.requirements = m_instance->getWindowRequirements();
 
     m_window = std::make_unique<Window>(window_info);
 
-    if (!m_rhi->init(*m_window)) {
-        throw std::runtime_error("Failed to initialize RHI instance.");
+    if (!m_instance->init(*m_window)) {
+        LUNA_CORE_FATAL("Failed to initialize RHI instance.");
     }
 
     m_renderer_controller =
-        std::make_unique<renderer::RendererController>(*m_rhi, info.width, info.height, info.renderer_kind);
-    m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_rhi->getDevice(), *m_rhi->getSwapchain());
+        std::make_unique<renderer::RendererController>(*m_instance, info.width, info.height, info.renderer_kind);
+    m_frame_presenter =
+        std::make_unique<renderer::RHIFramePresenter>(*m_instance->getDevice(), *m_instance->getSwapchain());
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
 }
 
@@ -123,9 +118,6 @@ void Application::shutdown()
     m_scene_renderer.reset();
     m_frame_presenter.reset();
     m_renderer_controller.reset();
-
-    if (m_rhi) {
-        m_rhi->shutdown();
-    }
+    m_instance->shutdown();
 }
 } // namespace lunalite::core

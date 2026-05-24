@@ -23,6 +23,7 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
         tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &error, path.string().c_str(), nullptr, true);
 
     if (!loaded) {
+        LUNA_CORE_ERROR("Failed to load OBJ file '{}': {}", path.string(), error);
         return AssetHandle{0};
     }
 
@@ -61,6 +62,7 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
     }
 
     if (vertices.empty()) {
+        LUNA_CORE_ERROR("No valid vertices found in OBJ file '{}'", path.string());
         return AssetHandle{0};
     }
 
