@@ -29,12 +29,16 @@ public:
         }
 
         if (!asset->handle.isValid()) {
-            LUNA_CORE_ERROR("Asset handle is invalid");
-            asset->handle = AssetHandle{};
+            do {
+                asset->handle = AssetHandle{};
+            } while (m_assets.contains(static_cast<uint64_t>(asset->handle)));
+        } else if (m_assets.contains(static_cast<uint64_t>(asset->handle))) {
+            LUNA_CORE_ERROR("Asset handle already exists");
+            return AssetHandle{0};
         }
 
         const auto key = static_cast<uint64_t>(asset->handle);
-        m_assets[key] = std::move(asset);
+        m_assets.emplace(key, std::move(asset));
         return AssetHandle{key};
     }
 

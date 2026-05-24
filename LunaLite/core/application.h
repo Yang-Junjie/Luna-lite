@@ -1,6 +1,6 @@
 #pragma once
 #include "../renderer/interface/renderer_kind.h"
-#include "../rhi/interface/rhi_types.h"
+#include "TinyRHI/interface/rhi_types.h"
 #include "layer_stack.h"
 #include "window.h"
 

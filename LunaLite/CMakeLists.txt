@@ -1,21 +1,6 @@
-add_library(LunaLiteRHI
-    rhi/opengl/instance.cpp
-    rhi/opengl/device.cpp
-    rhi/opengl/buffer.cpp
-    rhi/opengl/texture.cpp
-    rhi/opengl/shader.cpp
-    rhi/opengl/pipeline.cpp
-    rhi/opengl/gl_convert.cpp
-    rhi/opengl/command_list.cpp
-    rhi/opengl/swapchain.cpp
-    rhi/backend_factory.cpp
-)
-
-target_link_libraries(LunaLiteRHI
-    PUBLIC
-        glad::glad
-        glm::glm
-)
+set(TINYRHI_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(TINYRHI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(TinyRHI)
 
 add_library(LunaLiteRenderer
     renderer/controller/renderer_controller.cpp
@@ -26,7 +11,7 @@ add_library(LunaLiteRenderer
 target_link_libraries(LunaLiteRenderer
     PUBLIC
         glm::glm
-        LunaLiteRHI
+        TinyRHI::TinyRHI
         LunaLiteSoftRasterizationRenderer
     PRIVATE
         spdlog::spdlog
@@ -39,6 +24,7 @@ add_library(LunaLiteSoftRasterizationRenderer
 target_link_libraries(LunaLiteSoftRasterizationRenderer
     PUBLIC
         glm::glm
+        TinyRHI::TinyRHI
 )
 
 add_library(LunaLitePathTracingRenderer
@@ -48,6 +34,7 @@ add_library(LunaLitePathTracingRenderer
 target_link_libraries(LunaLitePathTracingRenderer
     PUBLIC
         glm::glm
+        TinyRHI::TinyRHI
 )
 
 add_library(LunaLite STATIC
@@ -65,11 +52,10 @@ add_library(LunaLite STATIC
 target_link_libraries(LunaLite
     PUBLIC
         glfw
-        glad::glad
         glm::glm
         EnTT::EnTT
         spdlog::spdlog
         tiny_obj_loader
-        LunaLiteRHI
+        TinyRHI::TinyRHI
         LunaLiteRenderer
 )

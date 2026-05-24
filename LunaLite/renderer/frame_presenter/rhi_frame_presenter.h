@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../rhi/interface/device.h"
-#include "../../rhi/interface/swapchain.h"
+#include "TinyRHI/interface/device.h"
+#include "TinyRHI/interface/swapchain.h"
 #include "../interface/frame_image.h"
 
 #include <cstdint>

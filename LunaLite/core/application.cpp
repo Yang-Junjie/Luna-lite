@@ -1,6 +1,6 @@
 #include "../renderer/controller/renderer_controller.h"
 #include "../renderer/frame_presenter/rhi_frame_presenter.h"
-#include "../rhi/backend_factory.h"
+#include "TinyRHI/backend_factory.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
 #include "layer.h"

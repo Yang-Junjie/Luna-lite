@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../rhi/interface/rhi_types.h"
+#include "TinyRHI/interface/rhi_types.h"
 
 #include <cstddef>
 #include <cstdint>

@@ -19,7 +19,6 @@ set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
 set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(third_party/glfw)
-add_subdirectory(third_party/glad)
 add_subdirectory(third_party/glm)
 add_subdirectory(third_party/entt)
 add_subdirectory(third_party/spdlog)

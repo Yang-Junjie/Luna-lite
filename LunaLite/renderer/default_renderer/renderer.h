@@ -1,5 +1,5 @@
 #pragma once
-#include "../../rhi/interface/instance.h"
+#include "TinyRHI/interface/instance.h"
 #include "../interface/frame_image.h"
 #include "../interface/renderer.h"
 
