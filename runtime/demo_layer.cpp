@@ -1,5 +1,10 @@
 #include "../LunaLite/asset/mesh_asset_loader.h"
 #include "../LunaLite/core/application.h"
+#include "../LunaLite/core/application_event.h"
+#include "../LunaLite/core/input.h"
+#include "../LunaLite/core/key_event.h"
+#include "../LunaLite/core/log.h"
+#include "../LunaLite/core/mouse_event.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "demo_layer.h"
@@ -48,4 +53,5 @@ void DemoLayer::onRender()
 {
     core::Application::get().getSceneRenderer().render(m_scene);
 }
+
 } // namespace lunalite::runtime

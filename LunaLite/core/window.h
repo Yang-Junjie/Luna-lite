@@ -1,10 +1,11 @@
 #pragma once
+#include "event.h"
 #include "TinyRHI/interface/rhi_types.h"
 #include "TinyRHI/interface/surface.h"
 
 #include <cstdint>
 
-#include <GLFW/glfw3.h>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -19,36 +20,17 @@ public:
     rhi::WindowRequirements requirements;
 };
 
-struct GLFWWindowDeleter {
-    void operator()(GLFWwindow* window) const noexcept
-    {
-        if (window) {
-            glfwDestroyWindow(window);
-        }
-    }
-};
-
-class Window final : public rhi::Surface {
+class Window : public rhi::Surface {
 public:
-    explicit Window(const WindowCreateInfo& info);
-    ~Window();
+    using EventCallbackFn = std::function<void(Event&)>;
+    ~Window() override = default;
 
-    void init();
-    void onUpdate();
+    virtual void init() = 0;
+    virtual void onUpdate() = 0;
+    virtual void setEventCallback(const EventCallbackFn& callback) = 0;
+    virtual bool shouldClose() = 0;
 
-    const rhi::SurfaceDesc& getSurfaceDesc() const override;
-    uint32_t getWidth() const override;
-    uint32_t getHeight() const override;
-    void resize(uint32_t width, uint32_t height) override;
-
-    bool shouldClose();
-
-private:
-    std::unique_ptr<GLFWwindow, GLFWWindowDeleter> m_window{nullptr};
-    WindowCreateInfo m_info;
-    rhi::SurfaceDesc m_surface_desc{};
-    uint32_t m_width{0};
-    uint32_t m_height{0};
+    static std::unique_ptr<Window> create(const WindowCreateInfo& info);
 };
 
 } // namespace lunalite::core

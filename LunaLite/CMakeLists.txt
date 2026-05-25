@@ -40,7 +40,8 @@ target_link_libraries(LunaLitePathTracingRenderer
 add_library(LunaLite STATIC
     core/entry_point.cpp
     core/application.cpp
-    core/window.cpp
+    core/input.cpp
+    platform/window/glfw_window.cpp
     core/layer_stack.cpp
     core/log.cpp
     core/uuid.cpp
@@ -51,11 +52,12 @@ add_library(LunaLite STATIC
 
 target_link_libraries(LunaLite
     PUBLIC
-        glfw
         glm::glm
         EnTT::EnTT
         spdlog::spdlog
         tiny_obj_loader
         TinyRHI::TinyRHI
         LunaLiteRenderer
+    PRIVATE
+        glfw
 )

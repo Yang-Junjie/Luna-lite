@@ -1,7 +1,9 @@
 #pragma once
 #include "../renderer/interface/renderer_kind.h"
-#include "TinyRHI/interface/rhi_types.h"
+#include "application_event.h"
+#include "event.h"
 #include "layer_stack.h"
+#include "TinyRHI/interface/rhi_types.h"
 #include "window.h"
 
 #include <cstdint>
@@ -51,6 +53,9 @@ public:
 private:
     void initialize(const ApplicationCreateInfo& info);
     void shutdown();
+    void onEvent(Event& event);
+    bool onWindowClose(WindowCloseEvent& event);
+    bool onWindowResize(WindowResizeEvent& event);
 
 private:
     bool m_is_running{true};

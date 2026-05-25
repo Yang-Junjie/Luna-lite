@@ -14,6 +14,7 @@ public:
 
     void beginFrame() override;
     void endFrame() override;
+    void resize(uint32_t width, uint32_t height) override;
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
     void setDirectionalLight(const glm::vec3& direction,
                              const glm::vec3& ambient,

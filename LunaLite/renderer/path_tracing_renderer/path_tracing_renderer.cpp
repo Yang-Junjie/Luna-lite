@@ -43,6 +43,15 @@ void PathTracingRenderer::endFrame()
     updateFrameImage();
 }
 
+void PathTracingRenderer::resize(uint32_t width, uint32_t height)
+{
+    m_width = std::max(1u, width);
+    m_height = std::max(1u, height);
+    m_framebuffer.resize(static_cast<size_t>(m_width) * m_height);
+    m_present_buffer.resize(static_cast<size_t>(m_width) * m_height);
+    updateFrameImage();
+}
+
 void PathTracingRenderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
 {
     m_view = view;

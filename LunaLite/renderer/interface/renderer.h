@@ -2,6 +2,8 @@
 #include "frame_image.h"
 #include "mesh.h"
 
+#include <cstdint>
+
 #include <glm/glm.hpp>
 
 namespace lunalite::renderer::interface {
@@ -12,6 +14,7 @@ public:
 
     virtual void beginFrame() = 0;
     virtual void endFrame() = 0;
+    virtual void resize(uint32_t width, uint32_t height) = 0;
     virtual void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) = 0;
     virtual void setDirectionalLight(const glm::vec3& direction,
                                      const glm::vec3& ambient,

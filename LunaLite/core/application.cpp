@@ -1,10 +1,11 @@
 #include "../renderer/controller/renderer_controller.h"
 #include "../renderer/frame_presenter/rhi_frame_presenter.h"
-#include "TinyRHI/backend_factory.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
+#include "application_event.h"
 #include "layer.h"
 #include "log.h"
+#include "TinyRHI/backend_factory.h"
 
 #include <chrono>
 #include <stdexcept>
@@ -100,7 +101,10 @@ void Application::initialize(const ApplicationCreateInfo& info)
     window_info.title = info.name;
     window_info.requirements = m_instance->getWindowRequirements();
 
-    m_window = std::make_unique<Window>(window_info);
+    m_window = Window::create(window_info);
+    m_window->setEventCallback([this](Event& event) {
+        onEvent(event);
+    });
 
     if (!m_instance->init(*m_window)) {
         LUNA_CORE_FATAL("Failed to initialize RHI instance.");
@@ -119,5 +123,36 @@ void Application::shutdown()
     m_frame_presenter.reset();
     m_renderer_controller.reset();
     m_instance->shutdown();
+}
+
+void Application::onEvent(Event& event)
+{
+    EventDispatcher dispatcher(event);
+    dispatcher.dispatch<WindowCloseEvent>([this](WindowCloseEvent& e) {
+        return onWindowClose(e);
+    });
+    dispatcher.dispatch<WindowResizeEvent>([this](WindowResizeEvent& e) {
+        return onWindowResize(e);
+    });
+
+    for (auto it = m_layer_stack.rbegin(); it != m_layer_stack.rend(); ++it) {
+        if (event.m_handled) {
+            break;
+        }
+
+        (*it)->onEvent(event);
+    }
+}
+
+bool Application::onWindowClose(WindowCloseEvent&)
+{
+    close();
+    return true;
+}
+
+bool Application::onWindowResize(WindowResizeEvent& event)
+{
+    m_renderer_controller->resize(event.getWidth(), event.getHeight());
+    return false;
 }
 } // namespace lunalite::core

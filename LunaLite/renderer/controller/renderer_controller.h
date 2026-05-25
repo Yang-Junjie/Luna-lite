@@ -26,6 +26,7 @@ public:
     const interface::Renderer& getRenderer() const;
     interface::RendererKind getKind() const;
     void switchRenderer(interface::RendererKind kind);
+    void resize(uint32_t width, uint32_t height);
     const interface::FrameImage& getFrameImage() const;
 
 private:

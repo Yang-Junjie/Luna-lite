@@ -584,6 +584,11 @@ void Renderer::endFrame()
     m_cmd->end();
 }
 
+void Renderer::resize(uint32_t width, uint32_t height)
+{
+    ensureGBuffer(width, height);
+}
+
 void Renderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
 {
     m_frameUniforms.view = view;

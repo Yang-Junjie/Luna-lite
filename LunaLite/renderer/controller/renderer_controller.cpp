@@ -3,6 +3,8 @@
 #include "../soft_rasterization_renderer/soft_rasterization_renderer.h"
 #include "renderer_controller.h"
 
+#include "TinyRHI/interface/instance.h"
+
 namespace lunalite::renderer {
 
 RendererController::RendererController(rhi::Instance& instance,
@@ -41,6 +43,21 @@ void RendererController::switchRenderer(interface::RendererKind kind)
 
     m_renderer = createRenderer(kind);
     m_kind = kind;
+}
+
+void RendererController::resize(uint32_t width, uint32_t height)
+{
+    if (width == 0 || height == 0) {
+        return;
+    }
+
+    m_width = width;
+    m_height = height;
+
+    m_instance.resize(width, height);
+    if (m_renderer) {
+        m_renderer->resize(width, height);
+    }
 }
 
 const interface::FrameImage& RendererController::getFrameImage() const

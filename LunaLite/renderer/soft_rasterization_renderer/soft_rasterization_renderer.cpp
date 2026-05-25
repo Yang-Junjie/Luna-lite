@@ -44,6 +44,20 @@ void SoftRasterizationRenderer::endFrame()
     updateFrameImage();
 }
 
+void SoftRasterizationRenderer::resize(uint32_t width, uint32_t height)
+{
+    if (width == 0 || height == 0) {
+        return;
+    }
+
+    m_width = width;
+    m_height = height;
+    m_color_buffer.resize(static_cast<size_t>(m_width) * m_height);
+    m_present_buffer.resize(static_cast<size_t>(m_width) * m_height * 4);
+    m_depth_buffer.resize(static_cast<size_t>(m_width) * m_height);
+    updateFrameImage();
+}
+
 void SoftRasterizationRenderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
 {
     m_view = view;
