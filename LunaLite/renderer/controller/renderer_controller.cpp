@@ -54,7 +54,10 @@ void RendererController::resize(uint32_t width, uint32_t height)
     m_width = width;
     m_height = height;
 
-    m_instance.resize(width, height);
+    if (auto* swapchain = m_instance.getSwapchain()) {
+        swapchain->resize(width, height);
+    }
+
     if (m_renderer) {
         m_renderer->resize(width, height);
     }
