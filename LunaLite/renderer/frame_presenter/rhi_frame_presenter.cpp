@@ -128,7 +128,7 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
 
     m_pipeline = m_device.createPipeline(rhi::PipelineDesc{
         .topology = rhi::PrimitiveTopology::Triangle,
-        .vertex_layout = rhi::VertexLayoutDesc{},
+        .vertex_input = rhi::VertexInputDesc{},
         .layout = m_pipeline_layout,
         .vertex_shader = m_vertex_shader,
         .fragment_shader = m_fragment_shader,
@@ -155,9 +155,9 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
 
     m_uniform_buffer = m_device.createBuffer(
         rhi::BufferDesc{
-            .type = rhi::BufferType::UniformBuffer,
-            .usage = rhi::BufferUsage::Dynamic,
             .size = sizeof(PresenterUniforms),
+            .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
+            .memory = rhi::MemoryUsage::CpuToGpu,
         },
         nullptr);
 }
@@ -282,7 +282,7 @@ void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, interface::
     const PresenterUniforms uniforms{
         .source_is_srgb = color_space == interface::FrameImageColorSpace::SRGB ? 1 : 0,
     };
-    m_device.updateBuffer(m_uniform_buffer, &uniforms, sizeof(uniforms));
+    m_device.updateBuffer(m_uniform_buffer, 0, &uniforms, sizeof(uniforms));
 
     const rhi::BindGroupDesc bindGroupDesc{
         .layout = m_bind_group_layout,

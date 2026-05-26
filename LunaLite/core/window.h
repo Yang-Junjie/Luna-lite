@@ -16,8 +16,6 @@ public:
     uint32_t width{800};
     uint32_t height{600};
     std::string title{"LunaLite"};
-
-    rhi::WindowRequirements requirements;
 };
 
 class Window : public rhi::Surface {

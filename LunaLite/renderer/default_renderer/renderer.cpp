@@ -143,9 +143,9 @@ void main()
 
 } // namespace
 
-Renderer::Renderer(rhi::Instance& instance)
-    : m_device(instance.getDevice()),
-      m_swapchain(instance.getSwapchain())
+Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
+    : m_device(&device),
+      m_swapchain(&swapchain)
 {
     m_cmd = &m_device->getCommandList();
 
@@ -229,20 +229,26 @@ Renderer::Renderer(rhi::Instance& instance)
                               ->createPipeline(
                                   rhi::PipelineDesc{
                                       .topology = rhi::PrimitiveTopology::Triangle,
-                                      .vertex_layout =
-                                          rhi::VertexLayoutDesc{
-                                              .stride = sizeof(interface::Vertex),
-                                              .attributes =
+                                      .vertex_input =
+                                          rhi::VertexInputDesc{
+                                              .buffers =
                                                   {
-                                                      rhi::VertexAttributeDesc{
-                                                          .semantic = rhi::VertexAttribute::Position,
-                                                          .format = rhi::VertexFormat::Float3,
-                                                          .offset = offsetof(interface::Vertex, position),
-                                                      },
-                                                      rhi::VertexAttributeDesc{
-                                                          .semantic = rhi::VertexAttribute::Normal,
-                                                          .format = rhi::VertexFormat::Float3,
-                                                          .offset = offsetof(interface::Vertex, normal),
+                                                      rhi::VertexBufferLayoutDesc{
+                                                          .binding = 0,
+                                                          .stride = sizeof(interface::Vertex),
+                                                          .attributes =
+                                                              {
+                                                                  rhi::VertexAttributeDesc{
+                                                                      .location = 0,
+                                                                      .format = rhi::VertexFormat::Float3,
+                                                                      .offset = offsetof(interface::Vertex, position),
+                                                                  },
+                                                                  rhi::VertexAttributeDesc{
+                                                                      .location = 1,
+                                                                      .format = rhi::VertexFormat::Float3,
+                                                                      .offset = offsetof(interface::Vertex, normal),
+                                                                  },
+                                                              },
                                                       },
                                                   },
                                           },
@@ -264,7 +270,7 @@ Renderer::Renderer(rhi::Instance& instance)
 
     m_lighting_pipeline = m_device->createPipeline(rhi::PipelineDesc{
         .topology = rhi::PrimitiveTopology::Triangle,
-        .vertex_layout = rhi::VertexLayoutDesc{},
+        .vertex_input = rhi::VertexInputDesc{},
         .layout = m_lighting_pipeline_layout,
         .vertex_shader = lightingVertexShader,
         .fragment_shader = lightingFragmentShader,
@@ -284,17 +290,17 @@ Renderer::Renderer(rhi::Instance& instance)
 
     m_frameUniformBuffer = m_device->createBuffer(
         rhi::BufferDesc{
-            .type = rhi::BufferType::UniformBuffer,
-            .usage = rhi::BufferUsage::Dynamic,
             .size = sizeof(FrameUniforms),
+            .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
+            .memory = rhi::MemoryUsage::CpuToGpu,
         },
         nullptr);
 
     m_objectUniformBuffer = m_device->createBuffer(
         rhi::BufferDesc{
-            .type = rhi::BufferType::UniformBuffer,
-            .usage = rhi::BufferUsage::Dynamic,
             .size = sizeof(ObjectUniforms),
+            .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
+            .memory = rhi::MemoryUsage::CpuToGpu,
         },
         nullptr);
 
@@ -620,7 +626,7 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
 
     m_objectUniforms.model = transform;
     m_objectUniforms.normalMatrix = glm::transpose(glm::inverse(transform));
-    m_device->updateBuffer(m_objectUniformBuffer, &m_objectUniforms, sizeof(ObjectUniforms));
+    m_device->updateBuffer(m_objectUniformBuffer, 0, &m_objectUniforms, sizeof(ObjectUniforms));
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);
 
@@ -643,7 +649,7 @@ void Renderer::flushFrameUniforms()
         return;
     }
 
-    m_device->updateBuffer(m_frameUniformBuffer, &m_frameUniforms, sizeof(FrameUniforms));
+    m_device->updateBuffer(m_frameUniformBuffer, 0, &m_frameUniforms, sizeof(FrameUniforms));
     m_frame_uniforms_dirty = false;
 }
 
@@ -681,16 +687,16 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
 
         gpu_mesh.vertex_buffer = m_device->createBuffer(
             rhi::BufferDesc{
-                .type = rhi::BufferType::VertexBuffer,
-                .usage = gpu_mesh.vertex_buffer_dynamic ? rhi::BufferUsage::Dynamic : rhi::BufferUsage::Static,
                 .size = gpu_mesh.vertex_buffer_capacity,
+                .usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::CopyDst,
+                .memory = gpu_mesh.vertex_buffer_dynamic ? rhi::MemoryUsage::CpuToGpu : rhi::MemoryUsage::GpuOnly,
             },
             nullptr);
         gpu_mesh.uploaded_vertex_version = 0;
     }
 
     if (gpu_mesh.uploaded_vertex_version != vertex_version) {
-        m_device->updateBuffer(gpu_mesh.vertex_buffer, vertices.data(), vertex_buffer_size);
+        m_device->updateBuffer(gpu_mesh.vertex_buffer, 0, vertices.data(), vertex_buffer_size);
         gpu_mesh.uploaded_vertex_version = vertex_version;
     }
 
@@ -707,16 +713,16 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
 
         gpu_mesh.index_buffer = m_device->createBuffer(
             rhi::BufferDesc{
-                .type = rhi::BufferType::IndexBuffer,
-                .usage = gpu_mesh.index_buffer_dynamic ? rhi::BufferUsage::Dynamic : rhi::BufferUsage::Static,
                 .size = gpu_mesh.index_buffer_capacity,
+                .usage = rhi::BufferUsage::Index | rhi::BufferUsage::CopyDst,
+                .memory = gpu_mesh.index_buffer_dynamic ? rhi::MemoryUsage::CpuToGpu : rhi::MemoryUsage::GpuOnly,
             },
             nullptr);
         gpu_mesh.uploaded_index_version = 0;
     }
 
     if (!indices.empty() && gpu_mesh.uploaded_index_version != index_version) {
-        m_device->updateBuffer(gpu_mesh.index_buffer, indices.data(), index_buffer_size);
+        m_device->updateBuffer(gpu_mesh.index_buffer, 0, indices.data(), index_buffer_size);
         gpu_mesh.uploaded_index_version = index_version;
     } else if (indices.empty() && gpu_mesh.index_buffer != 0) {
         m_device->destroyBuffer(gpu_mesh.index_buffer);

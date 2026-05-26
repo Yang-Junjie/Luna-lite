@@ -1,5 +1,6 @@
 #pragma once
-#include "TinyRHI/interface/instance.h"
+#include "TinyRHI/interface/device.h"
+#include "TinyRHI/interface/swapchain.h"
 #include "../interface/frame_image.h"
 #include "../interface/renderer.h"
 
@@ -12,7 +13,7 @@
 namespace lunalite::renderer {
 class Renderer : public interface::Renderer {
 public:
-    explicit Renderer(rhi::Instance& instance);
+    Renderer(rhi::Device& device, rhi::Swapchain& swapchain);
     ~Renderer() override = default;
     void beginFrame() override;
     void endFrame() override;

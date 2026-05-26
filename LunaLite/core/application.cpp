@@ -6,6 +6,8 @@
 #include "layer.h"
 #include "log.h"
 #include "TinyRHI/backend_factory.h"
+#include "TinyRHI/interface/device.h"
+#include "TinyRHI/interface/swapchain.h"
 
 #include <chrono>
 #include <stdexcept>
@@ -99,21 +101,28 @@ void Application::initialize(const ApplicationCreateInfo& info)
     window_info.width = info.width;
     window_info.height = info.height;
     window_info.title = info.name;
-    window_info.requirements = m_instance->getWindowRequirements();
 
     m_window = Window::create(window_info);
     m_window->setEventCallback([this](Event& event) {
         onEvent(event);
     });
 
-    if (!m_instance->init(*m_window)) {
+    if (!m_instance->init()) {
         LUNA_CORE_FATAL("Failed to initialize RHI instance.");
     }
 
-    m_renderer_controller =
-        std::make_unique<renderer::RendererController>(*m_instance, info.width, info.height, info.renderer_kind);
-    m_frame_presenter =
-        std::make_unique<renderer::RHIFramePresenter>(*m_instance->getDevice(), *m_instance->getSwapchain());
+    m_device = m_instance->getDevice();
+    LUNA_ASSERT(m_device != nullptr, "RHI instance returned null device.");
+
+    m_swapchain_handle = m_device->createSwapchain(*m_window, rhi::SwapchainDesc{});
+    m_swapchain = m_device->getSwapchain(m_swapchain_handle);
+    if (m_swapchain == nullptr) {
+        LUNA_CORE_FATAL("Failed to create RHI swapchain.");
+    }
+
+    m_renderer_controller = std::make_unique<renderer::RendererController>(
+        *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
+    m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
 }
 
@@ -122,7 +131,18 @@ void Application::shutdown()
     m_scene_renderer.reset();
     m_frame_presenter.reset();
     m_renderer_controller.reset();
-    m_instance->shutdown();
+
+    if (m_device != nullptr && m_swapchain_handle != 0) {
+        m_device->destroySwapchain(m_swapchain_handle);
+        m_swapchain_handle = 0;
+        m_swapchain = nullptr;
+    }
+
+    if (m_instance) {
+        m_instance->shutdown();
+    }
+    m_device = nullptr;
+    m_window.reset();
 }
 
 void Application::onEvent(Event& event)

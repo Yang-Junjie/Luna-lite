@@ -27,7 +27,7 @@ public:
     void setEventCallback(const EventCallbackFn& callback) override;
     bool shouldClose() override;
 
-    const rhi::SurfaceDesc& getSurfaceDesc() const override;
+    rhi::NativeSurfaceHandle getNativeHandle() const override;
     uint32_t getWidth() const override;
     uint32_t getHeight() const override;
     void resize(uint32_t width, uint32_t height) override;
@@ -46,7 +46,6 @@ private:
     std::unique_ptr<GLFWwindow, GLFWWindowDeleter> m_window{nullptr};
     EventCallbackFn m_event_callback;
     core::WindowCreateInfo m_info;
-    rhi::SurfaceDesc m_surface_desc{};
     uint32_t m_width{0};
     uint32_t m_height{0};
 };
