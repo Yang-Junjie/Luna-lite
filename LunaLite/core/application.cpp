@@ -17,6 +17,22 @@
 namespace lunalite::core {
 namespace {
 Application* s_instance = nullptr;
+
+const char* backendName(rhi::BackendType backend)
+{
+    switch (backend) {
+        case rhi::BackendType::OpenGL:
+            return "OpenGL";
+        case rhi::BackendType::Vulkan:
+            return "Vulkan";
+        case rhi::BackendType::D3D12:
+            return "D3D12";
+        case rhi::BackendType::Metal:
+            return "Metal";
+    }
+
+    return "Unknown";
+}
 }
 
 Application::Application(const ApplicationCreateInfo& info)
@@ -45,6 +61,12 @@ Application& Application::get()
 
 void Application::run()
 {
+    LUNA_ASSERT(m_window, "Application window is null.");
+    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
+    LUNA_ASSERT(m_frame_presenter, "Frame presenter is null.");
+    LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
+
+    LUNA_CORE_INFO("Application main loop started");
     auto lastFrameTime = std::chrono::steady_clock::now();
 
     while (m_is_running && !m_window->shouldClose()) {
@@ -67,37 +89,52 @@ void Application::run()
         m_scene_renderer->endFrame();
         m_frame_presenter->present(m_renderer_controller->getFrameImage());
     }
+
+    LUNA_CORE_INFO("Application main loop finished");
 }
 
 void Application::close()
 {
+    LUNA_CORE_DEBUG("Application close requested");
     m_is_running = false;
 }
 
 void Application::pushLayer(std::unique_ptr<Layer> layer)
 {
+    LUNA_ASSERT(layer, "Cannot push a null layer.");
     m_layer_stack.pushLayer(std::move(layer));
 }
 
 void Application::pushOverlay(std::unique_ptr<Layer> overlay)
 {
+    LUNA_ASSERT(overlay, "Cannot push a null overlay.");
     m_layer_stack.pushOverlay(std::move(overlay));
 }
 
 void Application::switchRenderer(renderer::interface::RendererKind kind)
 {
+    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
+    LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
+
     m_renderer_controller->switchRenderer(kind);
     m_scene_renderer->setRenderer(m_renderer_controller->getRenderer());
 }
 
 scene::SceneRenderer& Application::getSceneRenderer()
 {
+    LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
     return *m_scene_renderer;
 }
 
 void Application::initialize(const ApplicationCreateInfo& info)
 {
     LUNA_ASSERT(m_instance, "Failed to create RHI instance.");
+    LUNA_ASSERT(info.width > 0 && info.height > 0, "Application size must be non-zero.");
+    LUNA_CORE_INFO("Initializing application '{}' ({}x{}, backend: {})",
+                   info.name,
+                   info.width,
+                   info.height,
+                   backendName(info.backend));
 
     WindowCreateInfo window_info;
     window_info.width = info.width;
@@ -105,6 +142,7 @@ void Application::initialize(const ApplicationCreateInfo& info)
     window_info.title = info.name;
 
     m_window = Window::create(window_info);
+    LUNA_ASSERT(m_window, "Failed to create window.");
     m_window->setEventCallback([this](Event& event) {
         onEvent(event);
     });
@@ -115,14 +153,18 @@ void Application::initialize(const ApplicationCreateInfo& info)
 
     m_device = m_instance->getDevice();
     LUNA_ASSERT(m_device != nullptr, "RHI instance returned null device.");
+    LUNA_CORE_INFO("RHI instance initialized");
 
     m_surface_handle = m_instance->createSurface(m_window->getNativeHandle());
     if (!m_surface_handle) {
         LUNA_CORE_FATAL("Failed to create RHI surface.");
     }
+    LUNA_CORE_INFO("RHI surface created");
 
     if (auto* surface = m_instance->getSurface(m_surface_handle)) {
         surface->resize(info.width, info.height);
+    } else {
+        LUNA_CORE_FATAL("Failed to resolve RHI surface.");
     }
 
     m_swapchain_handle = m_device->createSwapchain(m_surface_handle, rhi::SwapchainDesc{});
@@ -130,15 +172,19 @@ void Application::initialize(const ApplicationCreateInfo& info)
     if (m_swapchain == nullptr) {
         LUNA_CORE_FATAL("Failed to create RHI swapchain.");
     }
+    LUNA_CORE_INFO("RHI swapchain created ({}x{})", m_swapchain->getWidth(), m_swapchain->getHeight());
 
     m_renderer_controller = std::make_unique<renderer::RendererController>(
         *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
+    LUNA_CORE_INFO("Application initialized");
 }
 
 void Application::shutdown()
 {
+    LUNA_CORE_INFO("Application shutdown started");
+
     m_scene_renderer.reset();
     m_frame_presenter.reset();
     m_renderer_controller.reset();
@@ -159,6 +205,8 @@ void Application::shutdown()
     }
     m_device = nullptr;
     m_window.reset();
+
+    LUNA_CORE_INFO("Application shutdown finished");
 }
 
 void Application::onEvent(Event& event)
@@ -182,18 +230,22 @@ void Application::onEvent(Event& event)
 
 bool Application::onWindowClose(WindowCloseEvent&)
 {
+    LUNA_CORE_INFO("Window close event received");
     close();
     return true;
 }
 
 bool Application::onWindowResize(WindowResizeEvent& event)
 {
+    LUNA_CORE_DEBUG("Window resized to {}x{}", event.getWidth(), event.getHeight());
+
     if (m_instance && m_surface_handle) {
         if (auto* surface = m_instance->getSurface(m_surface_handle)) {
             surface->resize(event.getWidth(), event.getHeight());
         }
     }
 
+    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
     m_renderer_controller->resize(event.getWidth(), event.getHeight());
     return false;
 }

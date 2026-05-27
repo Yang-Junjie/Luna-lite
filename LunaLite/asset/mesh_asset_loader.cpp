@@ -26,6 +26,9 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
         LUNA_CORE_ERROR("Failed to load OBJ file '{}': {}", path.string(), error);
         return AssetHandle{0};
     }
+    if (!warn.empty()) {
+        LUNA_CORE_WARN("OBJ load warning for '{}': {}", path.string(), warn);
+    }
 
     std::vector<renderer::interface::Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -100,6 +103,11 @@ renderer::interface::Vertex MeshAssetLoader::readVertex(const tinyobj::attrib_t&
 
     if (index.vertex_index >= 0) {
         const auto base = static_cast<size_t>(index.vertex_index) * 3;
+        if (base + 2 >= attrib.vertices.size()) {
+            LUNA_CORE_ERROR("OBJ vertex index out of range: {}", index.vertex_index);
+            return vertex;
+        }
+
         vertex.position = {
             attrib.vertices[base + 0],
             attrib.vertices[base + 1],
@@ -107,11 +115,15 @@ renderer::interface::Vertex MeshAssetLoader::readVertex(const tinyobj::attrib_t&
         };
 
         if (!attrib.colors.empty()) {
-            vertex.color = {
-                attrib.colors[base + 0],
-                attrib.colors[base + 1],
-                attrib.colors[base + 2],
-            };
+            if (base + 2 < attrib.colors.size()) {
+                vertex.color = {
+                    attrib.colors[base + 0],
+                    attrib.colors[base + 1],
+                    attrib.colors[base + 2],
+                };
+            } else {
+                LUNA_CORE_WARN("OBJ vertex color index out of range: {}", index.vertex_index);
+            }
         }
     }
 
@@ -126,6 +138,11 @@ renderer::interface::Vertex MeshAssetLoader::readVertex(const tinyobj::attrib_t&
 
     if (index.texcoord_index >= 0) {
         const auto base = static_cast<size_t>(index.texcoord_index) * 2;
+        if (base + 1 >= attrib.texcoords.size()) {
+            LUNA_CORE_WARN("OBJ texcoord index out of range: {}", index.texcoord_index);
+            return vertex;
+        }
+
         vertex.uv = {
             attrib.texcoords[base + 0],
             attrib.texcoords[base + 1],

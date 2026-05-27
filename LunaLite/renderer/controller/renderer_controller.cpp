@@ -3,10 +3,26 @@
 #include "../soft_rasterization_renderer/soft_rasterization_renderer.h"
 #include "renderer_controller.h"
 
+#include "../../core/log.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
 
 namespace lunalite::renderer {
+namespace {
+
+const char* rendererKindName(interface::RendererKind kind)
+{
+    switch (kind) {
+        case interface::RendererKind::Default:
+            return "Default";
+        case interface::RendererKind::SoftRasterization:
+            return "SoftRasterization";
+    }
+
+    return "Unknown";
+}
+
+} // namespace
 
 RendererController::RendererController(rhi::Device& device,
                                        rhi::Swapchain& swapchain,
@@ -19,17 +35,20 @@ RendererController::RendererController(rhi::Device& device,
       m_height(height)
 {
     switchRenderer(initial_kind);
+    LUNA_ASSERT(m_renderer, "Failed to create initial renderer.");
 }
 
 RendererController::~RendererController() = default;
 
 interface::Renderer& RendererController::getRenderer()
 {
+    LUNA_ASSERT(m_renderer, "Renderer is null.");
     return *m_renderer;
 }
 
 const interface::Renderer& RendererController::getRenderer() const
 {
+    LUNA_ASSERT(m_renderer, "Renderer is null.");
     return *m_renderer;
 }
 
@@ -45,17 +64,21 @@ void RendererController::switchRenderer(interface::RendererKind kind)
     }
 
     m_renderer = createRenderer(kind);
+    LUNA_ASSERT(m_renderer, "Failed to create renderer.");
     m_kind = kind;
+    LUNA_CORE_INFO("Renderer switched to {}", rendererKindName(kind));
 }
 
 void RendererController::resize(uint32_t width, uint32_t height)
 {
     if (width == 0 || height == 0) {
+        LUNA_CORE_DEBUG("Ignoring zero-sized renderer resize: {}x{}", width, height);
         return;
     }
 
     m_width = width;
     m_height = height;
+    LUNA_CORE_DEBUG("Resizing renderer and swapchain to {}x{}", width, height);
 
     m_swapchain.resize(width, height);
 
@@ -66,6 +89,7 @@ void RendererController::resize(uint32_t width, uint32_t height)
 
 const interface::FrameImage& RendererController::getFrameImage() const
 {
+    LUNA_ASSERT(m_renderer, "Renderer is null.");
     return m_renderer->getFrameImage();
 }
 

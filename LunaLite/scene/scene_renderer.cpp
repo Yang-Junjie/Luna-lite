@@ -17,20 +17,25 @@ SceneRenderer::SceneRenderer(renderer::interface::Renderer& renderer)
 void SceneRenderer::setRenderer(renderer::interface::Renderer& renderer)
 {
     m_renderer = &renderer;
+    LUNA_CORE_DEBUG("Scene renderer target changed");
 }
 
 void SceneRenderer::beginFrame()
 {
+    LUNA_ASSERT(m_renderer, "SceneRenderer has no renderer.");
     m_renderer->beginFrame();
 }
 
 void SceneRenderer::endFrame()
 {
+    LUNA_ASSERT(m_renderer, "SceneRenderer has no renderer.");
     m_renderer->endFrame();
 }
 
 void SceneRenderer::render(const Scene& scene)
 {
+    LUNA_ASSERT(m_renderer, "SceneRenderer has no renderer.");
+
     // Collect first directional light
     {
         const auto lightView = scene.getRegistry().view<const DirectionalLightComponent>();

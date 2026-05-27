@@ -24,6 +24,7 @@ public:
     template <typename T> AssetHandle add(std::shared_ptr<T> asset)
     {
         if (asset == nullptr) {
+            LUNA_ASSERT(asset != nullptr, "Cannot add null asset.");
             LUNA_CORE_ERROR("Failed to add null asset");
             return AssetHandle{0};
         }
@@ -33,7 +34,7 @@ public:
                 asset->handle = AssetHandle{};
             } while (m_assets.contains(static_cast<uint64_t>(asset->handle)));
         } else if (m_assets.contains(static_cast<uint64_t>(asset->handle))) {
-            LUNA_CORE_ERROR("Asset handle already exists");
+            LUNA_CORE_ERROR("Asset handle already exists: {}", asset->handle.toString());
             return AssetHandle{0};
         }
 
@@ -60,9 +61,14 @@ private:
 
     Asset* getAsset(AssetHandle handle)
     {
+        if (!handle.isValid()) {
+            LUNA_CORE_ERROR("Failed to get asset: invalid handle");
+            return nullptr;
+        }
+
         const auto it = m_assets.find(static_cast<uint64_t>(handle));
         if (it == m_assets.end()) {
-            LUNA_CORE_ERROR("Failed to get asset");
+            LUNA_CORE_ERROR("Failed to get asset: {}", handle.toString());
             return nullptr;
         }
 
@@ -71,9 +77,14 @@ private:
 
     const Asset* getAsset(AssetHandle handle) const
     {
+        if (!handle.isValid()) {
+            LUNA_CORE_ERROR("Failed to get asset: invalid handle");
+            return nullptr;
+        }
+
         const auto it = m_assets.find(static_cast<uint64_t>(handle));
         if (it == m_assets.end()) {
-            LUNA_CORE_ERROR("Failed to get asset");
+            LUNA_CORE_ERROR("Failed to get asset: {}", handle.toString());
             return nullptr;
         }
 

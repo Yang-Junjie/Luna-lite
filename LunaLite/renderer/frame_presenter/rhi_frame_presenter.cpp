@@ -1,5 +1,7 @@
 #include "rhi_frame_presenter.h"
 
+#include "../../core/log.h"
+
 #include <variant>
 
 namespace lunalite::renderer {
@@ -96,6 +98,8 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
       m_swapchain(swapchain),
       m_cmd(&m_device.getCommandList())
 {
+    LUNA_ASSERT(m_cmd != nullptr, "RHI command list is null.");
+
     m_vertex_shader = m_device.createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
         .source = kPresenterVertexShaderSource,
@@ -160,6 +164,15 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
             .memory = rhi::MemoryUsage::CpuToGpu,
         },
         nullptr);
+
+    LUNA_ASSERT(m_vertex_shader, "Failed to create presenter vertex shader.");
+    LUNA_ASSERT(m_fragment_shader, "Failed to create presenter fragment shader.");
+    LUNA_ASSERT(m_bind_group_layout, "Failed to create presenter bind group layout.");
+    LUNA_ASSERT(m_pipeline_layout, "Failed to create presenter pipeline layout.");
+    LUNA_ASSERT(m_pipeline, "Failed to create presenter pipeline.");
+    LUNA_ASSERT(m_sampler, "Failed to create presenter sampler.");
+    LUNA_ASSERT(m_uniform_buffer, "Failed to create presenter uniform buffer.");
+    LUNA_CORE_DEBUG("RHI frame presenter initialized");
 }
 
 RHIFramePresenter::~RHIFramePresenter()
@@ -244,6 +257,8 @@ void RHIFramePresenter::ensureUploadTexture(const interface::FrameImage& image)
         .format = rhiFormat,
         .aspect = rhi::TextureAspect::Color,
     });
+    LUNA_ASSERT(m_upload_texture, "Failed to create presenter upload texture.");
+    LUNA_ASSERT(m_upload_view, "Failed to create presenter upload texture view.");
 
     m_upload_width = image.width;
     m_upload_height = image.height;
@@ -253,6 +268,7 @@ void RHIFramePresenter::ensureUploadTexture(const interface::FrameImage& image)
 void RHIFramePresenter::uploadCpuImage(const interface::FrameImage& image, const interface::CpuFrameStorage& storage)
 {
     if (storage.pixels == nullptr) {
+        LUNA_CORE_WARN("Skipped CPU frame upload because pixel storage is null");
         return;
     }
 

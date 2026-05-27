@@ -337,6 +337,22 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
         .address_u = rhi::AddressMode::ClampToEdge,
         .address_v = rhi::AddressMode::ClampToEdge,
     });
+
+    LUNA_ASSERT(geometryVertexShader, "Failed to create geometry vertex shader.");
+    LUNA_ASSERT(geometryFragmentShader, "Failed to create geometry fragment shader.");
+    LUNA_ASSERT(lightingVertexShader, "Failed to create lighting vertex shader.");
+    LUNA_ASSERT(lightingFragmentShader, "Failed to create lighting fragment shader.");
+    LUNA_ASSERT(m_geometry_bind_group_layout, "Failed to create geometry bind group layout.");
+    LUNA_ASSERT(m_lighting_bind_group_layout, "Failed to create lighting bind group layout.");
+    LUNA_ASSERT(m_geometry_pipeline_layout, "Failed to create geometry pipeline layout.");
+    LUNA_ASSERT(m_lighting_pipeline_layout, "Failed to create lighting pipeline layout.");
+    LUNA_ASSERT(m_geometry_pipeline, "Failed to create geometry pipeline.");
+    LUNA_ASSERT(m_lighting_pipeline, "Failed to create lighting pipeline.");
+    LUNA_ASSERT(m_frameUniformBuffer, "Failed to create frame uniform buffer.");
+    LUNA_ASSERT(m_objectUniformBuffer, "Failed to create object uniform buffer.");
+    LUNA_ASSERT(m_geometry_bind_group, "Failed to create geometry bind group.");
+    LUNA_ASSERT(m_gbuffer_sampler, "Failed to create GBuffer sampler.");
+    LUNA_CORE_DEBUG("Default renderer initialized");
 }
 
 void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
@@ -481,6 +497,19 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
                                                     },
                                             });
 
+    LUNA_ASSERT(m_gbuffer.albedo_texture, "Failed to create GBuffer albedo texture.");
+    LUNA_ASSERT(m_gbuffer.normal_texture, "Failed to create GBuffer normal texture.");
+    LUNA_ASSERT(m_gbuffer.material_texture, "Failed to create GBuffer material texture.");
+    LUNA_ASSERT(m_gbuffer.depth_texture, "Failed to create GBuffer depth texture.");
+    LUNA_ASSERT(m_gbuffer.final_color_texture, "Failed to create GBuffer final color texture.");
+    LUNA_ASSERT(m_gbuffer.albedo_view, "Failed to create GBuffer albedo view.");
+    LUNA_ASSERT(m_gbuffer.normal_view, "Failed to create GBuffer normal view.");
+    LUNA_ASSERT(m_gbuffer.material_view, "Failed to create GBuffer material view.");
+    LUNA_ASSERT(m_gbuffer.depth_view, "Failed to create GBuffer depth view.");
+    LUNA_ASSERT(m_gbuffer.final_color_view, "Failed to create GBuffer final color view.");
+    LUNA_ASSERT(m_gbuffer.lighting_bind_group, "Failed to create GBuffer lighting bind group.");
+    LUNA_CORE_DEBUG("GBuffer resized to {}x{}", width, height);
+
     m_frame_image = interface::FrameImage{
         .width = width,
         .height = height,
@@ -497,6 +526,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
 void Renderer::beginFrame()
 {
     ensureGBuffer(m_swapchain->getWidth(), m_swapchain->getHeight());
+    LUNA_ASSERT(m_gbuffer.lighting_bind_group, "GBuffer is not initialized.");
 
     rhi::RenderPassBeginInfo pass;
     pass.color_attachments = {
@@ -657,6 +687,9 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
 {
     const auto& vertices = mesh.getVertices();
     const auto& indices = mesh.getIndices();
+    if (vertices.empty()) {
+        return nullptr;
+    }
 
     LUNA_ASSERT(
         vertices.size() <= std::numeric_limits<uint32_t>::max(), "Mesh has too many vertices: {}", vertices.size());
@@ -692,6 +725,7 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
                 .memory = gpu_mesh.vertex_buffer_dynamic ? rhi::MemoryUsage::CpuToGpu : rhi::MemoryUsage::GpuOnly,
             },
             nullptr);
+        LUNA_ASSERT(gpu_mesh.vertex_buffer, "Failed to create mesh vertex buffer.");
         gpu_mesh.uploaded_vertex_version = 0;
     }
 
@@ -718,6 +752,7 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
                 .memory = gpu_mesh.index_buffer_dynamic ? rhi::MemoryUsage::CpuToGpu : rhi::MemoryUsage::GpuOnly,
             },
             nullptr);
+        LUNA_ASSERT(gpu_mesh.index_buffer, "Failed to create mesh index buffer.");
         gpu_mesh.uploaded_index_version = 0;
     }
 
