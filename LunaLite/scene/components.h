@@ -1,5 +1,6 @@
 #pragma once
 #include "../asset/asset.h"
+#include "../renderer/interface/camera.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -24,6 +25,11 @@ struct TransformComponent {
 
 struct MeshComponent {
     asset::AssetHandle mesh{0};
+};
+
+struct CameraComponent {
+    renderer::interface::Camera camera;
+    bool primary{true};
 };
 
 struct DirectionalLightComponent {

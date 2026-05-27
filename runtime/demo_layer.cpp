@@ -23,7 +23,7 @@ DemoLayer::DemoLayer()
 
 void DemoLayer::onAttach()
 {
-    const auto cubeHandle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
+    const auto obj_handle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
 
     {
         auto entity = m_scene.createEntity();
@@ -31,13 +31,21 @@ void DemoLayer::onAttach()
         auto& transformComp = m_scene.addComponent<scene::TransformComponent>(entity);
         transformComp.scale = glm::vec3(8.0f, 8.0f, 8.0f);
         auto& meshComp = m_scene.addComponent<scene::MeshComponent>(entity);
-        meshComp.mesh = cubeHandle;
+        meshComp.mesh = obj_handle;
     }
 
     {
         auto entity = m_scene.createEntity();
         auto& light = m_scene.addComponent<scene::DirectionalLightComponent>(entity);
         light.direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
+    }
+
+    {
+        auto entity = m_scene.createEntity();
+        auto& transform = m_scene.addComponent<scene::TransformComponent>(entity);
+        transform.translation = glm::vec3(3.0f, 2.0f, 5.0f);
+        transform.rotation = glm::vec3(glm::radians(-20.0f), glm::radians(30.0f), 0.0f);
+        m_scene.addComponent<scene::CameraComponent>(entity);
     }
 
     core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
@@ -51,7 +59,7 @@ void DemoLayer::onUpdate(core::Timestep dt)
 
 void DemoLayer::onRender()
 {
-    core::Application::get().getSceneRenderer().render(m_scene);
+    core::Application::get().getSceneRenderer().onRenderRuntime(m_scene);
 }
 
 } // namespace lunalite::runtime

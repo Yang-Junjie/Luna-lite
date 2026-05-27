@@ -1,17 +1,15 @@
-#include "editor_layer.h"
-
 #include "../LunaLite/asset/mesh_asset_loader.h"
 #include "../LunaLite/core/application.h"
 #include "../LunaLite/imgui/imgui_renderer.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
+#include "editor_layer.h"
 
-#include <imgui.h>
-
-#include <algorithm>
+#include <cstdint>
 
 #include <glm/geometric.hpp>
 #include <glm/glm.hpp>
+#include <imgui.h>
 
 namespace lunalite::editor {
 
@@ -21,7 +19,7 @@ EditorLayer::EditorLayer()
 
 void EditorLayer::onAttach()
 {
-    const auto meshHandle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
+    const auto obj_handle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
 
     {
         auto entity = m_scene.createEntity();
@@ -29,7 +27,7 @@ void EditorLayer::onAttach()
         auto& transformComp = m_scene.addComponent<scene::TransformComponent>(entity);
         transformComp.scale = glm::vec3(8.0f, 8.0f, 8.0f);
         auto& meshComp = m_scene.addComponent<scene::MeshComponent>(entity);
-        meshComp.mesh = meshHandle;
+        meshComp.mesh = obj_handle;
     }
 
     {
@@ -41,50 +39,37 @@ void EditorLayer::onAttach()
 
 void EditorLayer::onUpdate(core::Timestep dt)
 {
-    auto& transform = m_scene.getComponent<scene::TransformComponent>(m_model_entity);
-    transform.rotation.y += dt.getMilliseconds() * 0.01f;
+    m_editor_camera.onUpdate(dt, m_viewport_hovered);
 }
 
 void EditorLayer::onRender()
 {
-    core::Application::get().getSceneRenderer().render(m_scene);
+    core::Application::get().getSceneRenderer().onRenderEditor(m_scene, m_editor_camera);
 }
 
 void EditorLayer::onImGuiRender()
 {
-    drawDockspace();
-    drawViewport();
-}
-
-void EditorLayer::drawDockspace()
-{
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) {
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
     }
+    drawViewport();
 }
 
 void EditorLayer::drawViewport()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::Begin("Viewport");
+    m_viewport_hovered = false;
 
     const auto& frame = core::Application::get().getFrameImage();
     const ImTextureID texture = core::Application::get().getImGuiRenderer().textureId(frame);
     const ImVec2 available = ImGui::GetContentRegionAvail();
     if (texture != ImTextureID_Invalid && frame.width > 0 && frame.height > 0 && available.x > 1.0f &&
         available.y > 1.0f) {
-        const float imageAspect = static_cast<float>(frame.width) / static_cast<float>(frame.height);
-        ImVec2 imageSize = available;
-        if (imageSize.x / imageSize.y > imageAspect) {
-            imageSize.x = imageSize.y * imageAspect;
-        } else {
-            imageSize.y = imageSize.x / imageAspect;
-        }
-
-        const ImVec2 cursor = ImGui::GetCursorPos();
-        ImGui::SetCursorPos(ImVec2(cursor.x + std::max(0.0f, (available.x - imageSize.x) * 0.5f),
-                                   cursor.y + std::max(0.0f, (available.y - imageSize.y) * 0.5f)));
-        ImGui::Image(texture, imageSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        core::Application::get().getSceneRenderer().setViewportSize(static_cast<uint32_t>(available.x),
+                                                                    static_cast<uint32_t>(available.y));
+        ImGui::Image(texture, available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        m_viewport_hovered = ImGui::IsItemHovered();
     }
 
     ImGui::End();

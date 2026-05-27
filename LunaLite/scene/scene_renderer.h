@@ -1,5 +1,10 @@
 #pragma once
+#include "../renderer/interface/camera.h"
 #include "scene.h"
+
+#include <cstdint>
+
+#include <glm/glm.hpp>
 
 namespace lunalite::core {
 class Application;
@@ -14,7 +19,9 @@ class SceneRenderer {
 public:
     ~SceneRenderer() = default;
     void setRenderer(renderer::interface::Renderer& renderer);
-    void render(const Scene& scene);
+    void setViewportSize(uint32_t width, uint32_t height);
+    void onRenderRuntime(const Scene& scene);
+    void onRenderEditor(const Scene& scene, const renderer::interface::Camera& camera);
 
 private:
     // 只有Applicaytion可以创建SceneRenderer使用beginFrame和endFrame
@@ -24,8 +31,14 @@ private:
 
     void beginFrame();
     void endFrame();
+    void renderScene(const Scene& scene,
+                     const glm::mat4& view,
+                     const glm::mat4& projection,
+                     const glm::vec3& cameraPosition);
 
 private:
     renderer::interface::Renderer* m_renderer{nullptr};
+    uint32_t m_viewport_width{1};
+    uint32_t m_viewport_height{1};
 };
 } // namespace lunalite::scene

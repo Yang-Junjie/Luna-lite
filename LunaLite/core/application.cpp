@@ -234,6 +234,7 @@ void Application::initialize(const ApplicationCreateInfo& info)
         *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
+    m_scene_renderer->setViewportSize(info.width, info.height);
     if (info.enable_imgui) {
         initializeImGui(info);
     }
@@ -357,6 +358,9 @@ bool Application::onWindowResize(WindowResizeEvent& event)
 
     LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
     m_renderer_controller->resize(event.getWidth(), event.getHeight());
+    if (m_scene_renderer) {
+        m_scene_renderer->setViewportSize(event.getWidth(), event.getHeight());
+    }
     return false;
 }
 } // namespace lunalite::core
