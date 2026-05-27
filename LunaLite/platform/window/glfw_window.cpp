@@ -317,6 +317,11 @@ rhi::NativeSurfaceHandle GLFWWindow::getNativeHandle() const
 #endif
 }
 
+void* GLFWWindow::getPlatformWindowHandle() const
+{
+    return m_window.get();
+}
+
 uint32_t GLFWWindow::getWidth() const
 {
     return m_width;

@@ -16,6 +16,15 @@ class RHIFramePresenter;
 class RendererController;
 } // namespace lunalite::renderer
 
+namespace lunalite::renderer::interface {
+struct FrameImage;
+}
+
+namespace lunalite::imgui {
+class ImGuiRenderer;
+class ImGuiPlatform;
+} // namespace lunalite::imgui
+
 namespace lunalite::rhi {
 class Device;
 class Instance;
@@ -35,6 +44,8 @@ struct ApplicationCreateInfo {
     uint32_t height{720};
     rhi::BackendType backend{rhi::BackendType::OpenGL};
     renderer::interface::RendererKind renderer_kind{renderer::interface::RendererKind::Default};
+    bool enable_imgui{false};
+    bool enable_imgui_viewports{true};
 };
 
 class Application {
@@ -51,10 +62,14 @@ public:
     void switchRenderer(renderer::interface::RendererKind kind);
 
     scene::SceneRenderer& getSceneRenderer();
+    const renderer::interface::FrameImage& getFrameImage() const;
+    imgui::ImGuiRenderer& getImGuiRenderer();
 
 private:
     void initialize(const ApplicationCreateInfo& info);
+    void initializeImGui(const ApplicationCreateInfo& info);
     void shutdown();
+    void shutdownImGui();
     void onEvent(Event& event);
     bool onWindowClose(WindowCloseEvent& event);
     bool onWindowResize(WindowResizeEvent& event);
@@ -72,6 +87,8 @@ private:
     std::unique_ptr<renderer::RendererController> m_renderer_controller;
     std::unique_ptr<renderer::RHIFramePresenter> m_frame_presenter;
     std::unique_ptr<scene::SceneRenderer> m_scene_renderer;
+    std::unique_ptr<imgui::ImGuiPlatform> m_imgui_platform;
+    std::unique_ptr<imgui::ImGuiRenderer> m_imgui_renderer;
 
     LayerStack m_layer_stack;
 };

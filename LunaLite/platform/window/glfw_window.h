@@ -28,6 +28,7 @@ public:
     bool shouldClose() override;
 
     rhi::NativeSurfaceHandle getNativeHandle() const override;
+    void* getPlatformWindowHandle() const override;
     uint32_t getWidth() const override;
     uint32_t getHeight() const override;
     void resize(uint32_t width, uint32_t height) override;

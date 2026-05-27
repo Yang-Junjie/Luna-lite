@@ -23,9 +23,32 @@ add_subdirectory(third_party/glm)
 add_subdirectory(third_party/entt)
 add_subdirectory(third_party/spdlog)
 
+add_library(imgui STATIC
+    third_party/imgui/imgui.cpp
+    third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp
+    third_party/imgui/imgui_widgets.cpp
+)
+
+add_library(imgui::imgui ALIAS imgui)
+
+target_include_directories(imgui
+    PUBLIC
+        third_party/imgui
+        third_party/imgui/backends
+)
+
+target_sources(imgui PRIVATE third_party/imgui/backends/imgui_impl_glfw.cpp)
+target_link_libraries(imgui PUBLIC glfw)
+
+if(WIN32)
+    target_link_libraries(imgui PUBLIC gdi32 dwmapi)
+endif()
+
 add_library(tiny_obj_loader INTERFACE)
 target_include_directories(tiny_obj_loader INTERFACE third_party/tiny_obj_loader)
 
 add_subdirectory(LunaLite)
 add_subdirectory(runtime)
+add_subdirectory(editor)
 add_subdirectory(tests)

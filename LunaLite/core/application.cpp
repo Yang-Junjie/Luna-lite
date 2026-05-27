@@ -1,15 +1,21 @@
 #include "../renderer/controller/renderer_controller.h"
 #include "../renderer/frame_presenter/rhi_frame_presenter.h"
+#include "../imgui/imgui_platform.h"
+#include "../imgui/imgui_renderer.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
 #include "application_event.h"
 #include "layer.h"
 #include "log.h"
 #include "TinyRHI/backend_factory.h"
+#include "TinyRHI/interface/command_list.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/instance.h"
+#include "TinyRHI/interface/render_pass.h"
 #include "TinyRHI/interface/surface.h"
 #include "TinyRHI/interface/swapchain.h"
+
+#include <imgui.h>
 
 #include <chrono>
 #include <stdexcept>
@@ -87,7 +93,45 @@ void Application::run()
         }
 
         m_scene_renderer->endFrame();
-        m_frame_presenter->present(m_renderer_controller->getFrameImage());
+
+        if (m_imgui_renderer) {
+            LUNA_ASSERT(m_imgui_platform, "ImGui platform is null.");
+
+            m_imgui_platform->newFrame();
+            ImGui::NewFrame();
+
+            for (auto& layer : m_layer_stack) {
+                layer->onImGuiRender();
+            }
+
+            ImGui::Render();
+
+            rhi::RenderPassBeginInfo pass;
+            pass.color_attachments.push_back(rhi::ColorAttachmentDesc{
+                .view = m_swapchain->getCurrentColorTextureView(),
+                .load_op = rhi::LoadOp::Clear,
+                .store_op = rhi::StoreOp::Store,
+                .clear_color = rhi::ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
+            });
+            pass.width = m_swapchain->getWidth();
+            pass.height = m_swapchain->getHeight();
+
+            auto& commands = m_device->getCommandList();
+            commands.begin();
+            commands.beginRenderPass(pass);
+            m_imgui_renderer->render(ImGui::GetDrawData(), commands);
+            commands.endRenderPass();
+            commands.end();
+
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+                ImGui::UpdatePlatformWindows();
+                ImGui::RenderPlatformWindowsDefault(nullptr, m_imgui_renderer.get());
+            }
+
+            m_swapchain->present();
+        } else {
+            m_frame_presenter->present(m_renderer_controller->getFrameImage());
+        }
     }
 
     LUNA_CORE_INFO("Application main loop finished");
@@ -124,6 +168,18 @@ scene::SceneRenderer& Application::getSceneRenderer()
 {
     LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
     return *m_scene_renderer;
+}
+
+const renderer::interface::FrameImage& Application::getFrameImage() const
+{
+    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
+    return m_renderer_controller->getFrameImage();
+}
+
+imgui::ImGuiRenderer& Application::getImGuiRenderer()
+{
+    LUNA_ASSERT(m_imgui_renderer, "ImGui renderer is null.");
+    return *m_imgui_renderer;
 }
 
 void Application::initialize(const ApplicationCreateInfo& info)
@@ -178,13 +234,50 @@ void Application::initialize(const ApplicationCreateInfo& info)
         *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
+    if (info.enable_imgui) {
+        initializeImGui(info);
+    }
     LUNA_CORE_INFO("Application initialized");
+}
+
+void Application::initializeImGui(const ApplicationCreateInfo& info)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
+    if (info.enable_imgui_viewports) {
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    }
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        style.WindowRounding = 0.0f;
+        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    }
+
+    m_imgui_platform = imgui::ImGuiPlatform::create();
+    if (!m_imgui_platform || !m_imgui_platform->init(*m_window)) {
+        LUNA_CORE_FATAL("Failed to initialize ImGui platform backend.");
+    }
+
+    m_imgui_renderer = std::make_unique<imgui::ImGuiRenderer>();
+    m_imgui_renderer->setSurfaceOwner(*m_instance);
+    m_imgui_renderer->setPlatform(*m_imgui_platform);
+    if (!m_imgui_renderer->init(*m_device)) {
+        LUNA_CORE_FATAL("Failed to initialize ImGui renderer backend.");
+    }
+
+    LUNA_CORE_INFO("ImGui initialized");
 }
 
 void Application::shutdown()
 {
     LUNA_CORE_INFO("Application shutdown started");
 
+    shutdownImGui();
     m_scene_renderer.reset();
     m_frame_presenter.reset();
     m_renderer_controller.reset();
@@ -207,6 +300,23 @@ void Application::shutdown()
     m_window.reset();
 
     LUNA_CORE_INFO("Application shutdown finished");
+}
+
+void Application::shutdownImGui()
+{
+    if (m_imgui_renderer) {
+        m_imgui_renderer->shutdown();
+        m_imgui_renderer.reset();
+    }
+
+    if (m_imgui_platform) {
+        m_imgui_platform->shutdown();
+        m_imgui_platform.reset();
+    }
+
+    if (ImGui::GetCurrentContext() != nullptr) {
+        ImGui::DestroyContext();
+    }
 }
 
 void Application::onEvent(Event& event)

@@ -1,0 +1,28 @@
+#include "../LunaLite/core/application.h"
+#include "editor_layer.h"
+
+#include <memory>
+
+namespace lunalite::core {
+
+Application* createApplication(int argc, char** argv)
+{
+    static_cast<void>(argc);
+    static_cast<void>(argv);
+
+    ApplicationCreateInfo info;
+    info.name = "LunaLite Editor";
+    info.width = 1'600;
+    info.height = 900;
+    info.backend = rhi::BackendType::OpenGL;
+    info.renderer_kind = renderer::interface::RendererKind::Default;
+    info.enable_imgui = true;
+    info.enable_imgui_viewports = true;
+
+    auto* app = new Application(info);
+    app->pushLayer(std::make_unique<editor::EditorLayer>());
+
+    return app;
+}
+
+} // namespace lunalite::core

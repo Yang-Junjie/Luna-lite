@@ -37,6 +37,17 @@ target_link_libraries(LunaLitePathTracingRenderer
         TinyRHI::TinyRHI
 )
 
+add_library(LunaLiteImGui
+    imgui/imgui_renderer.cpp
+    platform/imgui/glfw_imgui_platform.cpp
+)
+
+target_link_libraries(LunaLiteImGui
+    PUBLIC
+        imgui::imgui
+        TinyRHI::TinyRHI
+)
+
 add_library(LunaLite STATIC
     core/entry_point.cpp
     core/application.cpp
@@ -58,6 +69,7 @@ target_link_libraries(LunaLite
         tiny_obj_loader
         TinyRHI::TinyRHI
         LunaLiteRenderer
+        LunaLiteImGui
     PRIVATE
         glfw
 )
