@@ -345,11 +345,11 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         return;
     }
 
-    if (m_gbuffer.width == width && m_gbuffer.height == height && m_gbuffer.lighting_bind_group != 0) {
+    if (m_gbuffer.width == width && m_gbuffer.height == height && m_gbuffer.lighting_bind_group) {
         return;
     }
 
-    if (m_gbuffer.lighting_bind_group != 0) {
+    if (m_gbuffer.lighting_bind_group) {
         m_device->destroyBindGroup(m_gbuffer.lighting_bind_group);
     }
 
@@ -361,7 +361,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         m_gbuffer.final_color_view,
     };
     for (const auto view : views) {
-        if (view != 0) {
+        if (view) {
             m_device->destroyTextureView(view);
         }
     }
@@ -374,7 +374,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         m_gbuffer.final_color_texture,
     };
     for (const auto texture : textures) {
-        if (texture != 0) {
+        if (texture) {
             m_device->destroyTexture(texture);
         }
     }
@@ -618,7 +618,7 @@ void Renderer::setDirectionalLight(const glm::vec3& direction,
 void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
 {
     auto* gpu_mesh = getOrCreateMeshGpuData(mesh);
-    if (gpu_mesh == nullptr || gpu_mesh->vertex_buffer == 0 || gpu_mesh->vertex_count == 0) {
+    if (gpu_mesh == nullptr || !gpu_mesh->vertex_buffer || gpu_mesh->vertex_count == 0) {
         return;
     }
 
@@ -630,7 +630,7 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);
 
-    if (gpu_mesh->index_buffer != 0 && gpu_mesh->index_count > 0) {
+    if (gpu_mesh->index_buffer && gpu_mesh->index_count > 0) {
         m_cmd->setIndexBuffer(gpu_mesh->index_buffer, rhi::IndexFormat::UInt32);
         m_cmd->drawIndexed(gpu_mesh->index_count);
     } else {
@@ -674,9 +674,9 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
         gpu_mesh.uploaded_vertex_version != 0 && gpu_mesh.uploaded_vertex_version != vertex_version;
     const auto index_changed = gpu_mesh.uploaded_index_version != 0 && gpu_mesh.uploaded_index_version != index_version;
 
-    if (gpu_mesh.vertex_buffer == 0 || gpu_mesh.vertex_buffer_capacity < vertex_buffer_size ||
+    if (!gpu_mesh.vertex_buffer || gpu_mesh.vertex_buffer_capacity < vertex_buffer_size ||
         (vertex_changed && !gpu_mesh.vertex_buffer_dynamic)) {
-        if (gpu_mesh.vertex_buffer == 0) {
+        if (!gpu_mesh.vertex_buffer) {
             gpu_mesh.vertex_buffer_capacity = vertex_buffer_size;
             gpu_mesh.vertex_buffer_dynamic = false;
         } else {
@@ -700,9 +700,9 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
         gpu_mesh.uploaded_vertex_version = vertex_version;
     }
 
-    if (!indices.empty() && (gpu_mesh.index_buffer == 0 || gpu_mesh.index_buffer_capacity < index_buffer_size ||
+    if (!indices.empty() && (!gpu_mesh.index_buffer || gpu_mesh.index_buffer_capacity < index_buffer_size ||
                              (index_changed && !gpu_mesh.index_buffer_dynamic))) {
-        if (gpu_mesh.index_buffer == 0) {
+        if (!gpu_mesh.index_buffer) {
             gpu_mesh.index_buffer_capacity = index_buffer_size;
             gpu_mesh.index_buffer_dynamic = false;
         } else {
@@ -724,9 +724,9 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
     if (!indices.empty() && gpu_mesh.uploaded_index_version != index_version) {
         m_device->updateBuffer(gpu_mesh.index_buffer, 0, indices.data(), index_buffer_size);
         gpu_mesh.uploaded_index_version = index_version;
-    } else if (indices.empty() && gpu_mesh.index_buffer != 0) {
+    } else if (indices.empty() && gpu_mesh.index_buffer) {
         m_device->destroyBuffer(gpu_mesh.index_buffer);
-        gpu_mesh.index_buffer = 0;
+        gpu_mesh.index_buffer = {};
         gpu_mesh.index_buffer_dynamic = false;
         gpu_mesh.index_buffer_capacity = 0;
         gpu_mesh.uploaded_index_version = 0;

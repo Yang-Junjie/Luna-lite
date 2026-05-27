@@ -65,7 +65,8 @@ private:
     std::unique_ptr<rhi::Instance> m_instance;
     std::unique_ptr<Window> m_window;
     rhi::Device* m_device{nullptr};
-    rhi::SwapchainHandle m_swapchain_handle{0};
+    rhi::SurfaceHandle m_surface_handle{};
+    rhi::SwapchainHandle m_swapchain_handle{};
     rhi::Swapchain* m_swapchain{nullptr};
 
     std::unique_ptr<renderer::RendererController> m_renderer_controller;

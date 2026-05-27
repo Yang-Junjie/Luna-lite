@@ -48,8 +48,8 @@ public:
 
 private:
     struct MeshGpuData {
-        rhi::BufferHandle vertex_buffer{0};
-        rhi::BufferHandle index_buffer{0};
+        rhi::BufferHandle vertex_buffer{};
+        rhi::BufferHandle index_buffer{};
 
         bool vertex_buffer_dynamic{false};
         bool index_buffer_dynamic{false};
@@ -66,19 +66,19 @@ private:
         uint32_t width{0};
         uint32_t height{0};
 
-        rhi::TextureHandle albedo_texture{0};
-        rhi::TextureHandle normal_texture{0};
-        rhi::TextureHandle material_texture{0};
-        rhi::TextureHandle depth_texture{0};
-        rhi::TextureHandle final_color_texture{0};
+        rhi::TextureHandle albedo_texture{};
+        rhi::TextureHandle normal_texture{};
+        rhi::TextureHandle material_texture{};
+        rhi::TextureHandle depth_texture{};
+        rhi::TextureHandle final_color_texture{};
 
-        rhi::TextureViewHandle albedo_view{0};
-        rhi::TextureViewHandle normal_view{0};
-        rhi::TextureViewHandle material_view{0};
-        rhi::TextureViewHandle depth_view{0};
-        rhi::TextureViewHandle final_color_view{0};
+        rhi::TextureViewHandle albedo_view{};
+        rhi::TextureViewHandle normal_view{};
+        rhi::TextureViewHandle material_view{};
+        rhi::TextureViewHandle depth_view{};
+        rhi::TextureViewHandle final_color_view{};
 
-        rhi::BindGroupHandle lighting_bind_group{0};
+        rhi::BindGroupHandle lighting_bind_group{};
     };
 
     void ensureGBuffer(uint32_t width, uint32_t height);
@@ -90,18 +90,18 @@ private:
     rhi::Swapchain* m_swapchain{nullptr};
     rhi::CommandList* m_cmd{nullptr};
 
-    rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{0};
-    rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{0};
+    rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};
+    rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{};
 
-    rhi::PipelineLayoutHandle m_geometry_pipeline_layout{0};
-    rhi::PipelineLayoutHandle m_lighting_pipeline_layout{0};
-    rhi::PipelineHandle m_geometry_pipeline{0};
-    rhi::PipelineHandle m_lighting_pipeline{0};
+    rhi::PipelineLayoutHandle m_geometry_pipeline_layout{};
+    rhi::PipelineLayoutHandle m_lighting_pipeline_layout{};
+    rhi::PipelineHandle m_geometry_pipeline{};
+    rhi::PipelineHandle m_lighting_pipeline{};
 
-    rhi::BufferHandle m_frameUniformBuffer{0};
-    rhi::BufferHandle m_objectUniformBuffer{0};
-    rhi::BindGroupHandle m_geometry_bind_group{0};
-    rhi::SamplerHandle m_gbuffer_sampler{0};
+    rhi::BufferHandle m_frameUniformBuffer{};
+    rhi::BufferHandle m_objectUniformBuffer{};
+    rhi::BindGroupHandle m_geometry_bind_group{};
+    rhi::SamplerHandle m_gbuffer_sampler{};
     GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
     ObjectUniforms m_objectUniforms;

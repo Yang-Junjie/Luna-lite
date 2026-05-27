@@ -26,8 +26,8 @@ struct CpuFrameStorage {
 };
 
 struct GpuFrameStorage {
-    rhi::TextureHandle texture{0};
-    rhi::TextureViewHandle view{0};
+    rhi::TextureHandle texture{};
+    rhi::TextureViewHandle view{};
 };
 
 struct FrameImage {

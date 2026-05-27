@@ -164,34 +164,34 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
 
 RHIFramePresenter::~RHIFramePresenter()
 {
-    if (m_bind_group != 0) {
+    if (m_bind_group) {
         m_device.destroyBindGroup(m_bind_group);
     }
-    if (m_upload_view != 0) {
+    if (m_upload_view) {
         m_device.destroyTextureView(m_upload_view);
     }
-    if (m_upload_texture != 0) {
+    if (m_upload_texture) {
         m_device.destroyTexture(m_upload_texture);
     }
-    if (m_sampler != 0) {
+    if (m_sampler) {
         m_device.destroySampler(m_sampler);
     }
-    if (m_uniform_buffer != 0) {
+    if (m_uniform_buffer) {
         m_device.destroyBuffer(m_uniform_buffer);
     }
-    if (m_pipeline != 0) {
+    if (m_pipeline) {
         m_device.destroyPipeline(m_pipeline);
     }
-    if (m_pipeline_layout != 0) {
+    if (m_pipeline_layout) {
         m_device.destroyPipelineLayout(m_pipeline_layout);
     }
-    if (m_bind_group_layout != 0) {
+    if (m_bind_group_layout) {
         m_device.destroyBindGroupLayout(m_bind_group_layout);
     }
-    if (m_fragment_shader != 0) {
+    if (m_fragment_shader) {
         m_device.destroyShader(m_fragment_shader);
     }
-    if (m_vertex_shader != 0) {
+    if (m_vertex_shader) {
         m_device.destroyShader(m_vertex_shader);
     }
 }
@@ -214,22 +214,22 @@ void RHIFramePresenter::present(const interface::FrameImage& image)
 
 void RHIFramePresenter::ensureUploadTexture(const interface::FrameImage& image)
 {
-    if (m_upload_texture != 0 && m_upload_width == image.width && m_upload_height == image.height &&
+    if (m_upload_texture && m_upload_width == image.width && m_upload_height == image.height &&
         m_upload_format == image.format) {
         return;
     }
 
-    if (m_bind_group != 0) {
+    if (m_bind_group) {
         m_device.destroyBindGroup(m_bind_group);
-        m_bind_group = 0;
+        m_bind_group = {};
     }
-    if (m_upload_view != 0) {
+    if (m_upload_view) {
         m_device.destroyTextureView(m_upload_view);
-        m_upload_view = 0;
+        m_upload_view = {};
     }
-    if (m_upload_texture != 0) {
+    if (m_upload_texture) {
         m_device.destroyTexture(m_upload_texture);
-        m_upload_texture = 0;
+        m_upload_texture = {};
     }
 
     const auto rhiFormat = toRHITextureFormat(image.format);
@@ -257,7 +257,7 @@ void RHIFramePresenter::uploadCpuImage(const interface::FrameImage& image, const
     }
 
     ensureUploadTexture(image);
-    if (m_upload_texture == 0) {
+    if (!m_upload_texture) {
         return;
     }
 
@@ -275,7 +275,7 @@ void RHIFramePresenter::uploadCpuImage(const interface::FrameImage& image, const
 
 void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, interface::FrameImageColorSpace color_space)
 {
-    if (view == 0 || m_pipeline == 0 || m_sampler == 0 || m_uniform_buffer == 0 || m_bind_group_layout == 0) {
+    if (!view || !m_pipeline || !m_sampler || !m_uniform_buffer || !m_bind_group_layout) {
         return;
     }
 
@@ -307,7 +307,7 @@ void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, interface::
             },
     };
 
-    if (m_bind_group == 0) {
+    if (!m_bind_group) {
         m_bind_group = m_device.createBindGroup(bindGroupDesc);
     } else {
         m_device.updateBindGroup(m_bind_group, bindGroupDesc);

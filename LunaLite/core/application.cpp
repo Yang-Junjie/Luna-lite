@@ -7,6 +7,8 @@
 #include "log.h"
 #include "TinyRHI/backend_factory.h"
 #include "TinyRHI/interface/device.h"
+#include "TinyRHI/interface/instance.h"
+#include "TinyRHI/interface/surface.h"
 #include "TinyRHI/interface/swapchain.h"
 
 #include <chrono>
@@ -114,7 +116,16 @@ void Application::initialize(const ApplicationCreateInfo& info)
     m_device = m_instance->getDevice();
     LUNA_ASSERT(m_device != nullptr, "RHI instance returned null device.");
 
-    m_swapchain_handle = m_device->createSwapchain(*m_window, rhi::SwapchainDesc{});
+    m_surface_handle = m_instance->createSurface(m_window->getNativeHandle());
+    if (!m_surface_handle) {
+        LUNA_CORE_FATAL("Failed to create RHI surface.");
+    }
+
+    if (auto* surface = m_instance->getSurface(m_surface_handle)) {
+        surface->resize(info.width, info.height);
+    }
+
+    m_swapchain_handle = m_device->createSwapchain(m_surface_handle, rhi::SwapchainDesc{});
     m_swapchain = m_device->getSwapchain(m_swapchain_handle);
     if (m_swapchain == nullptr) {
         LUNA_CORE_FATAL("Failed to create RHI swapchain.");
@@ -132,10 +143,15 @@ void Application::shutdown()
     m_frame_presenter.reset();
     m_renderer_controller.reset();
 
-    if (m_device != nullptr && m_swapchain_handle != 0) {
+    if (m_device != nullptr && m_swapchain_handle) {
         m_device->destroySwapchain(m_swapchain_handle);
-        m_swapchain_handle = 0;
+        m_swapchain_handle = {};
         m_swapchain = nullptr;
+    }
+
+    if (m_instance && m_surface_handle) {
+        m_instance->destroySurface(m_surface_handle);
+        m_surface_handle = {};
     }
 
     if (m_instance) {
@@ -172,6 +188,12 @@ bool Application::onWindowClose(WindowCloseEvent&)
 
 bool Application::onWindowResize(WindowResizeEvent& event)
 {
+    if (m_instance && m_surface_handle) {
+        if (auto* surface = m_instance->getSurface(m_surface_handle)) {
+            surface->resize(event.getWidth(), event.getHeight());
+        }
+    }
+
     m_renderer_controller->resize(event.getWidth(), event.getHeight());
     return false;
 }
