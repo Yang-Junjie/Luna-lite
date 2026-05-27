@@ -11,6 +11,7 @@
 
 #include <glm/geometric.hpp>
 #include <glm/glm.hpp>
+#include <imgui.h>
 
 namespace lunalite::core {
 class Application;
@@ -60,6 +61,13 @@ void DemoLayer::onUpdate(core::Timestep dt)
 void DemoLayer::onRender()
 {
     core::Application::get().getSceneRenderer().onRenderRuntime(m_scene);
+}
+
+void DemoLayer::onImGuiRender()
+{
+    ImGui::Begin("Demo Layer");
+    ImGui::Text("Hello World");
+    ImGui::End();
 }
 
 } // namespace lunalite::runtime

@@ -13,6 +13,8 @@ public:
     RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapchain);
     ~RHIFramePresenter();
 
+    void renderToSwapchain(const interface::FrameImage& image);
+    void present();
     void present(const interface::FrameImage& image);
 
 private:

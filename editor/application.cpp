@@ -18,6 +18,7 @@ Application* createApplication(int argc, char** argv)
     info.renderer_kind = renderer::interface::RendererKind::Default;
     info.enable_imgui = true;
     info.enable_imgui_viewports = true;
+    info.present_scene_to_swapchain = false;
 
     auto* app = new Application(info);
     app->pushLayer(std::make_unique<editor::EditorLayer>());

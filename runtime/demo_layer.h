@@ -10,6 +10,7 @@ public:
     void onAttach() override;
     void onUpdate(core::Timestep dt) override;
     void onRender() override;
+    void onImGuiRender() override;
 
 private:
     scene::Scene m_scene;

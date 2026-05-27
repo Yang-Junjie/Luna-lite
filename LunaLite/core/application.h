@@ -29,7 +29,7 @@ namespace lunalite::rhi {
 class Device;
 class Instance;
 class Swapchain;
-}
+} // namespace lunalite::rhi
 
 namespace lunalite::scene {
 class Scene;
@@ -46,6 +46,7 @@ struct ApplicationCreateInfo {
     renderer::interface::RendererKind renderer_kind{renderer::interface::RendererKind::Default};
     bool enable_imgui{false};
     bool enable_imgui_viewports{true};
+    bool present_scene_to_swapchain{true};
 };
 
 class Application {
@@ -62,8 +63,8 @@ public:
     void switchRenderer(renderer::interface::RendererKind kind);
 
     scene::SceneRenderer& getSceneRenderer();
-    const renderer::interface::FrameImage& getFrameImage() const;
     imgui::ImGuiRenderer& getImGuiRenderer();
+    const renderer::interface::FrameImage& getFrameImage() const;
 
 private:
     void initialize(const ApplicationCreateInfo& info);
@@ -89,6 +90,7 @@ private:
     std::unique_ptr<scene::SceneRenderer> m_scene_renderer;
     std::unique_ptr<imgui::ImGuiPlatform> m_imgui_platform;
     std::unique_ptr<imgui::ImGuiRenderer> m_imgui_renderer;
+    bool m_present_scene_to_swapchain{true};
 
     LayerStack m_layer_stack;
 };

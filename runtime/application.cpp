@@ -13,6 +13,9 @@ Application* createApplication(int argc, char** argv)
     info.height = 720;
     info.backend = rhi::BackendType::OpenGL;
     info.renderer_kind = renderer::interface::RendererKind::Default;
+    info.enable_imgui = false;
+    info.enable_imgui_viewports = false;
+    info.present_scene_to_swapchain = true;
 
     auto* app = new Application(info);
     app->pushLayer(std::make_unique<runtime::DemoLayer>());

@@ -3,6 +3,7 @@
 #include "../renderer/interface/frame_image.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/instance.h"
+#include "TinyRHI/interface/swapchain.h"
 
 #include <imgui.h>
 
@@ -16,6 +17,11 @@ namespace lunalite::imgui {
 
 class ImGuiPlatform;
 
+enum class ImGuiRenderMode {
+    ClearSwapchain,
+    OverlaySwapchain
+};
+
 class ImGuiRenderer final {
 public:
     ImGuiRenderer() = default;
@@ -24,9 +30,11 @@ public:
     ImGuiRenderer(const ImGuiRenderer&) = delete;
     ImGuiRenderer& operator=(const ImGuiRenderer&) = delete;
 
-    bool init(rhi::Device& device);
+    bool init(rhi::Device& device, rhi::Swapchain& swapchain);
     void setSurfaceOwner(rhi::Instance& instance);
     void setPlatform(ImGuiPlatform& platform);
+    void beginFrame();
+    void endFrame(ImGuiRenderMode mode);
     void shutdown();
     void render(ImDrawData* draw_data, rhi::CommandList& commands);
     ImTextureID textureId(const renderer::interface::FrameImage& image);
@@ -61,6 +69,7 @@ private:
     static void swapViewportBuffersCallback(ImGuiViewport* viewport, void* render_arg);
 
     rhi::Device* m_device{nullptr};
+    rhi::Swapchain* m_swapchain{nullptr};
     rhi::Instance* m_instance{nullptr};
     ImGuiPlatform* m_platform{nullptr};
     rhi::BufferHandle m_vertex_buffer{};

@@ -1,10 +1,13 @@
+#include "imgui_platform.h"
 #include "imgui_renderer.h"
 
-#include "imgui_platform.h"
+#include "TinyRHI/interface/command_list.h"
+#include "TinyRHI/interface/render_pass.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <cstring>
+
+#include <algorithm>
 #include <limits>
 #include <variant>
 
@@ -47,8 +50,8 @@ void main()
 }
 )GLSL";
 
-constexpr size_t kInitialVertexBufferSize = 5000 * sizeof(ImDrawVert);
-constexpr size_t kInitialIndexBufferSize = 10000 * sizeof(ImDrawIdx);
+constexpr size_t kInitialVertexBufferSize = 5'000 * sizeof(ImDrawVert);
+constexpr size_t kInitialIndexBufferSize = 10'000 * sizeof(ImDrawIdx);
 constexpr uint32_t kProjectionMatrixSize = 16 * sizeof(float);
 
 ImTextureID textureIdFromBindGroup(BindGroupHandle bind_group)
@@ -113,13 +116,14 @@ ImGuiRenderer::~ImGuiRenderer()
     shutdown();
 }
 
-bool ImGuiRenderer::init(Device& device)
+bool ImGuiRenderer::init(Device& device, Swapchain& swapchain)
 {
     if (m_device != nullptr) {
         return false;
     }
 
     m_device = &device;
+    m_swapchain = &swapchain;
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "LunaLite TinyRHI";
     io.BackendRendererUserData = this;
@@ -142,6 +146,49 @@ void ImGuiRenderer::setSurfaceOwner(Instance& instance)
 void ImGuiRenderer::setPlatform(ImGuiPlatform& platform)
 {
     m_platform = &platform;
+}
+
+void ImGuiRenderer::beginFrame()
+{
+    if (m_platform == nullptr) {
+        return;
+    }
+
+    m_platform->newFrame();
+    ImGui::NewFrame();
+}
+
+void ImGuiRenderer::endFrame(ImGuiRenderMode mode)
+{
+    if (m_device == nullptr || m_swapchain == nullptr) {
+        return;
+    }
+
+    ImGui::Render();
+
+    RenderPassBeginInfo pass;
+    pass.color_attachments.push_back(ColorAttachmentDesc{
+        .view = m_swapchain->getCurrentColorTextureView(),
+        .load_op = mode == ImGuiRenderMode::ClearSwapchain ? LoadOp::Clear : LoadOp::Load,
+        .store_op = StoreOp::Store,
+        .clear_color = ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
+    });
+    pass.width = m_swapchain->getWidth();
+    pass.height = m_swapchain->getHeight();
+
+    auto& commands = m_device->getCommandList();
+    commands.begin();
+    commands.beginRenderPass(pass);
+    render(ImGui::GetDrawData(), commands);
+    commands.endRenderPass();
+    commands.end();
+
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault(nullptr, this);
+    }
+
+    m_swapchain->present();
 }
 
 void ImGuiRenderer::shutdown()
@@ -191,6 +238,7 @@ void ImGuiRenderer::shutdown()
     }
 
     m_device = nullptr;
+    m_swapchain = nullptr;
     m_instance = nullptr;
     m_platform = nullptr;
 }
@@ -454,12 +502,13 @@ bool ImGuiRenderer::ensureBuffers(int vertex_count, int index_count)
             m_device->destroyBuffer(m_vertex_buffer);
         }
         m_vertex_buffer_size = std::max(requiredVertexBytes, kInitialVertexBufferSize);
-        m_vertex_buffer = m_device->createBuffer(BufferDesc{
-                                                      .size = m_vertex_buffer_size,
-                                                      .usage = BufferUsage::Vertex | BufferUsage::CopyDst,
-                                                      .memory = MemoryUsage::CpuToGpu,
-                                                  },
-                                                  nullptr);
+        m_vertex_buffer = m_device->createBuffer(
+            BufferDesc{
+                .size = m_vertex_buffer_size,
+                .usage = BufferUsage::Vertex | BufferUsage::CopyDst,
+                .memory = MemoryUsage::CpuToGpu,
+            },
+            nullptr);
     }
 
     if (!m_index_buffer || m_index_buffer_size < requiredIndexBytes) {
@@ -467,12 +516,13 @@ bool ImGuiRenderer::ensureBuffers(int vertex_count, int index_count)
             m_device->destroyBuffer(m_index_buffer);
         }
         m_index_buffer_size = std::max(requiredIndexBytes, kInitialIndexBufferSize);
-        m_index_buffer = m_device->createBuffer(BufferDesc{
-                                                     .size = m_index_buffer_size,
-                                                     .usage = BufferUsage::Index | BufferUsage::CopyDst,
-                                                     .memory = MemoryUsage::CpuToGpu,
-                                                 },
-                                                 nullptr);
+        m_index_buffer = m_device->createBuffer(
+            BufferDesc{
+                .size = m_index_buffer_size,
+                .usage = BufferUsage::Index | BufferUsage::CopyDst,
+                .memory = MemoryUsage::CpuToGpu,
+            },
+            nullptr);
     }
 
     return m_vertex_buffer && m_index_buffer;
@@ -537,9 +587,9 @@ void ImGuiRenderer::uploadCpuImage(const renderer::interface::FrameImage& image,
                                 .height = image.height,
                                 .format = toRHITextureFormat(image.format),
                                 .data = storage.pixels,
-                                .row_pitch = storage.row_pitch == 0
-                                                 ? static_cast<size_t>(image.width) * frameImageBytesPerPixel(image.format)
-                                                 : storage.row_pitch,
+                                .row_pitch = storage.row_pitch == 0 ? static_cast<size_t>(image.width) *
+                                                                          frameImageBytesPerPixel(image.format)
+                                                                    : storage.row_pitch,
                             });
 }
 

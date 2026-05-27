@@ -209,7 +209,7 @@ RHIFramePresenter::~RHIFramePresenter()
     }
 }
 
-void RHIFramePresenter::present(const interface::FrameImage& image)
+void RHIFramePresenter::renderToSwapchain(const interface::FrameImage& image)
 {
     if (image.width == 0 || image.height == 0) {
         return;
@@ -221,8 +221,17 @@ void RHIFramePresenter::present(const interface::FrameImage& image)
     } else if (const auto* gpu = std::get_if<interface::GpuFrameStorage>(&image.storage)) {
         drawToSwapchain(gpu->view, image.color_space);
     }
+}
 
+void RHIFramePresenter::present()
+{
     m_swapchain.present();
+}
+
+void RHIFramePresenter::present(const interface::FrameImage& image)
+{
+    renderToSwapchain(image);
+    present();
 }
 
 void RHIFramePresenter::ensureUploadTexture(const interface::FrameImage& image)

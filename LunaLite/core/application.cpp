@@ -1,23 +1,20 @@
-#include "../renderer/controller/renderer_controller.h"
-#include "../renderer/frame_presenter/rhi_frame_presenter.h"
 #include "../imgui/imgui_platform.h"
 #include "../imgui/imgui_renderer.h"
+#include "../renderer/controller/renderer_controller.h"
+#include "../renderer/frame_presenter/rhi_frame_presenter.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
 #include "application_event.h"
 #include "layer.h"
 #include "log.h"
 #include "TinyRHI/backend_factory.h"
-#include "TinyRHI/interface/command_list.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/instance.h"
-#include "TinyRHI/interface/render_pass.h"
 #include "TinyRHI/interface/surface.h"
 #include "TinyRHI/interface/swapchain.h"
 
-#include <imgui.h>
-
 #include <chrono>
+#include <imgui.h>
 #include <stdexcept>
 
 namespace lunalite::core {
@@ -39,7 +36,7 @@ const char* backendName(rhi::BackendType backend)
 
     return "Unknown";
 }
-}
+} // namespace
 
 Application::Application(const ApplicationCreateInfo& info)
     : m_instance(rhi::BackendFactory::createInstance(info.backend))
@@ -95,40 +92,18 @@ void Application::run()
         m_scene_renderer->endFrame();
 
         if (m_imgui_renderer) {
-            LUNA_ASSERT(m_imgui_platform, "ImGui platform is null.");
+            if (m_present_scene_to_swapchain) {
+                m_frame_presenter->renderToSwapchain(m_renderer_controller->getFrameImage());
+            }
 
-            m_imgui_platform->newFrame();
-            ImGui::NewFrame();
+            m_imgui_renderer->beginFrame();
 
             for (auto& layer : m_layer_stack) {
                 layer->onImGuiRender();
             }
 
-            ImGui::Render();
-
-            rhi::RenderPassBeginInfo pass;
-            pass.color_attachments.push_back(rhi::ColorAttachmentDesc{
-                .view = m_swapchain->getCurrentColorTextureView(),
-                .load_op = rhi::LoadOp::Clear,
-                .store_op = rhi::StoreOp::Store,
-                .clear_color = rhi::ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
-            });
-            pass.width = m_swapchain->getWidth();
-            pass.height = m_swapchain->getHeight();
-
-            auto& commands = m_device->getCommandList();
-            commands.begin();
-            commands.beginRenderPass(pass);
-            m_imgui_renderer->render(ImGui::GetDrawData(), commands);
-            commands.endRenderPass();
-            commands.end();
-
-            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-                ImGui::UpdatePlatformWindows();
-                ImGui::RenderPlatformWindowsDefault(nullptr, m_imgui_renderer.get());
-            }
-
-            m_swapchain->present();
+            m_imgui_renderer->endFrame(m_present_scene_to_swapchain ? imgui::ImGuiRenderMode::OverlaySwapchain
+                                                                     : imgui::ImGuiRenderMode::ClearSwapchain);
         } else {
             m_frame_presenter->present(m_renderer_controller->getFrameImage());
         }
@@ -191,6 +166,7 @@ void Application::initialize(const ApplicationCreateInfo& info)
                    info.width,
                    info.height,
                    backendName(info.backend));
+    m_present_scene_to_swapchain = info.present_scene_to_swapchain;
 
     WindowCreateInfo window_info;
     window_info.width = info.width;
@@ -235,9 +211,11 @@ void Application::initialize(const ApplicationCreateInfo& info)
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
     m_scene_renderer->setViewportSize(info.width, info.height);
+
     if (info.enable_imgui) {
         initializeImGui(info);
     }
+
     LUNA_CORE_INFO("Application initialized");
 }
 
@@ -267,7 +245,7 @@ void Application::initializeImGui(const ApplicationCreateInfo& info)
     m_imgui_renderer = std::make_unique<imgui::ImGuiRenderer>();
     m_imgui_renderer->setSurfaceOwner(*m_instance);
     m_imgui_renderer->setPlatform(*m_imgui_platform);
-    if (!m_imgui_renderer->init(*m_device)) {
+    if (!m_imgui_renderer->init(*m_device, *m_swapchain)) {
         LUNA_CORE_FATAL("Failed to initialize ImGui renderer backend.");
     }
 

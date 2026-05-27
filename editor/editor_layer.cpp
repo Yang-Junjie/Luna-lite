@@ -61,10 +61,10 @@ void EditorLayer::drawViewport()
     ImGui::Begin("Viewport");
     m_viewport_hovered = false;
 
-    const auto& frame = core::Application::get().getFrameImage();
-    const ImTextureID texture = core::Application::get().getImGuiRenderer().textureId(frame);
+    const auto& frame_image = core::Application::get().getFrameImage();
+    const ImTextureID texture = core::Application::get().getImGuiRenderer().textureId(frame_image);
     const ImVec2 available = ImGui::GetContentRegionAvail();
-    if (texture != ImTextureID_Invalid && frame.width > 0 && frame.height > 0 && available.x > 1.0f &&
+    if (texture != ImTextureID_Invalid && frame_image.width > 0 && frame_image.height > 0 && available.x > 1.0f &&
         available.y > 1.0f) {
         core::Application::get().getSceneRenderer().setViewportSize(static_cast<uint32_t>(available.x),
                                                                     static_cast<uint32_t>(available.y));
