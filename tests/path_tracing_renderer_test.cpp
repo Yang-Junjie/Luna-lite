@@ -17,6 +17,9 @@ std::filesystem::path findTestMesh()
         "assets/cube.obj",
         "../assets/cube.obj",
         "../../assets/cube.obj",
+        "sample_project/Assets/cube.obj",
+        "../sample_project/Assets/cube.obj",
+        "../../sample_project/Assets/cube.obj",
     };
 
     for (const auto& candidate : candidates) {
@@ -33,9 +36,13 @@ int main()
 {
     using namespace lunalite;
 
-    const auto mesh_handle = asset::MeshAssetLoader::loadObj(findTestMesh());
-    const auto* mesh = asset::AssetDatabase::get().get<renderer::interface::Mesh>(mesh_handle);
-    if (mesh == nullptr) {
+    asset::AssetMetadata metadata;
+    metadata.Handle = asset::AssetHandle{};
+    metadata.Type = asset::AssetType::Mesh;
+    metadata.FilePath = std::filesystem::absolute(findTestMesh());
+
+    const auto mesh = asset::MeshAssetLoader::loadObj(metadata);
+    if (!mesh) {
         std::cerr << "Failed to load test mesh.\n";
         return 1;
     }

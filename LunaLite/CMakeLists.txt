@@ -56,7 +56,11 @@ add_library(LunaLite STATIC
     core/layer_stack.cpp
     core/log.cpp
     core/uuid.cpp
+    asset/asset_importer.cpp
+    asset/asset_manager.cpp
+    asset/mesh_asset_importer.cpp
     asset/mesh_asset_loader.cpp
+    project/project_manager.cpp
     scene/scene.cpp
     scene/scene_renderer.cpp
 )
@@ -67,6 +71,7 @@ target_link_libraries(LunaLite
         EnTT::EnTT
         spdlog::spdlog
         tiny_obj_loader
+        yaml-cpp::yaml-cpp
         TinyRHI::TinyRHI
         LunaLiteRenderer
         LunaLiteImGui

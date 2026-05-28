@@ -1,10 +1,11 @@
-#include "../LunaLite/asset/mesh_asset_loader.h"
+#include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/core/application.h"
 #include "../LunaLite/core/application_event.h"
 #include "../LunaLite/core/input.h"
 #include "../LunaLite/core/key_event.h"
 #include "../LunaLite/core/log.h"
 #include "../LunaLite/core/mouse_event.h"
+#include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "demo_layer.h"
@@ -24,7 +25,10 @@ DemoLayer::DemoLayer()
 
 void DemoLayer::onAttach()
 {
-    const auto obj_handle = asset::MeshAssetLoader::loadObj("../../assets/stanford-bunny.obj");
+    auto& projectManager = project::ProjectManager::instance();
+    projectManager.loadProject("../../sample_project/sample_project.lunaproj");
+    asset::AssetManager::get().loadProjectAssets();
+    const auto obj_handle = asset::AssetManager::get().getHandleByFileName("stanford-bunny.obj");
 
     {
         auto entity = m_scene.createEntity();

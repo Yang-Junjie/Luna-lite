@@ -1,0 +1,84 @@
+#include "../LunaLite/asset/asset_manager.h"
+#include "../LunaLite/project/project_manager.h"
+#include "../LunaLite/renderer/interface/mesh.h"
+
+#include <filesystem>
+#include <iostream>
+
+namespace {
+std::filesystem::path findTestMesh()
+{
+    const std::filesystem::path candidates[] = {
+        "sample_project/Assets/cube.obj",
+        "../sample_project/Assets/cube.obj",
+        "../../sample_project/Assets/cube.obj",
+        "assets/cube.obj",
+        "../assets/cube.obj",
+        "../../assets/cube.obj",
+    };
+
+    for (const auto& candidate : candidates) {
+        if (std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    return candidates[0];
+}
+} // namespace
+
+int main()
+{
+    using namespace lunalite;
+
+    const auto sourceMesh = findTestMesh();
+    if (!std::filesystem::exists(sourceMesh)) {
+        std::cerr << "Failed to find test mesh.\n";
+        return 1;
+    }
+
+    const auto projectRoot = std::filesystem::current_path() / "build" / "asset_manager_test_project";
+    std::error_code error;
+    std::filesystem::remove_all(projectRoot, error);
+
+    project::ProjectInfo info;
+    info.name = "AssetManagerTestProject";
+    info.assets_path = "Assets";
+    if (!project::ProjectManager::instance().createProject(projectRoot, info)) {
+        std::cerr << "Failed to create test project.\n";
+        return 1;
+    }
+
+    const auto targetMesh = projectRoot / info.assets_path / "cube.obj";
+    std::filesystem::copy_file(sourceMesh, targetMesh, std::filesystem::copy_options::overwrite_existing, error);
+    if (error) {
+        std::cerr << "Failed to copy test mesh: " << error.message() << "\n";
+        return 1;
+    }
+
+    if (!asset::AssetManager::get().loadProjectAssets()) {
+        std::cerr << "Failed to load project assets.\n";
+        return 1;
+    }
+
+    const auto handle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube.obj");
+    if (!handle.isValid()) {
+        std::cerr << "Failed to resolve imported mesh handle.\n";
+        return 1;
+    }
+
+    const auto fileNameHandle = asset::AssetManager::get().getHandleByFileName("cube.obj");
+    if (!fileNameHandle.isValid() || fileNameHandle != handle) {
+        std::cerr << "Failed to resolve imported mesh by file name.\n";
+        return 1;
+    }
+
+    const auto* mesh = asset::AssetManager::get().getAsset<renderer::interface::Mesh>(handle);
+    if (mesh == nullptr || mesh->getVertices().empty() || mesh->getIndices().empty()) {
+        std::cerr << "Failed to load mesh through AssetManager.\n";
+        return 1;
+    }
+
+    std::cout << "AssetManager imported and loaded a mesh asset.\n";
+    return 0;
+}

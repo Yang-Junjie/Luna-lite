@@ -1,4 +1,5 @@
-#include "asset_database.h"
+#include "../core/log.h"
+#include "../project/project_manager.h"
 #include "mesh_asset_loader.h"
 
 #include <cstdint>
@@ -11,8 +12,13 @@
 
 namespace lunalite::asset {
 
-AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
+std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetMetadata& metadata)
 {
+    const auto projectRoot =
+        project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());
+
+    const auto path = projectRoot / metadata.FilePath;
+
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -24,7 +30,7 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
 
     if (!loaded) {
         LUNA_CORE_ERROR("Failed to load OBJ file '{}': {}", path.string(), error);
-        return AssetHandle{0};
+        return nullptr;
     }
     if (!warn.empty()) {
         LUNA_CORE_WARN("OBJ load warning for '{}': {}", path.string(), warn);
@@ -66,14 +72,15 @@ AssetHandle MeshAssetLoader::loadObj(const std::filesystem::path& path)
 
     if (vertices.empty()) {
         LUNA_CORE_ERROR("No valid vertices found in OBJ file '{}'", path.string());
-        return AssetHandle{0};
+        return nullptr;
     }
 
     auto mesh = std::make_shared<renderer::interface::Mesh>();
+    mesh->handle = metadata.Handle;
     mesh->setVertices(std::move(vertices));
     mesh->setIndices(std::move(indices));
 
-    return AssetDatabase::get().add(std::move(mesh));
+    return mesh;
 }
 
 glm::vec3 MeshAssetLoader::calculateSurfaceNormal(const renderer::interface::Vertex& v0,

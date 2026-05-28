@@ -1,0 +1,7 @@
+Asset:
+  Handle: 16075057057839369176
+  Type: Mesh
+  Name: stanford-bunny
+  FilePath: Assets/stanford-bunny.obj
+  MemoryOnly: false
+  Config: ~

@@ -1,14 +1,15 @@
 #pragma once
 #include "../renderer/interface/mesh.h"
-#include "asset.h"
+#include "asset_metadata.h"
 
 #include <filesystem>
+#include <memory>
 #include <tiny_obj_loader.h>
 
 namespace lunalite::asset {
 class MeshAssetLoader {
 public:
-    static AssetHandle loadObj(const std::filesystem::path& path);
+    static std::shared_ptr<renderer::interface::Mesh> loadObj(const AssetMetadata& metadata);
 
 private:
     static glm::vec3 calculateSurfaceNormal(const renderer::interface::Vertex& v0,

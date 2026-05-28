@@ -23,11 +23,6 @@ public:
 
     template <typename T> AssetHandle add(std::shared_ptr<T> asset)
     {
-        if (asset == nullptr) {
-            LUNA_ASSERT(asset != nullptr, "Cannot add null asset.");
-            LUNA_CORE_ERROR("Failed to add null asset");
-            return AssetHandle{0};
-        }
 
         if (!asset->handle.isValid()) {
             do {
@@ -53,6 +48,16 @@ public:
     {
         const auto* asset = getAsset(handle);
         return dynamic_cast<const T*>(asset);
+    }
+
+    bool contains(AssetHandle handle) const
+    {
+        return handle.isValid() && m_assets.contains(static_cast<uint64_t>(handle));
+    }
+
+    void clear()
+    {
+        m_assets.clear();
     }
 
 private:
