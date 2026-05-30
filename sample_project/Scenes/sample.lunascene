@@ -1,0 +1,18 @@
+Scene: sample
+Entities:
+  - Entity: 0
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 0
+      Rotation:
+        - 0
+        - 0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    MeshComponent:
+      Mesh: 16075057057839369176

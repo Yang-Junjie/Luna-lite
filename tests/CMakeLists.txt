@@ -17,6 +17,15 @@ target_link_libraries(AssetManagerTest
         LunaLite
 )
 
+add_executable(SceneSerializerTest
+    scene_serializer_test.cpp
+)
+
+target_link_libraries(SceneSerializerTest
+    PRIVATE
+        LunaLite
+)
+
 add_executable(PathTracingRendererTest
     path_tracing_renderer_test.cpp
 )

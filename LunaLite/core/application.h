@@ -78,15 +78,18 @@ private:
 private:
     bool m_is_running{true};
 
-    std::unique_ptr<rhi::Instance> m_instance;
     std::unique_ptr<Window> m_window;
+
+    std::unique_ptr<rhi::Instance> m_instance;
     rhi::Device* m_device{nullptr};
+    rhi::Swapchain* m_swapchain{nullptr};
+
     rhi::SurfaceHandle m_surface_handle{};
     rhi::SwapchainHandle m_swapchain_handle{};
-    rhi::Swapchain* m_swapchain{nullptr};
 
     std::unique_ptr<renderer::RendererController> m_renderer_controller;
     std::unique_ptr<renderer::RHIFramePresenter> m_frame_presenter;
+
     std::unique_ptr<scene::SceneRenderer> m_scene_renderer;
     std::unique_ptr<imgui::ImGuiPlatform> m_imgui_platform;
     std::unique_ptr<imgui::ImGuiRenderer> m_imgui_renderer;

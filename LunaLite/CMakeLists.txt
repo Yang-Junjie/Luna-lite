@@ -60,10 +60,18 @@ add_library(LunaLite STATIC
     asset/asset_manager.cpp
     asset/mesh_asset_importer.cpp
     asset/mesh_asset_loader.cpp
+    platform/common/file_dialogs.h
     project/project_manager.cpp
     scene/scene.cpp
+    scene/scene_serializer.cpp
     scene/scene_renderer.cpp
 )
+
+if(WIN32)
+    target_sources(LunaLite PRIVATE platform/windows/win_file_dialogs.cpp)
+else()
+    target_sources(LunaLite PRIVATE platform/common/file_dialogs.cpp)
+endif()
 
 target_link_libraries(LunaLite
     PUBLIC

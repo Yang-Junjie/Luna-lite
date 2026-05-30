@@ -1,45 +1,26 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/core/application.h"
 #include "../LunaLite/imgui/imgui_renderer.h"
+#include "../LunaLite/platform/common/file_dialogs.h"
 #include "../LunaLite/project/project_manager.h"
-#include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
+#include "../LunaLite/scene/scene_serializer.h"
 #include "editor_layer.h"
 
 #include <cstdint>
 
-#include <glm/geometric.hpp>
-#include <glm/glm.hpp>
 #include <imgui.h>
 
 namespace lunalite::editor {
 
 EditorLayer::EditorLayer()
-    : Layer("EditorLayer")
+    : Layer("EditorLayer"),
+      m_hierarchy_panel(m_scene, m_selected_entity),
+      m_inspector_panel(m_scene, m_selected_entity)
 {}
 
 void EditorLayer::onAttach()
-{
-    auto& projectManager = project::ProjectManager::instance();
-    projectManager.loadProject("../../sample_project/sample_project.lunaproj");
-    asset::AssetManager::get().loadProjectAssets();
-    const auto obj_handle = asset::AssetManager::get().getHandleByFileName("stanford-bunny.obj");
-
-    {
-        auto entity = m_scene.createEntity();
-        m_model_entity = entity;
-        auto& transformComp = m_scene.addComponent<scene::TransformComponent>(entity);
-        transformComp.scale = glm::vec3(8.0f, 8.0f, 8.0f);
-        auto& meshComp = m_scene.addComponent<scene::MeshComponent>(entity);
-        meshComp.mesh = obj_handle;
-    }
-
-    {
-        auto entity = m_scene.createEntity();
-        auto& light = m_scene.addComponent<scene::DirectionalLightComponent>(entity);
-        light.direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
-    }
-}
+{}
 
 void EditorLayer::onUpdate(core::Timestep dt)
 {
@@ -56,7 +37,165 @@ void EditorLayer::onImGuiRender()
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) {
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
     }
+    drawMenuBar();
+    m_hierarchy_panel.onImGuiRender();
+    m_inspector_panel.onImGuiRender();
     drawViewport();
+}
+
+void EditorLayer::drawMenuBar()
+{
+    if (!ImGui::BeginMainMenuBar()) {
+        return;
+    }
+
+    if (ImGui::BeginMenu("Project")) {
+        if (ImGui::MenuItem("Create Project")) {
+            createProject();
+        }
+        if (ImGui::MenuItem("Open Project")) {
+            openProject();
+        }
+        if (ImGui::MenuItem("Save Project")) {
+            saveProject();
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Scene")) {
+        if (ImGui::MenuItem("Create Scene")) {
+            createScene();
+        }
+        if (ImGui::MenuItem("Open Scene")) {
+            openScene();
+        }
+        if (ImGui::MenuItem("Save Scene")) {
+            saveScene();
+        }
+        ImGui::EndMenu();
+    }
+
+    ImGui::EndMainMenuBar();
+}
+
+void EditorLayer::createProject()
+{
+    const auto projectRoot = FileDialogs::selectDirectory({});
+    if (projectRoot.empty()) {
+        return;
+    }
+
+    project::ProjectInfo info;
+    info.name = projectRoot.filename().string();
+    info.assets_path = "Assets";
+
+    if (!project::ProjectManager::instance().createProject(projectRoot, info)) {
+        return;
+    }
+
+    asset::AssetManager::get().loadProjectAssets();
+    m_scene.clear();
+    m_selected_entity = scene::Entity{};
+    m_current_scene_path.clear();
+}
+
+void EditorLayer::openProject()
+{
+    const auto projectPath = FileDialogs::openFile("Luna Project\0*.lunaproj\0", {});
+    if (projectPath.empty()) {
+        return;
+    }
+
+    auto& projectManager = project::ProjectManager::instance();
+    if (!projectManager.loadProject(projectPath)) {
+        return;
+    }
+
+    asset::AssetManager::get().loadProjectAssets();
+    m_scene.clear();
+    m_selected_entity = scene::Entity{};
+    m_current_scene_path.clear();
+
+    const auto& projectInfo = projectManager.getProjectInfo();
+    const auto projectRoot = projectManager.getProjectRootPath();
+    if (projectInfo && projectRoot && !projectInfo->start_scene.empty()) {
+        loadScene(*projectRoot / projectInfo->start_scene);
+    }
+}
+
+void EditorLayer::saveProject()
+{
+    project::ProjectManager::instance().saveProject();
+}
+
+void EditorLayer::createScene()
+{
+    auto scenePath = FileDialogs::saveFile("Luna Scene\0*.lunascene\0", {});
+    if (scenePath.empty()) {
+        return;
+    }
+    if (scenePath.extension().empty()) {
+        scenePath.replace_extension(scene::SceneSerializer::FileExtension);
+    }
+
+    m_scene.clear();
+    m_selected_entity = scene::Entity{};
+    if (!scene::SceneSerializer::serialize(m_scene, scenePath)) {
+        return;
+    }
+
+    m_current_scene_path = scenePath;
+
+    auto& projectManager = project::ProjectManager::instance();
+    const auto& projectInfo = projectManager.getProjectInfo();
+    if (projectInfo) {
+        auto info = *projectInfo;
+        info.start_scene = projectRelativePath(scenePath);
+        projectManager.setProjectInfo(info);
+        projectManager.saveProject();
+    }
+}
+
+void EditorLayer::openScene()
+{
+    const auto scenePath = FileDialogs::openFile("Luna Scene\0*.lunascene\0", {});
+    if (scenePath.empty()) {
+        return;
+    }
+
+    loadScene(scenePath);
+}
+
+void EditorLayer::saveScene()
+{
+    if (m_current_scene_path.empty()) {
+        createScene();
+        return;
+    }
+
+    scene::SceneSerializer::serialize(m_scene, m_current_scene_path);
+}
+
+bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
+{
+    if (!scene::SceneSerializer::deserialize(m_scene, scene_path)) {
+        return false;
+    }
+
+    m_selected_entity = scene::Entity{};
+    m_current_scene_path = scene_path;
+    return true;
+}
+
+std::filesystem::path EditorLayer::projectRelativePath(const std::filesystem::path& path) const
+{
+    const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
+    if (!projectRoot) {
+        return path;
+    }
+
+    const auto relativePath = path.lexically_relative(*projectRoot);
+    return relativePath.empty() ? path : relativePath;
 }
 
 void EditorLayer::drawViewport()

@@ -3,6 +3,7 @@
 
 #include <entt/entt.hpp>
 #include <utility>
+#include <vector>
 
 namespace lunalite::scene {
 class Scene {
@@ -10,6 +11,10 @@ public:
     Scene() = default;
 
     Entity createEntity();
+    void destroyEntity(Entity entity);
+    void clear();
+    bool isValidEntity(Entity entity) const;
+    std::vector<Entity> getEntities() const;
 
     template <typename T, typename... Args> T& addComponent(Entity entity, Args&&... args)
     {
@@ -29,6 +34,11 @@ public:
     template <typename T> bool hasComponent(Entity entity) const
     {
         return m_registry.all_of<T>(entity.getHandle());
+    }
+
+    template <typename T> void removeComponent(Entity entity)
+    {
+        m_registry.remove<T>(entity.getHandle());
     }
 
     entt::registry& getRegistry()

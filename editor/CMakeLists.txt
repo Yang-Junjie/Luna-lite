@@ -2,6 +2,8 @@ add_executable(LunaLiteEditor
     application.cpp
     editor_camera.cpp
     editor_layer.cpp
+    hierarchy_panel.cpp
+    inspector_panel.cpp
 )
 
 target_link_libraries(LunaLiteEditor
