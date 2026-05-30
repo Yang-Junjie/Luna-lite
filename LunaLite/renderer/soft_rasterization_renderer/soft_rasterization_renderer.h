@@ -3,6 +3,7 @@
 #include "../interface/renderer.h"
 
 #include <cstdint>
+
 #include <vector>
 
 namespace lunalite::renderer {
@@ -15,10 +16,7 @@ public:
     void endFrame() override;
     void resize(uint32_t width, uint32_t height) override;
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
-    void setDirectionalLight(const glm::vec3& direction,
-                             const glm::vec3& ambient,
-                             const glm::vec3& diffuse,
-                             const glm::vec3& specular) override;
+    void setSceneLighting(const interface::SceneLighting& lighting) override;
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
     const interface::FrameImage& getFrameImage() const override;
 
@@ -31,7 +29,10 @@ private:
     };
 
     void rasterizeTriangle(const ScreenVertex& v0, const ScreenVertex& v1, const ScreenVertex& v2);
-    bool projectVertex(const interface::Vertex& vertex, const glm::mat4& model, const glm::mat4& normal_matrix, ScreenVertex& out) const;
+    bool projectVertex(const interface::Vertex& vertex,
+                       const glm::mat4& model,
+                       const glm::mat4& normal_matrix,
+                       ScreenVertex& out) const;
     void updateFrameImage();
     uint32_t pixelIndex(uint32_t x, uint32_t y) const;
 
@@ -46,10 +47,7 @@ private:
     glm::mat4 m_view{1.0f};
     glm::mat4 m_projection{1.0f};
     glm::vec3 m_camera_pos{0.0f};
-    glm::vec3 m_light_direction{0.0f, -1.0f, 0.0f};
-    glm::vec3 m_light_ambient{0.05f};
-    glm::vec3 m_light_diffuse{0.8f};
-    glm::vec3 m_light_specular{1.0f};
+    interface::SceneLighting m_lighting;
 };
 
 } // namespace lunalite::renderer

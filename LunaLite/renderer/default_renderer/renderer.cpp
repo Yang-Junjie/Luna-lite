@@ -38,6 +38,12 @@ layout(std140, binding = 0) uniform FrameUniforms {
     float _pad3;
     vec3 lightSpecular;
     float _pad4;
+    uint directionalLightCount;
+    float _pad5;
+    float _pad6;
+    float _pad7;
+    vec3 environmentAmbient;
+    float _pad8;
 };
 
 layout(std140, binding = 1) uniform ObjectUniforms {
@@ -115,6 +121,12 @@ layout(std140, binding = 0) uniform FrameUniforms {
     float _pad3;
     vec3 lightSpecular;
     float _pad4;
+    uint directionalLightCount;
+    float _pad5;
+    float _pad6;
+    float _pad7;
+    vec3 environmentAmbient;
+    float _pad8;
 };
 
 layout(binding = 1) uniform sampler2D gAlbedoTexture;
@@ -131,12 +143,17 @@ void main()
     vec3 normal = normalize(texture(gNormalTexture, vUV).rgb * 2.0 - 1.0);
     vec3 material = texture(gMaterialTexture, vUV).rgb;
 
-    vec3 L = normalize(-lightDir);
-    float diff = max(dot(normal, L), 0.0);
+    vec3 color = environmentAmbient * albedo;
+    if (directionalLightCount > 0u) {
+        vec3 L = normalize(-lightDir);
+        float diff = max(dot(normal, L), 0.0);
 
-    vec3 ambient = lightAmbient * albedo;
-    vec3 diffuse = lightDiffuse * diff * albedo;
-    vec3 color = ambient + diffuse + material.b * 0.0;
+        vec3 ambient = lightAmbient * albedo;
+        vec3 diffuse = lightDiffuse * diff * albedo;
+        color += ambient + diffuse;
+    }
+
+    color += material.b * 0.0;
     outColor = vec4(color, 1.0);
 }
 )";
@@ -633,15 +650,23 @@ void Renderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, c
     m_frame_uniforms_dirty = true;
 }
 
-void Renderer::setDirectionalLight(const glm::vec3& direction,
-                                   const glm::vec3& ambient,
-                                   const glm::vec3& diffuse,
-                                   const glm::vec3& specular)
+void Renderer::setSceneLighting(const interface::SceneLighting& lighting)
 {
-    m_frameUniforms.lightDir = direction;
-    m_frameUniforms.lightAmbient = ambient;
-    m_frameUniforms.lightDiffuse = diffuse;
-    m_frameUniforms.lightSpecular = specular;
+    m_frameUniforms.directionalLightCount = lighting.directional_light_count > 0 ? 1u : 0u;
+    m_frameUniforms.environmentAmbient = lighting.environment_ambient;
+
+    if (m_frameUniforms.directionalLightCount > 0) {
+        m_frameUniforms.lightDir = lighting.directional_light.direction;
+        m_frameUniforms.lightAmbient = lighting.directional_light.ambient;
+        m_frameUniforms.lightDiffuse = lighting.directional_light.diffuse;
+        m_frameUniforms.lightSpecular = lighting.directional_light.specular;
+    } else {
+        m_frameUniforms.lightDir = {0.0f, -1.0f, 0.0f};
+        m_frameUniforms.lightAmbient = {0.0f, 0.0f, 0.0f};
+        m_frameUniforms.lightDiffuse = {0.0f, 0.0f, 0.0f};
+        m_frameUniforms.lightSpecular = {0.0f, 0.0f, 0.0f};
+    }
+
     m_frame_uniforms_dirty = true;
 }
 

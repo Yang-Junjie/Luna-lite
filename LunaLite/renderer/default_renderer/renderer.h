@@ -1,8 +1,8 @@
 #pragma once
-#include "TinyRHI/interface/device.h"
-#include "TinyRHI/interface/swapchain.h"
 #include "../interface/frame_image.h"
 #include "../interface/renderer.h"
+#include "TinyRHI/interface/device.h"
+#include "TinyRHI/interface/swapchain.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -19,10 +19,7 @@ public:
     void endFrame() override;
     void resize(uint32_t width, uint32_t height) override;
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
-    void setDirectionalLight(const glm::vec3& direction,
-                             const glm::vec3& ambient,
-                             const glm::vec3& diffuse,
-                             const glm::vec3& specular) override;
+    void setSceneLighting(const interface::SceneLighting& lighting) override;
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
     const interface::FrameImage& getFrameImage() const override;
 
@@ -33,12 +30,18 @@ public:
         float _pad0{0.0f};
         glm::vec3 lightDir{0.0f, -1.0f, 0.0f};
         float _pad1{0.0f};
-        glm::vec3 lightAmbient{0.05f, 0.05f, 0.05f};
+        glm::vec3 lightAmbient{0.0f};
         float _pad2{0.0f};
-        glm::vec3 lightDiffuse{0.8f, 0.8f, 0.8f};
+        glm::vec3 lightDiffuse{0.0f};
         float _pad3{0.0f};
-        glm::vec3 lightSpecular{1.0f, 1.0f, 1.0f};
+        glm::vec3 lightSpecular{0.0f};
         float _pad4{0.0f};
+        uint32_t directionalLightCount{0};
+        float _pad5{0.0f};
+        float _pad6{0.0f};
+        float _pad7{0.0f};
+        glm::vec3 environmentAmbient{0.0f};
+        float _pad8{0.0f};
     };
 
     struct alignas(16) ObjectUniforms {

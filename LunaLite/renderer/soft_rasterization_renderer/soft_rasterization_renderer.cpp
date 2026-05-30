@@ -1,11 +1,11 @@
 #include "soft_rasterization_renderer.h"
 
-#include <algorithm>
 #include <cmath>
-#include <limits>
 
+#include <algorithm>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <limits>
 
 namespace lunalite::renderer {
 namespace {
@@ -58,22 +58,21 @@ void SoftRasterizationRenderer::resize(uint32_t width, uint32_t height)
     updateFrameImage();
 }
 
-void SoftRasterizationRenderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
+void SoftRasterizationRenderer::setViewProjection(const glm::mat4& view,
+                                                  const glm::mat4& proj,
+                                                  const glm::vec3& cameraPos)
 {
     m_view = view;
     m_projection = proj;
     m_camera_pos = cameraPos;
 }
 
-void SoftRasterizationRenderer::setDirectionalLight(const glm::vec3& direction,
-                                                    const glm::vec3& ambient,
-                                                    const glm::vec3& diffuse,
-                                                    const glm::vec3& specular)
+void SoftRasterizationRenderer::setSceneLighting(const interface::SceneLighting& lighting)
 {
-    m_light_direction = direction;
-    m_light_ambient = ambient;
-    m_light_diffuse = diffuse;
-    m_light_specular = specular;
+    m_lighting = lighting;
+    if (m_lighting.directional_light_count > 1) {
+        m_lighting.directional_light_count = 1;
+    }
 }
 
 void SoftRasterizationRenderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
@@ -119,7 +118,9 @@ const interface::FrameImage& SoftRasterizationRenderer::getFrameImage() const
     return m_frame_image;
 }
 
-void SoftRasterizationRenderer::rasterizeTriangle(const ScreenVertex& v0, const ScreenVertex& v1, const ScreenVertex& v2)
+void SoftRasterizationRenderer::rasterizeTriangle(const ScreenVertex& v0,
+                                                  const ScreenVertex& v1,
+                                                  const ScreenVertex& v2)
 {
     const glm::vec2 p0{v0.position.x, v0.position.y};
     const glm::vec2 p1{v1.position.x, v1.position.y};
@@ -130,11 +131,18 @@ void SoftRasterizationRenderer::rasterizeTriangle(const ScreenVertex& v0, const 
     }
 
     const auto min_x = static_cast<int32_t>(std::max(0.0f, std::floor(std::min({p0.x, p1.x, p2.x}))));
-    const auto max_x = static_cast<int32_t>(std::min(static_cast<float>(m_width - 1), std::ceil(std::max({p0.x, p1.x, p2.x}))));
+    const auto max_x =
+        static_cast<int32_t>(std::min(static_cast<float>(m_width - 1), std::ceil(std::max({p0.x, p1.x, p2.x}))));
     const auto min_y = static_cast<int32_t>(std::max(0.0f, std::floor(std::min({p0.y, p1.y, p2.y}))));
-    const auto max_y = static_cast<int32_t>(std::min(static_cast<float>(m_height - 1), std::ceil(std::max({p0.y, p1.y, p2.y}))));
+    const auto max_y =
+        static_cast<int32_t>(std::min(static_cast<float>(m_height - 1), std::ceil(std::max({p0.y, p1.y, p2.y}))));
 
-    const auto light = glm::normalize(-m_light_direction);
+    const auto has_directional_light = m_lighting.directional_light_count > 0;
+    glm::vec3 light{0.0f};
+    if (has_directional_light) {
+        light = glm::normalize(-m_lighting.directional_light.direction);
+    }
+
     for (int32_t y = min_y; y <= max_y; ++y) {
         for (int32_t x = min_x; x <= max_x; ++x) {
             const glm::vec2 p{static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f};
@@ -153,8 +161,13 @@ void SoftRasterizationRenderer::rasterizeTriangle(const ScreenVertex& v0, const 
 
             const auto normal = glm::normalize(w0 * v0.normal + w1 * v1.normal + w2 * v2.normal);
             const auto base_color = w0 * v0.color + w1 * v1.color + w2 * v2.color;
-            const auto diffuse = std::max(glm::dot(normal, light), 0.0f);
-            m_color_buffer[index] = base_color * (m_light_ambient + m_light_diffuse * diffuse);
+            auto color = base_color * m_lighting.environment_ambient;
+            if (has_directional_light) {
+                const auto diffuse = std::max(glm::dot(normal, light), 0.0f);
+                color += base_color *
+                         (m_lighting.directional_light.ambient + m_lighting.directional_light.diffuse * diffuse);
+            }
+            m_color_buffer[index] = color;
             m_depth_buffer[index] = depth;
         }
     }

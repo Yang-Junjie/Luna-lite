@@ -5,11 +5,10 @@
 #include "../LunaLite/renderer/soft_rasterization_renderer/soft_rasterization_renderer.h"
 
 #include <filesystem>
-#include <iostream>
-#include <variant>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
+#include <variant>
 
 namespace {
 std::filesystem::path findTestMesh()
@@ -57,10 +56,13 @@ int main()
 
     renderer.beginFrame();
     renderer.setViewProjection(view, projection, camera_pos);
-    renderer.setDirectionalLight(glm::normalize(glm::vec3{-0.5f, -1.0f, -0.3f}),
-                                 glm::vec3{0.05f},
-                                 glm::vec3{0.8f},
-                                 glm::vec3{1.0f});
+    renderer::interface::SceneLighting lighting;
+    lighting.directional_light_count = 1;
+    lighting.directional_light.direction = glm::normalize(glm::vec3{-0.5f, -1.0f, -0.3f});
+    lighting.directional_light.ambient = glm::vec3{0.05f};
+    lighting.directional_light.diffuse = glm::vec3{0.8f};
+    lighting.directional_light.specular = glm::vec3{1.0f};
+    renderer.setSceneLighting(lighting);
     renderer.renderMesh(*mesh, model);
     renderer.endFrame();
 
