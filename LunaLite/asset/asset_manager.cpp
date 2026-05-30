@@ -23,11 +23,7 @@ bool AssetManager::loadProjectAssets()
 
     const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
 
-    auto assetsRoot = *projectRoot;
-    const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
-    if (projectInfo && !projectInfo->assets_path.empty()) {
-        assetsRoot /= projectInfo->assets_path;
-    }
+    const auto assetsRoot = *projectRoot;
 
     if (!std::filesystem::exists(assetsRoot)) {
         LUNA_CORE_ERROR("Failed to load project assets: '{}' does not exist", assetsRoot.string());
@@ -88,12 +84,17 @@ AssetHandle AssetManager::getHandleByFileName(const std::string& assetName) cons
 
 const AssetMetadata* AssetManager::getMetadata(AssetHandle handle) const
 {
-    const auto it = m_metadata_registry.find(static_cast<uint64_t>(handle));
+    const auto it = m_metadata_registry.find(handle);
     if (it == m_metadata_registry.end()) {
         return nullptr;
     }
 
     return &it->second;
+}
+
+const std::unordered_map<AssetHandle, AssetMetadata>& AssetManager::getMetadataRegistry() const
+{
+    return m_metadata_registry;
 }
 
 void AssetManager::registerDefaultImporters()
@@ -168,15 +169,14 @@ bool AssetManager::registerMetadata(const AssetMetadata& metadata)
         return false;
     }
 
-    const auto key = static_cast<uint64_t>(metadata.Handle);
-    if (m_metadata_registry.contains(key)) {
+    if (m_metadata_registry.contains(metadata.Handle)) {
         LUNA_CORE_ERROR("Failed to register asset metadata '{}': duplicate handle {}",
                         metadata.FilePath.string(),
                         metadata.Handle.toString());
         return false;
     }
 
-    m_metadata_registry.emplace(key, metadata);
+    m_metadata_registry.emplace(metadata.Handle, metadata);
     m_path_handle_map.emplace(metadata.FilePath.lexically_normal().generic_string(), metadata.Handle);
     return true;
 }

@@ -3,6 +3,7 @@
 #include "../LunaLite/imgui/imgui_renderer.h"
 #include "../LunaLite/platform/common/file_dialogs.h"
 #include "../LunaLite/project/project_manager.h"
+#include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "../LunaLite/scene/scene_serializer.h"
 #include "editor_layer.h"
@@ -39,6 +40,7 @@ void EditorLayer::onImGuiRender()
     drawMenuBar();
     m_hierarchy_panel.onImGuiRender();
     m_inspector_panel.onImGuiRender();
+    m_content_browser_panel.onImGuiRender();
     drawViewport();
 }
 
@@ -186,6 +188,29 @@ bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
     return true;
 }
 
+void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
+{
+    if (payload.type != asset::AssetType::Mesh) {
+        return;
+    }
+
+    const auto handle = payload.handle;
+    if (!handle.isValid()) {
+        return;
+    }
+
+    auto entity = m_scene.createEntity();
+    auto& mesh = m_scene.addComponent<scene::MeshComponent>(entity);
+    mesh.mesh = handle;
+
+    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
+        auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
+        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    }
+
+    m_selected_entity = entity;
+}
+
 std::filesystem::path EditorLayer::projectRelativePath(const std::filesystem::path& path) const
 {
     const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
@@ -212,6 +237,14 @@ void EditorLayer::drawViewport()
                                                                     static_cast<uint32_t>(available.y));
         ImGui::Image(texture, available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         m_viewport_hovered = ImGui::IsItemHovered();
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
+                if (payload->DataSize == sizeof(AssetDragDropPayload)) {
+                    createEntityFromAsset(*static_cast<const AssetDragDropPayload*>(payload->Data));
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
     }
 
     ImGui::End();

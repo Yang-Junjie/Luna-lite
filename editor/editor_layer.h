@@ -2,6 +2,7 @@
 
 #include "../LunaLite/core/layer.h"
 #include "../LunaLite/scene/scene.h"
+#include "content_browser_panel.h"
 #include "editor_camera.h"
 #include "hierarchy_panel.h"
 #include "inspector_panel.h"
@@ -30,6 +31,7 @@ private:
     void openScene();
     void saveScene();
     bool loadScene(const std::filesystem::path& scene_path);
+    void createEntityFromAsset(const AssetDragDropPayload& payload);
     std::filesystem::path projectRelativePath(const std::filesystem::path& path) const;
 
     EditorCamera m_editor_camera;
@@ -37,6 +39,7 @@ private:
     scene::Entity m_selected_entity;
     HierarchyPanel m_hierarchy_panel;
     InspectorPanel m_inspector_panel;
+    ContentBrowserPanel m_content_browser_panel;
     bool m_viewport_hovered{false};
     std::filesystem::path m_current_scene_path;
 };

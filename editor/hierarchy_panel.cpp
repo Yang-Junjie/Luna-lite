@@ -1,6 +1,7 @@
-#include "hierarchy_panel.h"
-
+#include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/scene/components.h"
+#include "content_browser_panel.h"
+#include "hierarchy_panel.h"
 
 #include <cstdint>
 
@@ -8,6 +9,42 @@
 #include <string>
 
 namespace lunalite::editor {
+namespace {
+void createEntityFromAsset(scene::Scene& scene, scene::Entity& selectedEntity, const AssetDragDropPayload& payload)
+{
+    if (payload.type != asset::AssetType::Mesh) {
+        return;
+    }
+
+    const auto handle = payload.handle;
+    if (!handle.isValid()) {
+        return;
+    }
+
+    auto entity = scene.createEntity();
+    auto& mesh = scene.addComponent<scene::MeshComponent>(entity);
+    mesh.mesh = handle;
+
+    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
+        auto& tag = scene.getComponent<scene::TagComponent>(entity);
+        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    }
+
+    selectedEntity = entity;
+}
+
+void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity)
+{
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
+            if (payload->DataSize == sizeof(AssetDragDropPayload)) {
+                createEntityFromAsset(scene, selectedEntity, *static_cast<const AssetDragDropPayload*>(payload->Data));
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+}
+} // namespace
 
 HierarchyPanel::HierarchyPanel(scene::Scene& scene, scene::Entity& selected_entity)
     : m_scene(scene),
@@ -17,28 +54,6 @@ HierarchyPanel::HierarchyPanel(scene::Scene& scene, scene::Entity& selected_enti
 void HierarchyPanel::onImGuiRender()
 {
     ImGui::Begin("Hierarchy");
-
-    if (ImGui::Button("Add Entity")) {
-        m_selected_entity = m_scene.createEntity();
-    }
-
-    ImGui::SameLine();
-
-    const bool can_delete_selected = m_scene.isValidEntity(m_selected_entity);
-    if (!can_delete_selected) {
-        ImGui::BeginDisabled();
-    }
-
-    if (ImGui::Button("Delete Selected")) {
-        m_scene.destroyEntity(m_selected_entity);
-        m_selected_entity = scene::Entity{};
-    }
-
-    if (!can_delete_selected) {
-        ImGui::EndDisabled();
-    }
-
-    ImGui::Separator();
 
     scene::Entity entity_to_delete;
     for (const auto entity : m_scene.getEntities()) {
@@ -54,10 +69,24 @@ void HierarchyPanel::onImGuiRender()
         if (ImGui::Selectable(label.c_str(), selected)) {
             m_selected_entity = scene::Entity{handle};
         }
+        acceptAssetDrop(m_scene, m_selected_entity);
 
         if (ImGui::BeginPopupContextItem()) {
             if (ImGui::MenuItem("Delete")) {
                 entity_to_delete = scene::Entity{handle};
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    const auto available = ImGui::GetContentRegionAvail();
+    if (available.y > 0.0f) {
+        ImGui::Dummy(available);
+        acceptAssetDrop(m_scene, m_selected_entity);
+
+        if (ImGui::BeginPopupContextItem("HierarchyEmptyContext")) {
+            if (ImGui::MenuItem("Create Entity")) {
+                m_selected_entity = m_scene.createEntity();
             }
             ImGui::EndPopup();
         }

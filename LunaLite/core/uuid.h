@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 
+#include <functional>
 #include <string>
 
 namespace lunalite::core {
@@ -39,3 +40,12 @@ private:
     uint64_t m_uuid;
 };
 } // namespace lunalite::core
+
+namespace std {
+template <> struct hash<lunalite::core::UUID> {
+    size_t operator()(const lunalite::core::UUID& uuid) const noexcept
+    {
+        return hash<uint64_t>{}(static_cast<uint64_t>(uuid));
+    }
+};
+} // namespace std

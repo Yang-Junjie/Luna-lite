@@ -28,6 +28,7 @@ public:
     AssetHandle getHandleByRelativePath(const std::filesystem::path& assetPath) const;
     AssetHandle getHandleByFileName(const std::string& assetName) const;
     const AssetMetadata* getMetadata(AssetHandle handle) const;
+    const std::unordered_map<AssetHandle, AssetMetadata>& getMetadataRegistry() const;
 
     template <typename T> T* getAsset(AssetHandle handle)
     {
@@ -48,7 +49,7 @@ private:
     bool loadAsset(const AssetMetadata& metadata);
 
     std::vector<std::unique_ptr<Importer>> m_importers;
-    std::unordered_map<uint64_t, AssetMetadata> m_metadata_registry;
+    std::unordered_map<AssetHandle, AssetMetadata> m_metadata_registry;
     std::unordered_map<std::string, AssetHandle> m_path_handle_map;
 };
 

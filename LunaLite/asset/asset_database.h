@@ -27,15 +27,15 @@ public:
         if (!asset->handle.isValid()) {
             do {
                 asset->handle = AssetHandle{};
-            } while (m_assets.contains(static_cast<uint64_t>(asset->handle)));
-        } else if (m_assets.contains(static_cast<uint64_t>(asset->handle))) {
+            } while (m_assets.contains(asset->handle));
+        } else if (m_assets.contains(asset->handle)) {
             LUNA_CORE_ERROR("Asset handle already exists: {}", asset->handle.toString());
             return AssetHandle{0};
         }
 
-        const auto key = static_cast<uint64_t>(asset->handle);
-        m_assets.emplace(key, std::move(asset));
-        return AssetHandle{key};
+        const auto handle = asset->handle;
+        m_assets.emplace(handle, std::move(asset));
+        return handle;
     }
 
     template <typename T> T* get(AssetHandle handle)
@@ -52,7 +52,7 @@ public:
 
     bool contains(AssetHandle handle) const
     {
-        return handle.isValid() && m_assets.contains(static_cast<uint64_t>(handle));
+        return handle.isValid() && m_assets.contains(handle);
     }
 
     void clear()
@@ -71,7 +71,7 @@ private:
             return nullptr;
         }
 
-        const auto it = m_assets.find(static_cast<uint64_t>(handle));
+        const auto it = m_assets.find(handle);
         if (it == m_assets.end()) {
             LUNA_CORE_ERROR("Failed to get asset: {}", handle.toString());
             return nullptr;
@@ -87,7 +87,7 @@ private:
             return nullptr;
         }
 
-        const auto it = m_assets.find(static_cast<uint64_t>(handle));
+        const auto it = m_assets.find(handle);
         if (it == m_assets.end()) {
             LUNA_CORE_ERROR("Failed to get asset: {}", handle.toString());
             return nullptr;
@@ -96,6 +96,6 @@ private:
         return it->second.get();
     }
 
-    std::unordered_map<uint64_t, std::shared_ptr<Asset>> m_assets;
+    std::unordered_map<AssetHandle, std::shared_ptr<Asset>> m_assets;
 };
 } // namespace lunalite::asset
