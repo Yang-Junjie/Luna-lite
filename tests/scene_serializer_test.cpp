@@ -23,7 +23,7 @@ int main()
     scene::Scene scene;
     {
         auto entity = scene.createEntity();
-        auto& transform = scene.addComponent<scene::TransformComponent>(entity);
+        auto& transform = scene.getComponent<scene::TransformComponent>(entity);
         transform.translation = {1.0f, 2.0f, 3.0f};
         transform.rotation = {0.1f, 0.2f, 0.3f};
         transform.scale = {2.0f, 2.0f, 2.0f};

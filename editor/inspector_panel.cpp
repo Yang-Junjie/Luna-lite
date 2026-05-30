@@ -1,7 +1,9 @@
 #include "../LunaLite/scene/components.h"
 #include "inspector_panel.h"
 
+#include <array>
 #include <cstdint>
+#include <cstring>
 
 #include <imgui.h>
 
@@ -30,10 +32,6 @@ void InspectorPanel::onImGuiRender()
     }
 
     if (ImGui::BeginPopup("AddComponent")) {
-        if (!m_scene.hasComponent<scene::TransformComponent>(m_selected_entity) && ImGui::MenuItem("Transform")) {
-            m_scene.addComponent<scene::TransformComponent>(m_selected_entity);
-        }
-
         if (!m_scene.hasComponent<scene::MeshComponent>(m_selected_entity) && ImGui::MenuItem("Mesh")) {
             m_scene.addComponent<scene::MeshComponent>(m_selected_entity);
         }
@@ -52,14 +50,21 @@ void InspectorPanel::onImGuiRender()
 
     ImGui::Separator();
 
+    if (m_scene.hasComponent<scene::TagComponent>(m_selected_entity)) {
+        const bool open = ImGui::CollapsingHeader("Tag", ImGuiTreeNodeFlags_DefaultOpen);
+        if (open && m_scene.hasComponent<scene::TagComponent>(m_selected_entity)) {
+            auto& tag = m_scene.getComponent<scene::TagComponent>(m_selected_entity);
+            std::array<char, 256> buffer{};
+            const size_t copySize = tag.tag.size() < buffer.size() - 1 ? tag.tag.size() : buffer.size() - 1;
+            std::memcpy(buffer.data(), tag.tag.data(), copySize);
+            if (ImGui::InputText("Name", buffer.data(), buffer.size())) {
+                tag.tag = buffer.data();
+            }
+        }
+    }
+
     if (m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
         const bool open = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
-        if (ImGui::BeginPopupContextItem("TransformPopup")) {
-            if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::TransformComponent>(m_selected_entity);
-            }
-            ImGui::EndPopup();
-        }
         if (open && m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
             auto& transform = m_scene.getComponent<scene::TransformComponent>(m_selected_entity);
             ImGui::DragFloat3("Translation", &transform.translation.x, 0.1f);

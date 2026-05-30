@@ -1,5 +1,7 @@
 #include "hierarchy_panel.h"
 
+#include "../LunaLite/scene/components.h"
+
 #include <cstdint>
 
 #include <imgui.h>
@@ -42,7 +44,11 @@ void HierarchyPanel::onImGuiRender()
     for (const auto entity : m_scene.getEntities()) {
         const auto handle = entity.getHandle();
         const auto entity_id = static_cast<uint32_t>(handle);
-        const std::string label = "Entity " + std::to_string(entity_id);
+        std::string label = "Entity " + std::to_string(entity_id);
+        if (m_scene.hasComponent<scene::TagComponent>(entity)) {
+            const auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
+            label = (tag.tag.empty() ? "empty tag" : tag.tag) + "##" + std::to_string(entity_id);
+        }
         const bool selected = m_selected_entity.getHandle() == handle;
 
         if (ImGui::Selectable(label.c_str(), selected)) {

@@ -19,8 +19,7 @@ EditorLayer::EditorLayer()
       m_inspector_panel(m_scene, m_selected_entity)
 {}
 
-void EditorLayer::onAttach()
-{}
+void EditorLayer::onAttach() {}
 
 void EditorLayer::onUpdate(core::Timestep dt)
 {
@@ -50,11 +49,11 @@ void EditorLayer::drawMenuBar()
     }
 
     if (ImGui::BeginMenu("Project")) {
-        if (ImGui::MenuItem("Create Project")) {
-            createProject();
-        }
         if (ImGui::MenuItem("Open Project")) {
             openProject();
+        }
+        if (ImGui::MenuItem("Create Project")) {
+            createProject();
         }
         if (ImGui::MenuItem("Save Project")) {
             saveProject();
@@ -63,11 +62,11 @@ void EditorLayer::drawMenuBar()
     }
 
     if (ImGui::BeginMenu("Scene")) {
-        if (ImGui::MenuItem("Create Scene")) {
-            createScene();
-        }
         if (ImGui::MenuItem("Open Scene")) {
             openScene();
+        }
+        if (ImGui::MenuItem("Create Scene")) {
+            createScene();
         }
         if (ImGui::MenuItem("Save Scene")) {
             saveScene();

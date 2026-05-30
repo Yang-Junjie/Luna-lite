@@ -101,6 +101,10 @@ void SceneRenderer::renderScene(const Scene& scene,
     for (const auto entity : meshView) {
         const auto& transform = meshView.get<const TransformComponent>(entity);
         const auto& meshComponent = meshView.get<const MeshComponent>(entity);
+        if (!meshComponent.mesh.isValid()) {
+            continue;
+        }
+
         const auto* mesh = asset::AssetDatabase::get().get<renderer::interface::Mesh>(meshComponent.mesh);
         if (mesh == nullptr) {
             LUNA_CORE_ERROR("Entity {} has a null mesh asset", static_cast<uint32_t>(entity));

@@ -71,6 +71,9 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         }
     };
 
+    for (const auto entity : registry.view<const TagComponent>()) {
+        addEntity(entity);
+    }
     for (const auto entity : registry.view<const TransformComponent>()) {
         addEntity(entity);
     }
@@ -87,6 +90,13 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     for (const auto entity : sceneEntities) {
         YAML::Node serializedEntity;
         serializedEntity["Entity"] = static_cast<uint32_t>(entity);
+
+        if (registry.all_of<TagComponent>(entity)) {
+            const auto& tag = registry.get<TagComponent>(entity);
+            YAML::Node node;
+            node["Tag"] = tag.tag;
+            serializedEntity["TagComponent"] = node;
+        }
 
         if (registry.all_of<TransformComponent>(entity)) {
             const auto& transform = registry.get<TransformComponent>(entity);
@@ -171,8 +181,13 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
         for (const auto& serializedEntity : entities) {
             const auto entity = scene.createEntity();
 
+            if (const auto tagNode = serializedEntity["TagComponent"]) {
+                auto& tag = scene.getComponent<TagComponent>(entity);
+                tag.tag = tagNode["Tag"].as<std::string>("");
+            }
+
             if (const auto transformNode = serializedEntity["TransformComponent"]) {
-                auto& transform = scene.addComponent<TransformComponent>(entity);
+                auto& transform = scene.getComponent<TransformComponent>(entity);
                 transform.translation = readVec3(transformNode["Translation"]);
                 transform.rotation = readVec3(transformNode["Rotation"]);
                 transform.scale = readVec3(transformNode["Scale"], glm::vec3{1.0f});

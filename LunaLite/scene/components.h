@@ -6,6 +6,16 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace lunalite::scene {
+struct TagComponent {
+    std::string tag;
+
+    TagComponent() = default;
+
+    explicit TagComponent(std::string tag)
+        : tag(std::move(tag))
+    {}
+};
+
 struct TransformComponent {
     glm::vec3 translation{0.0f};
     glm::vec3 rotation{0.0f};

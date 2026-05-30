@@ -33,7 +33,7 @@ void DemoLayer::onAttach()
     {
         auto entity = m_scene.createEntity();
         m_model_entity = entity;
-        auto& transformComp = m_scene.addComponent<scene::TransformComponent>(entity);
+        auto& transformComp = m_scene.getComponent<scene::TransformComponent>(entity);
         transformComp.scale = glm::vec3(8.0f, 8.0f, 8.0f);
         auto& meshComp = m_scene.addComponent<scene::MeshComponent>(entity);
         meshComp.mesh = obj_handle;
@@ -47,7 +47,7 @@ void DemoLayer::onAttach()
 
     {
         auto entity = m_scene.createEntity();
-        auto& transform = m_scene.addComponent<scene::TransformComponent>(entity);
+        auto& transform = m_scene.getComponent<scene::TransformComponent>(entity);
         transform.translation = glm::vec3(3.0f, 2.0f, 5.0f);
         transform.rotation = glm::vec3(glm::radians(-20.0f), glm::radians(30.0f), 0.0f);
         m_scene.addComponent<scene::CameraComponent>(entity);

@@ -1,10 +1,15 @@
 #include "scene.h"
 
+#include "components.h"
+
 namespace lunalite::scene {
 
 Entity Scene::createEntity()
 {
-    return Entity{m_registry.create()};
+    Entity entity{m_registry.create()};
+    addComponent<TagComponent>(entity);
+    addComponent<TransformComponent>(entity);
+    return entity;
 }
 
 void Scene::destroyEntity(Entity entity)
