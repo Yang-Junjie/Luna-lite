@@ -11,6 +11,11 @@
 
 namespace lunalite::editor {
 
+enum class SceneState {
+    Edit,
+    Play
+};
+
 class EditorLayer final : public core::Layer {
 public:
     EditorLayer();
@@ -26,6 +31,8 @@ private:
     void createProject();
     void openProject();
     void saveProject();
+    void startRuntime();
+    void stopRuntime();
 
     void createScene();
     void openScene();
@@ -35,11 +42,16 @@ private:
     std::filesystem::path projectRelativePath(const std::filesystem::path& path) const;
 
     EditorCamera m_editor_camera;
+
     scene::Scene m_scene;
+    scene::Scene m_runtime_scene;
+
     scene::Entity m_selected_entity;
+
     HierarchyPanel m_hierarchy_panel;
     InspectorPanel m_inspector_panel;
     ContentBrowserPanel m_content_browser_panel;
+    SceneState m_scene_state{SceneState::Edit};
     bool m_viewport_hovered{false};
     std::filesystem::path m_current_scene_path;
 };

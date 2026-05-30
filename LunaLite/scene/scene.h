@@ -1,4 +1,5 @@
 #pragma once
+#include "../core/timestep.h"
 #include "entity.h"
 
 #include <entt/entt.hpp>
@@ -13,6 +14,11 @@ public:
     Entity createEntity();
     void destroyEntity(Entity entity);
     void clear();
+    void copyFrom(const Scene& other);
+    void onRuntimeStart();
+    void onUpdateEditor(core::Timestep dt);
+    void onUpdateRuntime(core::Timestep dt);
+    void onRuntimeStop();
     bool isValidEntity(Entity entity) const;
     std::vector<Entity> getEntities() const;
 

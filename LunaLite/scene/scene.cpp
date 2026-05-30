@@ -1,6 +1,5 @@
-#include "scene.h"
-
 #include "components.h"
+#include "scene.h"
 
 namespace lunalite::scene {
 
@@ -23,6 +22,50 @@ void Scene::clear()
 {
     m_registry.clear();
 }
+
+void Scene::copyFrom(const Scene& other)
+{
+    clear();
+
+    for (const auto sourceEntity : other.getEntities()) {
+        auto targetEntity = createEntity();
+
+        if (other.hasComponent<TagComponent>(sourceEntity)) {
+            getComponent<TagComponent>(targetEntity) = other.getComponent<TagComponent>(sourceEntity);
+        }
+
+        if (other.hasComponent<TransformComponent>(sourceEntity)) {
+            getComponent<TransformComponent>(targetEntity) = other.getComponent<TransformComponent>(sourceEntity);
+        }
+
+        if (other.hasComponent<MeshComponent>(sourceEntity)) {
+            addComponent<MeshComponent>(targetEntity) = other.getComponent<MeshComponent>(sourceEntity);
+        }
+
+        if (other.hasComponent<CameraComponent>(sourceEntity)) {
+            addComponent<CameraComponent>(targetEntity) = other.getComponent<CameraComponent>(sourceEntity);
+        }
+
+        if (other.hasComponent<DirectionalLightComponent>(sourceEntity)) {
+            addComponent<DirectionalLightComponent>(targetEntity) =
+                other.getComponent<DirectionalLightComponent>(sourceEntity);
+        }
+    }
+}
+
+void Scene::onRuntimeStart() {}
+
+void Scene::onUpdateEditor(core::Timestep dt)
+{
+    (void) dt;
+}
+
+void Scene::onUpdateRuntime(core::Timestep dt)
+{
+    (void) dt;
+}
+
+void Scene::onRuntimeStop() {}
 
 bool Scene::isValidEntity(Entity entity) const
 {

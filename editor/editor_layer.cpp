@@ -24,11 +24,22 @@ void EditorLayer::onAttach() {}
 
 void EditorLayer::onUpdate(core::Timestep dt)
 {
+    if (m_scene_state == SceneState::Play) {
+        m_runtime_scene.onUpdateRuntime(dt);
+        return;
+    }
+
+    m_scene.onUpdateEditor(dt);
     m_editor_camera.onUpdate(dt, m_viewport_hovered);
 }
 
 void EditorLayer::onRender()
 {
+    if (m_scene_state == SceneState::Play) {
+        core::Application::get().getSceneRenderer().onRenderRuntime(m_runtime_scene);
+        return;
+    }
+
     core::Application::get().getSceneRenderer().onRenderEditor(m_scene, m_editor_camera);
 }
 
@@ -76,11 +87,23 @@ void EditorLayer::drawMenuBar()
         ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Runtime")) {
+        if (ImGui::MenuItem("Play", nullptr, false, m_scene_state != SceneState::Play)) {
+            startRuntime();
+        }
+        if (ImGui::MenuItem("Stop", nullptr, false, m_scene_state == SceneState::Play)) {
+            stopRuntime();
+        }
+        ImGui::EndMenu();
+    }
+
     ImGui::EndMainMenuBar();
 }
 
 void EditorLayer::createProject()
 {
+    stopRuntime();
+
     const auto projectRoot = FileDialogs::selectDirectory({});
     if (projectRoot.empty()) {
         return;
@@ -102,6 +125,8 @@ void EditorLayer::createProject()
 
 void EditorLayer::openProject()
 {
+    stopRuntime();
+
     const auto projectPath = FileDialogs::openFile("Luna Project\0*.lunaproj\0", {});
     if (projectPath.empty()) {
         return;
@@ -129,8 +154,32 @@ void EditorLayer::saveProject()
     project::ProjectManager::instance().saveProject();
 }
 
+void EditorLayer::startRuntime()
+{
+    if (m_scene_state == SceneState::Play) {
+        return;
+    }
+
+    m_runtime_scene.copyFrom(m_scene);
+    m_runtime_scene.onRuntimeStart();
+    m_scene_state = SceneState::Play;
+}
+
+void EditorLayer::stopRuntime()
+{
+    if (m_scene_state != SceneState::Play) {
+        return;
+    }
+
+    m_runtime_scene.onRuntimeStop();
+    m_runtime_scene.clear();
+    m_scene_state = SceneState::Edit;
+}
+
 void EditorLayer::createScene()
 {
+    stopRuntime();
+
     auto scenePath = FileDialogs::saveFile("Luna Scene\0*.lunascene\0", {});
     if (scenePath.empty()) {
         return;
@@ -179,6 +228,8 @@ void EditorLayer::saveScene()
 
 bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
 {
+    stopRuntime();
+
     if (!scene::SceneSerializer::deserialize(m_scene, scene_path)) {
         return false;
     }
