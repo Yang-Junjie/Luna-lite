@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../interface/frame_image.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
-#include "../interface/frame_image.h"
 
 #include <cstdint>
 
@@ -20,7 +20,7 @@ public:
 private:
     void ensureUploadTexture(const interface::FrameImage& image);
     void uploadCpuImage(const interface::FrameImage& image, const interface::CpuFrameStorage& storage);
-    void drawToSwapchain(rhi::TextureViewHandle view, interface::FrameImageColorSpace color_space);
+    void drawToSwapchain(rhi::TextureViewHandle view);
 
     rhi::Device& m_device;
     rhi::Swapchain& m_swapchain;
@@ -32,7 +32,6 @@ private:
     rhi::ShaderHandle m_vertex_shader{};
     rhi::ShaderHandle m_fragment_shader{};
     rhi::SamplerHandle m_sampler{};
-    rhi::BufferHandle m_uniform_buffer{};
     rhi::BindGroupHandle m_bind_group{};
 
     rhi::TextureHandle m_upload_texture{};

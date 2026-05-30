@@ -154,6 +154,7 @@ void main()
     }
 
     color += material.b * 0.0;
+    color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
     outColor = vec4(color, 1.0);
 }
 )";
@@ -531,7 +532,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         .width = width,
         .height = height,
         .format = interface::FrameImageFormat::RGBA8_UNorm,
-        .color_space = interface::FrameImageColorSpace::Linear,
+        .color_space = interface::FrameImageColorSpace::SRGB,
         .storage =
             interface::GpuFrameStorage{
                 .texture = m_gbuffer.final_color_texture,

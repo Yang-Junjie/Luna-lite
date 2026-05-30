@@ -21,6 +21,11 @@ uint8_t toByte(float value)
     return static_cast<uint8_t>(std::round(clamped * 255.0f));
 }
 
+float linearToSrgb(float value)
+{
+    return std::pow(std::max(value, 0.0f), 1.0f / 2.2f);
+}
+
 } // namespace
 
 SoftRasterizationRenderer::SoftRasterizationRenderer(uint32_t width, uint32_t height)
@@ -207,9 +212,9 @@ void SoftRasterizationRenderer::updateFrameImage()
         for (uint32_t x = 0; x < m_width; ++x) {
             const auto& color = m_color_buffer[pixelIndex(x, source_y)];
             const auto offset = (static_cast<size_t>(y) * m_width + x) * 4;
-            m_present_buffer[offset + 0] = toByte(color.r);
-            m_present_buffer[offset + 1] = toByte(color.g);
-            m_present_buffer[offset + 2] = toByte(color.b);
+            m_present_buffer[offset + 0] = toByte(linearToSrgb(color.r));
+            m_present_buffer[offset + 1] = toByte(linearToSrgb(color.g));
+            m_present_buffer[offset + 2] = toByte(linearToSrgb(color.b));
             m_present_buffer[offset + 3] = 255;
         }
     }
@@ -218,7 +223,7 @@ void SoftRasterizationRenderer::updateFrameImage()
         .width = m_width,
         .height = m_height,
         .format = interface::FrameImageFormat::RGBA8_UNorm,
-        .color_space = interface::FrameImageColorSpace::Linear,
+        .color_space = interface::FrameImageColorSpace::SRGB,
         .storage =
             interface::CpuFrameStorage{
                 .pixels = m_present_buffer.data(),

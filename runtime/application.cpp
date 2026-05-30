@@ -1,9 +1,26 @@
 #include "../LunaLite/core/application.h"
 #include "demo_layer.h"
 
+#include <filesystem>
 #include <memory>
 
 namespace lunalite::core {
+namespace {
+std::filesystem::path getExecutableDirectory(int argc, char** argv)
+{
+    if (argc <= 0 || argv == nullptr || argv[0] == nullptr || argv[0][0] == '\0') {
+        return std::filesystem::current_path();
+    }
+
+    const auto executable_path = std::filesystem::absolute(argv[0]);
+    if (executable_path.has_parent_path()) {
+        return executable_path.parent_path();
+    }
+
+    return std::filesystem::current_path();
+}
+} // namespace
+
 Application* createApplication(int argc, char** argv)
 {
 
@@ -18,7 +35,7 @@ Application* createApplication(int argc, char** argv)
     info.present_scene_to_swapchain = true;
 
     auto* app = new Application(info);
-    app->pushLayer(std::make_unique<runtime::DemoLayer>());
+    app->pushLayer(std::make_unique<runtime::DemoLayer>(getExecutableDirectory(argc, argv)));
 
     return app;
 }

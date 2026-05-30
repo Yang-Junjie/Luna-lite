@@ -1,25 +1,42 @@
 Scene: sample
 Entities:
+  - Entity: 3
+    TagComponent:
+      Tag: camera
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 9.5
+      Rotation:
+        - 0
+        - 0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    CameraComponent:
+      Primary: true
+      ProjectionType: Perspective
   - Entity: 2
     TagComponent:
-      Tag: directional light
-    DirectionalLightComponent:
-      Direction:
-        - -1.3
-        - -5
-        - -2.1
-      Ambient:
-        - 0.05
-        - 0.05
-        - 0.05
-      Diffuse:
-        - 0.8
-        - 0.8
-        - 0.8
-      Specular:
+      Tag: bunny
+    TransformComponent:
+      Translation:
+        - 2.4
+        - 0.5
+        - -2
+      Rotation:
+        - 0
+        - 0
+        - 0
+      Scale:
         - 1
         - 1
         - 1
+    MeshComponent:
+      Mesh: 8787621114382715278
   - Entity: 1
     TagComponent:
       Tag: cube
@@ -40,10 +57,10 @@ Entities:
       Mesh: 16075057057839369176
   - Entity: 0
     TagComponent:
-      Tag: bunny
+      Tag: directional light
     TransformComponent:
       Translation:
-        - 2.4
+        - 0
         - 0
         - 0
       Rotation:
@@ -54,5 +71,20 @@ Entities:
         - 1
         - 1
         - 1
-    MeshComponent:
-      Mesh: 8787621114382715278
+    DirectionalLightComponent:
+      Direction:
+        - -1.3
+        - -5
+        - -2.1
+      Ambient:
+        - 0.05
+        - 0.05
+        - 0.05
+      Diffuse:
+        - 0.8
+        - 0.8
+        - 0.8
+      Specular:
+        - 1
+        - 1
+        - 1

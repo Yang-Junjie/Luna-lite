@@ -1,18 +1,10 @@
-#include "rhi_frame_presenter.h"
-
 #include "../../core/log.h"
+#include "rhi_frame_presenter.h"
 
 #include <variant>
 
 namespace lunalite::renderer {
 namespace {
-
-struct alignas(16) PresenterUniforms {
-    int32_t source_is_srgb{0};
-    int32_t _padding0{0};
-    int32_t _padding1{0};
-    int32_t _padding2{0};
-};
 
 rhi::TextureFormat toRHITextureFormat(interface::FrameImageFormat format)
 {
@@ -69,25 +61,14 @@ void main()
 constexpr const char* kPresenterFragmentShaderSource = R"(
 #version 450 core
 
-layout(std140, binding = 0) uniform PresenterUniforms {
-    int sourceIsSRGB;
-    int _padding0;
-    int _padding1;
-    int _padding2;
-};
-
-layout(binding = 1) uniform sampler2D uFrameTexture;
+layout(binding = 0) uniform sampler2D uFrameTexture;
 
 in vec2 vUV;
 out vec4 outColor;
 
 void main()
 {
-    vec4 color = texture(uFrameTexture, vUV);
-    if (sourceIsSRGB == 0) {
-        color.rgb = pow(max(color.rgb, vec3(0.0)), vec3(1.0 / 2.2));
-    }
-    outColor = vec4(color.rgb, color.a);
+    outColor = texture(uFrameTexture, vUV);
 }
 )";
 
@@ -115,11 +96,6 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
             {
                 rhi::BindGroupLayoutEntry{
                     .binding = 0,
-                    .type = rhi::BindingType::UniformBuffer,
-                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
-                },
-                rhi::BindGroupLayoutEntry{
-                    .binding = 1,
                     .type = rhi::BindingType::CombinedImageSampler,
                     .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
                 },
@@ -157,21 +133,12 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
         .address_v = rhi::AddressMode::ClampToEdge,
     });
 
-    m_uniform_buffer = m_device.createBuffer(
-        rhi::BufferDesc{
-            .size = sizeof(PresenterUniforms),
-            .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
-            .memory = rhi::MemoryUsage::CpuToGpu,
-        },
-        nullptr);
-
     LUNA_ASSERT(m_vertex_shader, "Failed to create presenter vertex shader.");
     LUNA_ASSERT(m_fragment_shader, "Failed to create presenter fragment shader.");
     LUNA_ASSERT(m_bind_group_layout, "Failed to create presenter bind group layout.");
     LUNA_ASSERT(m_pipeline_layout, "Failed to create presenter pipeline layout.");
     LUNA_ASSERT(m_pipeline, "Failed to create presenter pipeline.");
     LUNA_ASSERT(m_sampler, "Failed to create presenter sampler.");
-    LUNA_ASSERT(m_uniform_buffer, "Failed to create presenter uniform buffer.");
     LUNA_CORE_DEBUG("RHI frame presenter initialized");
 }
 
@@ -188,9 +155,6 @@ RHIFramePresenter::~RHIFramePresenter()
     }
     if (m_sampler) {
         m_device.destroySampler(m_sampler);
-    }
-    if (m_uniform_buffer) {
-        m_device.destroyBuffer(m_uniform_buffer);
     }
     if (m_pipeline) {
         m_device.destroyPipeline(m_pipeline);
@@ -217,9 +181,9 @@ void RHIFramePresenter::renderToSwapchain(const interface::FrameImage& image)
 
     if (const auto* cpu = std::get_if<interface::CpuFrameStorage>(&image.storage)) {
         uploadCpuImage(image, *cpu);
-        drawToSwapchain(m_upload_view, image.color_space);
+        drawToSwapchain(m_upload_view);
     } else if (const auto* gpu = std::get_if<interface::GpuFrameStorage>(&image.storage)) {
-        drawToSwapchain(gpu->view, image.color_space);
+        drawToSwapchain(gpu->view);
     }
 }
 
@@ -292,22 +256,17 @@ void RHIFramePresenter::uploadCpuImage(const interface::FrameImage& image, const
                                .height = image.height,
                                .format = toRHITextureFormat(image.format),
                                .data = storage.pixels,
-                               .row_pitch = storage.row_pitch == 0
-                                                ? static_cast<size_t>(image.width) * frameImageBytesPerPixel(image.format)
-                                                : storage.row_pitch,
+                               .row_pitch = storage.row_pitch == 0 ? static_cast<size_t>(image.width) *
+                                                                         frameImageBytesPerPixel(image.format)
+                                                                   : storage.row_pitch,
                            });
 }
 
-void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, interface::FrameImageColorSpace color_space)
+void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view)
 {
-    if (!view || !m_pipeline || !m_sampler || !m_uniform_buffer || !m_bind_group_layout) {
+    if (!view || !m_pipeline || !m_sampler || !m_bind_group_layout) {
         return;
     }
-
-    const PresenterUniforms uniforms{
-        .source_is_srgb = color_space == interface::FrameImageColorSpace::SRGB ? 1 : 0,
-    };
-    m_device.updateBuffer(m_uniform_buffer, 0, &uniforms, sizeof(uniforms));
 
     const rhi::BindGroupDesc bindGroupDesc{
         .layout = m_bind_group_layout,
@@ -315,16 +274,6 @@ void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, interface::
             {
                 rhi::BindGroupEntry{
                     .binding = 0,
-                    .type = rhi::BindingType::UniformBuffer,
-                    .buffer =
-                        rhi::BufferBinding{
-                            .buffer = m_uniform_buffer,
-                            .offset = 0,
-                            .size = sizeof(PresenterUniforms),
-                        },
-                },
-                rhi::BindGroupEntry{
-                    .binding = 1,
                     .type = rhi::BindingType::CombinedImageSampler,
                     .texture_view = view,
                     .sampler = m_sampler,

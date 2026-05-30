@@ -70,7 +70,7 @@ int main()
     const auto* cpu_storage = std::get_if<renderer::interface::CpuFrameStorage>(&frame_image.storage);
     if (frame_image.width != 256 || frame_image.height != 256 ||
         frame_image.format != renderer::interface::FrameImageFormat::RGBA32_Float ||
-        frame_image.color_space != renderer::interface::FrameImageColorSpace::Linear || cpu_storage == nullptr ||
+        frame_image.color_space != renderer::interface::FrameImageColorSpace::SRGB || cpu_storage == nullptr ||
         cpu_storage->pixels == nullptr || cpu_storage->row_pitch != 256u * sizeof(glm::vec4)) {
         std::cerr << "Path tracing renderer produced an invalid frame image.\n";
         return 1;

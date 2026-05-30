@@ -14,6 +14,11 @@ namespace {
 constexpr float kEpsilon = 1e-4f;
 constexpr float kPi = 3.14159265358979323846f;
 
+glm::vec3 linearToSrgb(const glm::vec3& color)
+{
+    return glm::pow(glm::max(color, glm::vec3{0.0f}), glm::vec3{1.0f / 2.2f});
+}
+
 } // namespace
 
 PathTracingRenderer::PathTracingRenderer(uint32_t width, uint32_t height)
@@ -148,14 +153,14 @@ void PathTracingRenderer::renderFrame()
 void PathTracingRenderer::updateFrameImage()
 {
     for (size_t i = 0; i < m_framebuffer.size(); ++i) {
-        m_present_buffer[i] = glm::vec4{m_framebuffer[i], 1.0f};
+        m_present_buffer[i] = glm::vec4{linearToSrgb(m_framebuffer[i]), 1.0f};
     }
 
     m_frame_image = interface::FrameImage{
         .width = m_width,
         .height = m_height,
         .format = interface::FrameImageFormat::RGBA32_Float,
-        .color_space = interface::FrameImageColorSpace::Linear,
+        .color_space = interface::FrameImageColorSpace::SRGB,
         .storage =
             interface::CpuFrameStorage{
                 .pixels = m_present_buffer.data(),
