@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../LunaLite/asset/asset.h"
-#include "../LunaLite/asset/asset_types.h"
+#include "../../LunaLite/asset/asset.h"
+#include "../../LunaLite/asset/asset_types.h"
 
 namespace lunalite::editor {
 

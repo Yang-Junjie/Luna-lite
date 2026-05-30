@@ -24,7 +24,7 @@ public:
     void onRenderEditor(const Scene& scene, const renderer::interface::Camera& camera);
 
 private:
-    // 只有Applicaytion可以创建SceneRenderer使用beginFrame和endFrame
+    // 只有Application可以创建SceneRenderer使用beginFrame和endFrame
     friend class core::Application;
 
     explicit SceneRenderer(renderer::interface::Renderer& renderer);

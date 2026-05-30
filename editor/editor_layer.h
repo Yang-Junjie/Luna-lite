@@ -2,10 +2,10 @@
 
 #include "../LunaLite/core/layer.h"
 #include "../LunaLite/scene/scene.h"
-#include "content_browser_panel.h"
 #include "editor_camera.h"
-#include "hierarchy_panel.h"
-#include "inspector_panel.h"
+#include "panels/content_browser_panel.h"
+#include "panels/hierarchy_panel.h"
+#include "panels/inspector_panel.h"
 
 #include <filesystem>
 

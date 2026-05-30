@@ -1,12 +1,12 @@
 #pragma once
 
-#include "../LunaLite/scene/scene.h"
+#include "../../LunaLite/scene/scene.h"
 
 namespace lunalite::editor {
 
-class HierarchyPanel {
+class InspectorPanel {
 public:
-    HierarchyPanel(scene::Scene& scene, scene::Entity& selected_entity);
+    InspectorPanel(scene::Scene& scene, scene::Entity& selected_entity);
 
     void onImGuiRender();
 

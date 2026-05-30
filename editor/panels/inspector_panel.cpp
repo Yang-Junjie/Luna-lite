@@ -1,5 +1,6 @@
-#include "../LunaLite/scene/components.h"
 #include "inspector_panel.h"
+
+#include "../../LunaLite/scene/components.h"
 
 #include <array>
 #include <cstdint>

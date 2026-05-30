@@ -1,6 +1,7 @@
-#include "../LunaLite/asset/asset_manager.h"
-#include "../LunaLite/project/project_manager.h"
 #include "content_browser_panel.h"
+
+#include "../../LunaLite/asset/asset_manager.h"
+#include "../../LunaLite/project/project_manager.h"
 
 #include <imgui.h>
 

@@ -1,7 +1,8 @@
-#include "../LunaLite/asset/asset_manager.h"
-#include "../LunaLite/scene/components.h"
 #include "content_browser_panel.h"
 #include "hierarchy_panel.h"
+
+#include "../../LunaLite/asset/asset_manager.h"
+#include "../../LunaLite/scene/components.h"
 
 #include <cstdint>
 
