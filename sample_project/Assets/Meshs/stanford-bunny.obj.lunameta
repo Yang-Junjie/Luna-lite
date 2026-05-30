@@ -1,7 +1,7 @@
 Asset:
-  Handle: 16075057057839369176
+  Handle: 15330008245417503353
   Type: Mesh
   Name: stanford-bunny
-  FilePath: Assets/stanford-bunny.obj
+  FilePath: Assets/Meshs/stanford-bunny.obj
   MemoryOnly: false
   Config: ~

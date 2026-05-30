@@ -60,11 +60,14 @@ add_library(LunaLite STATIC
     asset/asset_manager.cpp
     asset/mesh_asset_importer.cpp
     asset/mesh_asset_loader.cpp
+    asset/script_asset_importer.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
     scene/scene.cpp
     scene/scene_serializer.cpp
     scene/scene_renderer.cpp
+    script/entity_api.cpp
+    script/lua_script_runtime.cpp
 )
 
 if(WIN32)
@@ -83,6 +86,7 @@ target_link_libraries(LunaLite
         TinyRHI::TinyRHI
         LunaLiteRenderer
         LunaLiteImGui
+        sol2::sol2
     PRIVATE
         glfw
 )

@@ -30,6 +30,9 @@ int main()
 
         auto& mesh = scene.addComponent<scene::MeshComponent>(entity);
         mesh.mesh = asset::AssetHandle{42};
+
+        auto& script = scene.addComponent<scene::ScriptComponent>(entity);
+        script.scripts.push_back({asset::AssetHandle{84}, true});
     }
 
     {
@@ -61,6 +64,12 @@ int main()
         loadedScene.getRegistry().view<const scene::TransformComponent, const scene::MeshComponent>();
     if (countView(transformMeshView) != 1) {
         std::cerr << "Unexpected transform mesh entity count.\n";
+        return 1;
+    }
+
+    const auto scriptView = loadedScene.getRegistry().view<const scene::ScriptComponent>();
+    if (countView(scriptView) != 1) {
+        std::cerr << "Unexpected script entity count.\n";
         return 1;
     }
 

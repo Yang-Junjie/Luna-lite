@@ -1,8 +1,10 @@
 #pragma once
 #include "../core/timestep.h"
+#include "../script/script_runtime.h"
 #include "entity.h"
 
 #include <entt/entt.hpp>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -59,5 +61,6 @@ public:
 
 private:
     entt::registry m_registry;
+    std::unique_ptr<script::ScriptRuntime> m_script_runtime;
 };
 } // namespace lunalite::scene

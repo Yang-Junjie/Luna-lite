@@ -241,25 +241,37 @@ bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
 
 void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
 {
-    if (payload.type != asset::AssetType::Mesh) {
-        return;
-    }
-
     const auto handle = payload.handle;
     if (!handle.isValid()) {
         return;
     }
 
-    auto entity = m_scene.createEntity();
-    auto& mesh = m_scene.addComponent<scene::MeshComponent>(entity);
-    mesh.mesh = handle;
+    if (payload.type == asset::AssetType::Mesh) {
+        auto entity = m_scene.createEntity();
+        auto& mesh = m_scene.addComponent<scene::MeshComponent>(entity);
+        mesh.mesh = handle;
 
-    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
-        auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
-        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+        if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
+            auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
+            tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+        }
+
+        m_selected_entity = entity;
+        return;
     }
 
-    m_selected_entity = entity;
+    if (payload.type == asset::AssetType::Script) {
+        auto entity = m_scene.createEntity();
+        auto& script = m_scene.addComponent<scene::ScriptComponent>(entity);
+        script.scripts.push_back({handle, true});
+
+        if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
+            auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
+            tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+        }
+
+        m_selected_entity = entity;
+    }
 }
 
 std::filesystem::path EditorLayer::projectRelativePath(const std::filesystem::path& path) const

@@ -3,6 +3,7 @@
 #include "asset_manager.h"
 #include "mesh_asset_importer.h"
 #include "mesh_asset_loader.h"
+#include "script_asset_importer.h"
 
 #include <optional>
 #include <system_error>
@@ -104,6 +105,7 @@ void AssetManager::registerDefaultImporters()
     }
 
     m_importers.push_back(std::make_unique<MeshAssetImporter>());
+    m_importers.push_back(std::make_unique<ScriptAssetImporter>());
 }
 
 Importer* AssetManager::findImporter(const std::filesystem::path& assetPath) const
@@ -206,6 +208,8 @@ bool AssetManager::loadAsset(const AssetMetadata& metadata)
             }
             return AssetDatabase::get().add(mesh).isValid();
         }
+        case AssetType::Script:
+            return true;
         default:
             return false;
     }

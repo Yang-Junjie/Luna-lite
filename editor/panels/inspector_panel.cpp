@@ -1,11 +1,10 @@
+#include "../../LunaLite/scene/components.h"
 #include "inspector_panel.h"
 
-#include "../../LunaLite/scene/components.h"
-
-#include <array>
 #include <cstdint>
 #include <cstring>
 
+#include <array>
 #include <imgui.h>
 
 namespace lunalite::editor {
@@ -35,6 +34,10 @@ void InspectorPanel::onImGuiRender()
     if (ImGui::BeginPopup("AddComponent")) {
         if (!m_scene.hasComponent<scene::MeshComponent>(m_selected_entity) && ImGui::MenuItem("Mesh")) {
             m_scene.addComponent<scene::MeshComponent>(m_selected_entity);
+        }
+
+        if (!m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity) && ImGui::MenuItem("Script")) {
+            m_scene.addComponent<scene::ScriptComponent>(m_selected_entity);
         }
 
         if (!m_scene.hasComponent<scene::CameraComponent>(m_selected_entity) && ImGui::MenuItem("Camera")) {
@@ -87,6 +90,45 @@ void InspectorPanel::onImGuiRender()
             uint64_t meshHandle = static_cast<uint64_t>(mesh.mesh);
             if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &meshHandle)) {
                 mesh.mesh = asset::AssetHandle{meshHandle};
+            }
+        }
+    }
+
+    if (m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity)) {
+        const bool open = ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen);
+        if (ImGui::BeginPopupContextItem("ScriptPopup")) {
+            if (ImGui::MenuItem("Delete Component")) {
+                m_scene.removeComponent<scene::ScriptComponent>(m_selected_entity);
+            }
+            ImGui::EndPopup();
+        }
+        if (open && m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity)) {
+            auto& script = m_scene.getComponent<scene::ScriptComponent>(m_selected_entity);
+            if (ImGui::Button("Add Script")) {
+                script.scripts.push_back({});
+            }
+
+            int scriptToDelete = -1;
+            for (size_t i = 0; i < script.scripts.size(); ++i) {
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::Separator();
+                ImGui::Text("Script %zu", i);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Delete")) {
+                    scriptToDelete = static_cast<int>(i);
+                }
+
+                auto& binding = script.scripts[i];
+                ImGui::Checkbox("Enabled", &binding.enabled);
+                uint64_t scriptHandle = static_cast<uint64_t>(binding.script);
+                if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &scriptHandle)) {
+                    binding.script = asset::AssetHandle{scriptHandle};
+                }
+                ImGui::PopID();
+            }
+
+            if (scriptToDelete >= 0) {
+                script.scripts.erase(script.scripts.begin() + scriptToDelete);
             }
         }
     }

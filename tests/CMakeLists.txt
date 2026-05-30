@@ -26,6 +26,15 @@ target_link_libraries(SceneSerializerTest
         LunaLite
 )
 
+add_executable(ScriptRuntimeTest
+    script_runtime_test.cpp
+)
+
+target_link_libraries(ScriptRuntimeTest
+    PRIVATE
+        LunaLite
+)
+
 add_executable(PathTracingRendererTest
     path_tracing_renderer_test.cpp
 )

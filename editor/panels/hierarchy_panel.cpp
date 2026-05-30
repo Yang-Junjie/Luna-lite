@@ -1,8 +1,7 @@
-#include "content_browser_panel.h"
-#include "hierarchy_panel.h"
-
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/scene/components.h"
+#include "content_browser_panel.h"
+#include "hierarchy_panel.h"
 
 #include <cstdint>
 
@@ -11,35 +10,61 @@
 
 namespace lunalite::editor {
 namespace {
-void createEntityFromAsset(scene::Scene& scene, scene::Entity& selectedEntity, const AssetDragDropPayload& payload)
+void setEntityTagFromAsset(scene::Scene& scene, scene::Entity entity, asset::AssetHandle handle)
 {
-    if (payload.type != asset::AssetType::Mesh) {
-        return;
+    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
+        auto& tag = scene.getComponent<scene::TagComponent>(entity);
+        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    }
+}
+
+void addScriptToEntity(scene::Scene& scene, scene::Entity entity, asset::AssetHandle handle)
+{
+    if (!scene.hasComponent<scene::ScriptComponent>(entity)) {
+        scene.addComponent<scene::ScriptComponent>(entity);
     }
 
+    auto& script = scene.getComponent<scene::ScriptComponent>(entity);
+    script.scripts.push_back({handle, true});
+}
+
+void createEntityFromAsset(scene::Scene& scene,
+                           scene::Entity& selectedEntity,
+                           const AssetDragDropPayload& payload,
+                           scene::Entity targetEntity = {})
+{
     const auto handle = payload.handle;
     if (!handle.isValid()) {
         return;
     }
 
-    auto entity = scene.createEntity();
-    auto& mesh = scene.addComponent<scene::MeshComponent>(entity);
-    mesh.mesh = handle;
-
-    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
-        auto& tag = scene.getComponent<scene::TagComponent>(entity);
-        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    if (payload.type == asset::AssetType::Mesh) {
+        auto entity = scene.createEntity();
+        auto& mesh = scene.addComponent<scene::MeshComponent>(entity);
+        mesh.mesh = handle;
+        setEntityTagFromAsset(scene, entity, handle);
+        selectedEntity = entity;
+        return;
     }
 
-    selectedEntity = entity;
+    if (payload.type == asset::AssetType::Script) {
+        const bool useTargetEntity = scene.isValidEntity(targetEntity);
+        auto entity = useTargetEntity ? targetEntity : scene.createEntity();
+        addScriptToEntity(scene, entity, handle);
+        if (!useTargetEntity) {
+            setEntityTagFromAsset(scene, entity, handle);
+        }
+        selectedEntity = entity;
+    }
 }
 
-void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity)
+void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::Entity targetEntity = {})
 {
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
             if (payload->DataSize == sizeof(AssetDragDropPayload)) {
-                createEntityFromAsset(scene, selectedEntity, *static_cast<const AssetDragDropPayload*>(payload->Data));
+                createEntityFromAsset(
+                    scene, selectedEntity, *static_cast<const AssetDragDropPayload*>(payload->Data), targetEntity);
             }
         }
         ImGui::EndDragDropTarget();
@@ -70,7 +95,7 @@ void HierarchyPanel::onImGuiRender()
         if (ImGui::Selectable(label.c_str(), selected)) {
             m_selected_entity = scene::Entity{handle};
         }
-        acceptAssetDrop(m_scene, m_selected_entity);
+        acceptAssetDrop(m_scene, m_selected_entity, scene::Entity{handle});
 
         if (ImGui::BeginPopupContextItem()) {
             if (ImGui::MenuItem("Delete")) {

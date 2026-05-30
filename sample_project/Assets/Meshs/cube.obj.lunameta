@@ -1,7 +1,7 @@
 Asset:
-  Handle: 8787621114382715278
+  Handle: 12712907297239299619
   Type: Mesh
   Name: cube
-  FilePath: Assets/cube.obj
+  FilePath: Assets/Meshs/cube.obj
   MemoryOnly: false
   Config: ~

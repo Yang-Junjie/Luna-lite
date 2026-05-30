@@ -1,3 +1,4 @@
+#include "../script/lua_script_runtime.h"
 #include "components.h"
 #include "scene.h"
 
@@ -20,6 +21,10 @@ void Scene::destroyEntity(Entity entity)
 
 void Scene::clear()
 {
+    if (m_script_runtime) {
+        m_script_runtime->onRuntimeStop();
+        m_script_runtime.reset();
+    }
     m_registry.clear();
 }
 
@@ -42,6 +47,10 @@ void Scene::copyFrom(const Scene& other)
             addComponent<MeshComponent>(targetEntity) = other.getComponent<MeshComponent>(sourceEntity);
         }
 
+        if (other.hasComponent<ScriptComponent>(sourceEntity)) {
+            addComponent<ScriptComponent>(targetEntity) = other.getComponent<ScriptComponent>(sourceEntity);
+        }
+
         if (other.hasComponent<CameraComponent>(sourceEntity)) {
             addComponent<CameraComponent>(targetEntity) = other.getComponent<CameraComponent>(sourceEntity);
         }
@@ -53,7 +62,11 @@ void Scene::copyFrom(const Scene& other)
     }
 }
 
-void Scene::onRuntimeStart() {}
+void Scene::onRuntimeStart()
+{
+    m_script_runtime = std::make_unique<script::LuaScriptRuntime>();
+    m_script_runtime->onRuntimeStart(*this);
+}
 
 void Scene::onUpdateEditor(core::Timestep dt)
 {
@@ -62,10 +75,18 @@ void Scene::onUpdateEditor(core::Timestep dt)
 
 void Scene::onUpdateRuntime(core::Timestep dt)
 {
-    (void) dt;
+    if (m_script_runtime) {
+        m_script_runtime->onRuntimeUpdate(dt);
+    }
 }
 
-void Scene::onRuntimeStop() {}
+void Scene::onRuntimeStop()
+{
+    if (m_script_runtime) {
+        m_script_runtime->onRuntimeStop();
+        m_script_runtime.reset();
+    }
+}
 
 bool Scene::isValidEntity(Entity entity) const
 {

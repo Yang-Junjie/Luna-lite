@@ -4,6 +4,8 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <string>
+#include <vector>
 
 namespace lunalite::scene {
 struct TagComponent {
@@ -35,6 +37,15 @@ struct TransformComponent {
 
 struct MeshComponent {
     asset::AssetHandle mesh{0};
+};
+
+struct ScriptBinding {
+    asset::AssetHandle script{0};
+    bool enabled{true};
+};
+
+struct ScriptComponent {
+    std::vector<ScriptBinding> scripts;
 };
 
 struct CameraComponent {

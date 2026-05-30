@@ -80,6 +80,9 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     for (const auto entity : registry.view<const MeshComponent>()) {
         addEntity(entity);
     }
+    for (const auto entity : registry.view<const ScriptComponent>()) {
+        addEntity(entity);
+    }
     for (const auto entity : registry.view<const CameraComponent>()) {
         addEntity(entity);
     }
@@ -112,6 +115,20 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             YAML::Node node;
             node["Mesh"] = static_cast<uint64_t>(mesh.mesh);
             serializedEntity["MeshComponent"] = node;
+        }
+
+        if (registry.all_of<ScriptComponent>(entity)) {
+            const auto& script = registry.get<ScriptComponent>(entity);
+            YAML::Node node;
+            YAML::Node scripts(YAML::NodeType::Sequence);
+            for (const auto& binding : script.scripts) {
+                YAML::Node scriptNode;
+                scriptNode["Script"] = static_cast<uint64_t>(binding.script);
+                scriptNode["Enabled"] = binding.enabled;
+                scripts.push_back(scriptNode);
+            }
+            node["Scripts"] = scripts;
+            serializedEntity["ScriptComponent"] = node;
         }
 
         if (registry.all_of<CameraComponent>(entity)) {
@@ -196,6 +213,18 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             if (const auto meshNode = serializedEntity["MeshComponent"]) {
                 auto& mesh = scene.addComponent<MeshComponent>(entity);
                 mesh.mesh = asset::AssetHandle{meshNode["Mesh"].as<uint64_t>(0)};
+            }
+
+            if (const auto scriptNode = serializedEntity["ScriptComponent"]) {
+                auto& script = scene.addComponent<ScriptComponent>(entity);
+                if (const auto scriptsNode = scriptNode["Scripts"]; scriptsNode && scriptsNode.IsSequence()) {
+                    for (const auto& bindingNode : scriptsNode) {
+                        ScriptBinding binding;
+                        binding.script = asset::AssetHandle{bindingNode["Script"].as<uint64_t>(0)};
+                        binding.enabled = bindingNode["Enabled"].as<bool>(true);
+                        script.scripts.push_back(binding);
+                    }
+                }
             }
 
             if (const auto cameraNode = serializedEntity["CameraComponent"]) {
