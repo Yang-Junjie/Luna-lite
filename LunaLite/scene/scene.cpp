@@ -1,4 +1,4 @@
-#include "../script/lua_script_runtime.h"
+#include "../script/script_runtime.h"
 #include "components.h"
 #include "scene.h"
 
@@ -64,7 +64,7 @@ void Scene::copyFrom(const Scene& other)
 
 void Scene::onRuntimeStart()
 {
-    m_script_runtime = std::make_unique<script::LuaScriptRuntime>();
+    m_script_runtime = script::createScriptRuntime();
     m_script_runtime->onRuntimeStart(*this);
 }
 

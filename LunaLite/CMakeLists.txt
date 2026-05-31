@@ -69,8 +69,9 @@ add_library(LunaLite STATIC
     script/glue/entity_api.cpp
     script/glue/input_api.cpp
     script/glue/log_api.cpp
-    script/lua_script_runtime.cpp
+    script/lua/lua_script_runtime.cpp
     script/glue/scene_api.cpp
+    script/script_runtime.cpp
     script/glue/time_api.cpp
 )
 

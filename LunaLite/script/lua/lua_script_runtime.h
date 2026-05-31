@@ -1,7 +1,7 @@
 #pragma once
-#include "../scene/entity.h"
-#include "glue/time_api.h"
-#include "script_runtime.h"
+#include "../../scene/entity.h"
+#include "../glue/time_api.h"
+#include "../script_runtime.h"
 
 #include <filesystem>
 #include <sol/sol.hpp>
