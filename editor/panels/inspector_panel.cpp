@@ -92,9 +92,9 @@ void InspectorPanel::onImGuiRender()
         if (open && m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
             auto& transform = m_scene.getComponent<scene::TransformComponent>(m_selected_entity);
             ImGui::DragFloat3("Translation", &transform.translation.x, 0.1f);
-            auto rotation = glm::eulerAngles(transform.rotation);
-            if (ImGui::DragFloat3("Rotation", &rotation.x, 0.1f)) {
-                transform.rotation = glm::normalize(glm::quat{rotation});
+            auto rotation = glm::degrees(glm::eulerAngles(transform.rotation));
+            if (ImGui::DragFloat3("Rotation", &rotation.x, 1.0f)) {
+                transform.rotation = glm::normalize(glm::quat{glm::radians(rotation)});
             }
             ImGui::DragFloat3("Scale", &transform.scale.x, 0.1f);
         }
