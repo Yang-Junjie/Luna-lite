@@ -1,4 +1,5 @@
 #include "../../LunaLite/scene/components.h"
+#include "content_browser_panel.h"
 #include "inspector_panel.h"
 
 #include <cstdint>
@@ -8,6 +9,25 @@
 #include <imgui.h>
 
 namespace lunalite::editor {
+namespace {
+bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
+{
+    bool accepted = false;
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
+            if (payload->DataSize == sizeof(AssetDragDropPayload)) {
+                const auto& assetPayload = *static_cast<const AssetDragDropPayload*>(payload->Data);
+                if (assetPayload.type == type && assetPayload.handle.isValid()) {
+                    handle = assetPayload.handle;
+                    accepted = true;
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    return accepted;
+}
+} // namespace
 
 InspectorPanel::InspectorPanel(scene::Scene& scene, scene::Entity& selected_entity)
     : m_scene(scene),
@@ -72,7 +92,10 @@ void InspectorPanel::onImGuiRender()
         if (open && m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
             auto& transform = m_scene.getComponent<scene::TransformComponent>(m_selected_entity);
             ImGui::DragFloat3("Translation", &transform.translation.x, 0.1f);
-            ImGui::DragFloat3("Rotation", &transform.rotation.x, 0.1f);
+            auto rotation = glm::eulerAngles(transform.rotation);
+            if (ImGui::DragFloat3("Rotation", &rotation.x, 0.1f)) {
+                transform.rotation = glm::normalize(glm::quat{rotation});
+            }
             ImGui::DragFloat3("Scale", &transform.scale.x, 0.1f);
         }
     }
@@ -91,6 +114,7 @@ void InspectorPanel::onImGuiRender()
             if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &meshHandle)) {
                 mesh.mesh = asset::AssetHandle{meshHandle};
             }
+            acceptAssetHandleDrop(asset::AssetType::Mesh, mesh.mesh);
         }
     }
 
@@ -124,6 +148,7 @@ void InspectorPanel::onImGuiRender()
                 if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &scriptHandle)) {
                     binding.script = asset::AssetHandle{scriptHandle};
                 }
+                acceptAssetHandleDrop(asset::AssetType::Script, binding.script);
                 ImGui::PopID();
             }
 
@@ -144,6 +169,17 @@ void InspectorPanel::onImGuiRender()
         if (open && m_scene.hasComponent<scene::CameraComponent>(m_selected_entity)) {
             auto& camera = m_scene.getComponent<scene::CameraComponent>(m_selected_entity);
             ImGui::Checkbox("Primary", &camera.primary);
+
+            using ProjectionType = renderer::interface::Camera::ProjectionType;
+            int projectionType = camera.camera.getProjectionType() == ProjectionType::Orthographic ? 1 : 0;
+            const char* projectionTypes[] = {"Perspective", "Orthographic"};
+            if (ImGui::Combo("Projection", &projectionType, projectionTypes, 2)) {
+                if (projectionType == 1) {
+                    camera.camera.setOrthographic(10.0f, 0.1f, 100.0f);
+                } else {
+                    camera.camera.setPerspective(glm::radians(45.0f), 0.1f, 100.0f);
+                }
+            }
         }
     }
 

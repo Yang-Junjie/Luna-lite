@@ -40,12 +40,7 @@ public:
         if (m_projection_type == ProjectionType::Orthographic) {
             const float halfHeight = m_orthographic_size * 0.5f;
             const float halfWidth = halfHeight * aspectRatio;
-            return glm::ortho(-halfWidth,
-                              halfWidth,
-                              -halfHeight,
-                              halfHeight,
-                              m_orthographic_near,
-                              m_orthographic_far);
+            return glm::ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, m_orthographic_near, m_orthographic_far);
         }
 
         return glm::perspective(m_perspective_fov, aspectRatio, m_perspective_near, m_perspective_far);
@@ -69,8 +64,8 @@ private:
     float m_perspective_far{100.0f};
 
     float m_orthographic_size{10.0f};
-    float m_orthographic_near{-1.0f};
-    float m_orthographic_far{1.0f};
+    float m_orthographic_near{0.1f};
+    float m_orthographic_far{100.0f};
 };
 
 } // namespace lunalite::renderer::interface

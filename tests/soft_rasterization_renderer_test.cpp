@@ -14,6 +14,9 @@ namespace {
 std::filesystem::path findTestMesh()
 {
     const std::filesystem::path candidates[] = {
+        "sample_project/Assets/Meshs/stanford-bunny.obj",
+        "../sample_project/Assets/Meshs/stanford-bunny.obj",
+        "../../sample_project/Assets/Meshs/stanford-bunny.obj",
         "assets/stanford-bunny.obj",
         "../assets/stanford-bunny.obj",
         "../../assets/stanford-bunny.obj",

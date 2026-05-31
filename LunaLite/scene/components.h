@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <vector>
 
@@ -20,16 +21,14 @@ struct TagComponent {
 
 struct TransformComponent {
     glm::vec3 translation{0.0f};
-    glm::vec3 rotation{0.0f};
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 scale{1.0f};
 
     glm::mat4 getTransform() const
     {
         glm::mat4 transform{1.0f};
         transform = glm::translate(transform, translation);
-        transform = glm::rotate(transform, rotation.x, {1.0f, 0.0f, 0.0f});
-        transform = glm::rotate(transform, rotation.y, {0.0f, 1.0f, 0.0f});
-        transform = glm::rotate(transform, rotation.z, {0.0f, 0.0f, 1.0f});
+        transform *= glm::mat4_cast(rotation);
         transform = glm::scale(transform, scale);
         return transform;
     }

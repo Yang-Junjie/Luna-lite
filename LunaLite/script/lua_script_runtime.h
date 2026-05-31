@@ -1,5 +1,6 @@
 #pragma once
 #include "../scene/entity.h"
+#include "glue/time_api.h"
 #include "script_runtime.h"
 
 #include <filesystem>
@@ -31,11 +32,14 @@ public:
 
 private:
     void registerBindings();
+    void registerSceneBindings(scene::Scene& scene);
+    void updateTime(core::Timestep dt);
     void reportScriptError(const sol::protected_function_result& result,
                            const std::filesystem::path& scriptPath,
                            const char* functionName) const;
 
     sol::state m_lua;
     std::vector<LuaScriptInstance> m_instances;
+    ScriptTime m_time;
 };
 } // namespace lunalite::script

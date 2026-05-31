@@ -105,7 +105,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             const auto& transform = registry.get<TransformComponent>(entity);
             YAML::Node node;
             node["Translation"] = writeVec3(transform.translation);
-            node["Rotation"] = writeVec3(transform.rotation);
+            node["Rotation"] = writeVec3(glm::eulerAngles(transform.rotation));
             node["Scale"] = writeVec3(transform.scale);
             serializedEntity["TransformComponent"] = node;
         }
@@ -206,7 +206,7 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             if (const auto transformNode = serializedEntity["TransformComponent"]) {
                 auto& transform = scene.getComponent<TransformComponent>(entity);
                 transform.translation = readVec3(transformNode["Translation"]);
-                transform.rotation = readVec3(transformNode["Rotation"]);
+                transform.rotation = glm::quat{readVec3(transformNode["Rotation"])};
                 transform.scale = readVec3(transformNode["Scale"], glm::vec3{1.0f});
             }
 
@@ -234,7 +234,7 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                 const auto projectionType =
                     stringToProjectionType(cameraNode["ProjectionType"].as<std::string>("Perspective"));
                 if (projectionType == renderer::interface::Camera::ProjectionType::Orthographic) {
-                    camera.camera.setOrthographic(10.0f, -1.0f, 1.0f);
+                    camera.camera.setOrthographic(10.0f, 0.1f, 100.0f);
                 } else {
                     camera.camera.setPerspective(glm::radians(45.0f), 0.1f, 100.0f);
                 }

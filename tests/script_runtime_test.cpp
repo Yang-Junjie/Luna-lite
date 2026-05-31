@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <glm/gtc/quaternion.hpp>
 #include <iostream>
 
 namespace {
@@ -37,15 +38,41 @@ int main()
         script << R"(
 return {
     on_create = function(entity)
+        Log.info("script runtime test")
+
+        local child = Scene.create_entity("child")
+        local found_child = Scene.find_entity_by_tag("child")
+        if found_child:is_valid() then
+            found_child:destroy()
+        else
+            entity:set_tag("failed to find child")
+            return
+        end
+
+        if Input.is_key_pressed("W") then
+            entity:set_tag("unexpected input")
+            return
+        end
+
+        entity:add_camera()
+        entity:set_mesh("12712907297239299619")
         entity:set_tag("started")
     end,
 
     on_update = function(entity, dt)
         local x, y, z = entity:get_translation()
-        entity:set_translation(x + dt, y + dt * 2.0, z)
+        entity:set_translation(x + Time.delta_time, y + Time.elapsed_time, z)
 
         local rx, ry, rz = entity:get_rotation()
         entity:set_rotation(rx, ry + dt, rz)
+
+        if entity:has_camera() then
+            entity:remove_camera()
+        end
+
+        if entity:has_mesh() then
+            entity:remove_mesh()
+        end
     end,
 
     on_destroy = function(entity)
@@ -76,12 +103,28 @@ return {
         std::cerr << "Lua on_create did not update tag.\n";
         return 1;
     }
+    if (!scene.hasComponent<scene::CameraComponent>(entity) || !scene.hasComponent<scene::MeshComponent>(entity)) {
+        std::cerr << "Lua component API did not add components.\n";
+        return 1;
+    }
+    if (scene.getComponent<scene::MeshComponent>(entity).mesh != asset::AssetHandle{12'712'907'297'239'299'619ull}) {
+        std::cerr << "Lua component API did not preserve string mesh handle.\n";
+        return 1;
+    }
+    if (scene.getEntities().size() != 1) {
+        std::cerr << "Lua scene API did not destroy created child entity.\n";
+        return 1;
+    }
 
     scene.onUpdateRuntime(core::Timestep{0.5f});
     const auto& transform = scene.getComponent<scene::TransformComponent>(entity);
-    if (!near(transform.translation.x, 0.5f) || !near(transform.translation.y, 1.0f) ||
-        !near(transform.rotation.y, 0.5f)) {
+    const auto rotation = glm::eulerAngles(transform.rotation);
+    if (!near(transform.translation.x, 0.5f) || !near(transform.translation.y, 0.5f) || !near(rotation.y, 0.5f)) {
         std::cerr << "Lua on_update did not update transform.\n";
+        return 1;
+    }
+    if (scene.hasComponent<scene::CameraComponent>(entity) || scene.hasComponent<scene::MeshComponent>(entity)) {
+        std::cerr << "Lua component API did not remove components.\n";
         return 1;
     }
 

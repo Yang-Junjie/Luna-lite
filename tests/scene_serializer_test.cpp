@@ -3,6 +3,7 @@
 #include "../LunaLite/scene/scene_serializer.h"
 
 #include <filesystem>
+#include <glm/gtc/quaternion.hpp>
 #include <iostream>
 
 namespace {
@@ -25,7 +26,7 @@ int main()
         auto entity = scene.createEntity();
         auto& transform = scene.getComponent<scene::TransformComponent>(entity);
         transform.translation = {1.0f, 2.0f, 3.0f};
-        transform.rotation = {0.1f, 0.2f, 0.3f};
+        transform.rotation = glm::quat{glm::vec3{0.1f, 0.2f, 0.3f}};
         transform.scale = {2.0f, 2.0f, 2.0f};
 
         auto& mesh = scene.addComponent<scene::MeshComponent>(entity);

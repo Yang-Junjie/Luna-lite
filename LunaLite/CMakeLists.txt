@@ -66,8 +66,12 @@ add_library(LunaLite STATIC
     scene/scene.cpp
     scene/scene_serializer.cpp
     scene/scene_renderer.cpp
-    script/entity_api.cpp
+    script/glue/entity_api.cpp
+    script/glue/input_api.cpp
+    script/glue/log_api.cpp
     script/lua_script_runtime.cpp
+    script/glue/scene_api.cpp
+    script/glue/time_api.cpp
 )
 
 if(WIN32)

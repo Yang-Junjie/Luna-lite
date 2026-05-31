@@ -1,0 +1,7 @@
+Asset:
+  Handle: 9557520703294432819
+  Type: Script
+  Name: FirstPersonCamera
+  FilePath: Assets/Scripts/FirstPersonCamera.lua
+  MemoryOnly: false
+  Config: ~
