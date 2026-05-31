@@ -694,6 +694,7 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
     }
 }
 
+
 const interface::FrameImage& Renderer::getFrameImage() const
 {
     return m_frame_image;

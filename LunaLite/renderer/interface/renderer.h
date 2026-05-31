@@ -30,7 +30,9 @@ public:
     virtual void resize(uint32_t width, uint32_t height) = 0;
     virtual void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) = 0;
     virtual void setSceneLighting(const SceneLighting& lighting) = 0;
+
     virtual void renderMesh(const Mesh& mesh, const glm::mat4& transform) = 0;
+
     virtual const FrameImage& getFrameImage() const = 0;
 };
 } // namespace lunalite::renderer::interface
