@@ -6,7 +6,7 @@ add_library(LunaLiteRenderer
     renderer/debug_renderer.cpp
     renderer/default_renderer/renderer.cpp
     renderer/renderer_controller.cpp
-    renderer/rhi_frame_presenter.cpp
+    renderer/frame_presenter/rhi_frame_presenter.cpp
 )
 
 target_link_libraries(LunaLiteRenderer
@@ -16,6 +16,11 @@ target_link_libraries(LunaLiteRenderer
         LunaLiteSoftRasterizationRenderer
     PRIVATE
         spdlog::spdlog
+)
+
+target_compile_definitions(LunaLiteRenderer
+    PRIVATE
+        LUNALITE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
 )
 
 add_library(LunaLiteSoftRasterizationRenderer
@@ -47,6 +52,11 @@ target_link_libraries(LunaLiteImGui
     PUBLIC
         imgui::imgui
         TinyRHI::TinyRHI
+)
+
+target_compile_definitions(LunaLiteImGui
+    PRIVATE
+        LUNALITE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
 )
 
 add_library(LunaLite STATIC

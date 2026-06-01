@@ -4,7 +4,13 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 
 namespace lunalite::renderer {
 namespace {
@@ -24,209 +30,35 @@ struct LineVertex {
     glm::vec3 color{1.0f};
 };
 
-constexpr const char* geometryVertexShaderSource = R"(
-#version 450 core
-
-layout(location = 0) in vec3 aPosition;
-layout(location = 1) in vec3 aNormal;
-
-layout(std140, binding = 0) uniform FrameUniforms {
-    mat4 view;
-    mat4 projection;
-    vec3 cameraPos;
-    float _pad0;
-    vec3 lightDir;
-    float _pad1;
-    vec3 lightAmbient;
-    float _pad2;
-    vec3 lightDiffuse;
-    float _pad3;
-    vec3 lightSpecular;
-    float _pad4;
-    uint directionalLightCount;
-    float _pad5;
-    float _pad6;
-    float _pad7;
-    vec3 environmentAmbient;
-    float _pad8;
-};
-
-layout(std140, binding = 1) uniform ObjectUniforms {
-    mat4 model;
-    mat4 normalMatrix;
-};
-
-out vec3 vWorldPos;
-out vec3 vNormal;
-
-void main()
+std::optional<std::string> readTextFile(const std::filesystem::path& path)
 {
-    vec4 worldPosition = model * vec4(aPosition, 1.0);
-    vWorldPos = worldPosition.xyz;
-    vNormal = normalize(mat3(normalMatrix) * aNormal);
-    gl_Position = projection * view * worldPosition;
-}
-)";
-
-constexpr const char* geometryFragmentShaderSource = R"(
-#version 450 core
-
-in vec3 vWorldPos;
-in vec3 vNormal;
-
-layout(location = 0) out vec4 gAlbedo;
-layout(location = 1) out vec4 gNormal;
-layout(location = 2) out vec4 gMaterial;
-
-void main()
-{
-    gAlbedo = vec4(0.8, 0.65, 0.5, 1.0);
-    gNormal = vec4(normalize(vNormal) * 0.5 + 0.5, 1.0);
-    gMaterial = vec4(0.5, 0.5, 0.0, 1.0);
-}
-)";
-
-constexpr const char* lineVertexShaderSource = R"(
-#version 450 core
-
-layout(location = 0) in vec3 aPosition;
-layout(location = 1) in vec3 aColor;
-
-layout(std140, binding = 0) uniform FrameUniforms {
-    mat4 view;
-    mat4 projection;
-    vec3 cameraPos;
-    float _pad0;
-    vec3 lightDir;
-    float _pad1;
-    vec3 lightAmbient;
-    float _pad2;
-    vec3 lightDiffuse;
-    float _pad3;
-    vec3 lightSpecular;
-    float _pad4;
-    uint directionalLightCount;
-    float _pad5;
-    float _pad6;
-    float _pad7;
-    vec3 environmentAmbient;
-    float _pad8;
-};
-
-layout(std140, binding = 1) uniform ObjectUniforms {
-    mat4 model;
-    mat4 normalMatrix;
-};
-
-out vec3 vColor;
-
-void main()
-{
-    vColor = aColor;
-    gl_Position = projection * view * model * vec4(aPosition, 1.0);
-}
-)";
-
-constexpr const char* lineFragmentShaderSource = R"(
-#version 450 core
-
-in vec3 vColor;
-
-layout(location = 0) out vec4 gAlbedo;
-layout(location = 1) out vec4 gNormal;
-layout(location = 2) out vec4 gMaterial;
-
-void main()
-{
-    vec3 normal = vec3(0.0, 1.0, 0.0);
-    gAlbedo = vec4(vColor, 1.0);
-    gNormal = vec4(normal * 0.5 + 0.5, 1.0);
-    gMaterial = vec4(0.0, 0.0, 1.0, 1.0);
-}
-)";
-
-constexpr const char* lightingVertexShaderSource = R"(
-#version 450 core
-
-out vec2 vUV;
-
-void main()
-{
-    const vec2 positions[3] = vec2[](
-        vec2(-1.0, -1.0),
-        vec2( 3.0, -1.0),
-        vec2(-1.0,  3.0)
-    );
-
-    const vec2 uvs[3] = vec2[](
-        vec2(0.0, 0.0),
-        vec2(2.0, 0.0),
-        vec2(0.0, 2.0)
-    );
-
-    vUV = uvs[gl_VertexID];
-    gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
-}
-)";
-
-constexpr const char* lightingFragmentShaderSource = R"(
-#version 450 core
-
-layout(std140, binding = 0) uniform FrameUniforms {
-    mat4 view;
-    mat4 projection;
-    vec3 cameraPos;
-    float _pad0;
-    vec3 lightDir;
-    float _pad1;
-    vec3 lightAmbient;
-    float _pad2;
-    vec3 lightDiffuse;
-    float _pad3;
-    vec3 lightSpecular;
-    float _pad4;
-    uint directionalLightCount;
-    float _pad5;
-    float _pad6;
-    float _pad7;
-    vec3 environmentAmbient;
-    float _pad8;
-};
-
-layout(binding = 1) uniform sampler2D gAlbedoTexture;
-layout(binding = 2) uniform sampler2D gNormalTexture;
-layout(binding = 3) uniform sampler2D gMaterialTexture;
-layout(binding = 4) uniform sampler2D gDepthTexture;
-
-in vec2 vUV;
-out vec4 outColor;
-
-void main()
-{
-    vec3 albedo = texture(gAlbedoTexture, vUV).rgb;
-    vec3 normal = normalize(texture(gNormalTexture, vUV).rgb * 2.0 - 1.0);
-    vec3 material = texture(gMaterialTexture, vUV).rgb;
-
-    if (material.b > 0.5) {
-        vec3 unlitColor = pow(max(albedo, vec3(0.0)), vec3(1.0 / 2.2));
-        outColor = vec4(unlitColor, 1.0);
-        return;
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    if (!file) {
+        return std::nullopt;
     }
 
-    vec3 color = environmentAmbient * albedo;
-    if (directionalLightCount > 0u) {
-        vec3 L = normalize(-lightDir);
-        float diff = max(dot(normal, L), 0.0);
+    std::ostringstream contents;
+    contents << file.rdbuf();
+    return contents.str();
+}
 
-        vec3 ambient = lightAmbient * albedo;
-        vec3 diffuse = lightDiffuse * diff * albedo;
-        color += ambient + diffuse;
+std::string loadDefaultRendererShader(const char* file_name)
+{
+    const auto relative_path =
+        std::filesystem::path{"LunaLite"} / "renderer" / "default_renderer" / "shaders" / file_name;
+#ifdef LUNALITE_SOURCE_ROOT
+    const auto shader_path = std::filesystem::path{LUNALITE_SOURCE_ROOT} / relative_path;
+#else
+    const auto shader_path = relative_path;
+#endif
+
+    if (auto source = readTextFile(shader_path)) {
+        return *source;
     }
 
-    color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
-    outColor = vec4(color, 1.0);
+    throw std::runtime_error("Failed to load default renderer shader '" + std::string{file_name} + "' from '" +
+                             shader_path.string() + "'.");
 }
-)";
 
 } // namespace
 
@@ -236,34 +68,41 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
 {
     m_cmd = &m_device->getCommandList();
 
+    const auto geometryVertexShaderSource = loadDefaultRendererShader("geometry.vert");
+    const auto geometryFragmentShaderSource = loadDefaultRendererShader("geometry.frag");
+    const auto lineVertexShaderSource = loadDefaultRendererShader("line.vert");
+    const auto lineFragmentShaderSource = loadDefaultRendererShader("line.frag");
+    const auto lightingVertexShaderSource = loadDefaultRendererShader("lighting.vert");
+    const auto lightingFragmentShaderSource = loadDefaultRendererShader("lighting.frag");
+
     const auto geometryVertexShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
-        .source = geometryVertexShaderSource,
+        .source = geometryVertexShaderSource.c_str(),
     });
 
     const auto geometryFragmentShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
-        .source = geometryFragmentShaderSource,
+        .source = geometryFragmentShaderSource.c_str(),
     });
 
     const auto lineVertexShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
-        .source = lineVertexShaderSource,
+        .source = lineVertexShaderSource.c_str(),
     });
 
     const auto lineFragmentShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
-        .source = lineFragmentShaderSource,
+        .source = lineFragmentShaderSource.c_str(),
     });
 
     const auto lightingVertexShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
-        .source = lightingVertexShaderSource,
+        .source = lightingVertexShaderSource.c_str(),
     });
 
     const auto lightingFragmentShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
-        .source = lightingFragmentShaderSource,
+        .source = lightingFragmentShaderSource.c_str(),
     });
 
     m_geometry_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{

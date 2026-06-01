@@ -1,6 +1,12 @@
-#include "../core/log.h"
+#include "../../core/log.h"
 #include "rhi_frame_presenter.h"
 
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <variant>
 
 namespace lunalite::renderer {
@@ -34,43 +40,35 @@ size_t frameImageBytesPerPixel(interface::FrameImageFormat format)
     return 4;
 }
 
-constexpr const char* kPresenterVertexShaderSource = R"(
-#version 450 core
-
-out vec2 vUV;
-
-void main()
+std::optional<std::string> readTextFile(const std::filesystem::path& path)
 {
-    const vec2 positions[3] = vec2[](
-        vec2(-1.0, -1.0),
-        vec2( 3.0, -1.0),
-        vec2(-1.0,  3.0)
-    );
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    if (!file) {
+        return std::nullopt;
+    }
 
-    const vec2 uvs[3] = vec2[](
-        vec2(0.0, 0.0),
-        vec2(2.0, 0.0),
-        vec2(0.0, 2.0)
-    );
-
-    vUV = uvs[gl_VertexID];
-    gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
+    std::ostringstream contents;
+    contents << file.rdbuf();
+    return contents.str();
 }
-)";
 
-constexpr const char* kPresenterFragmentShaderSource = R"(
-#version 450 core
-
-layout(binding = 0) uniform sampler2D uFrameTexture;
-
-in vec2 vUV;
-out vec4 outColor;
-
-void main()
+std::string loadFramePresenterShader(const char* file_name)
 {
-    outColor = texture(uFrameTexture, vUV);
+    const auto relative_path =
+        std::filesystem::path{"LunaLite"} / "renderer" / "frame_presenter" / "shaders" / file_name;
+#ifdef LUNALITE_SOURCE_ROOT
+    const auto shader_path = std::filesystem::path{LUNALITE_SOURCE_ROOT} / relative_path;
+#else
+    const auto shader_path = relative_path;
+#endif
+
+    if (auto source = readTextFile(shader_path)) {
+        return *source;
+    }
+
+    throw std::runtime_error("Failed to load frame presenter shader '" + std::string{file_name} + "' from '" +
+                             shader_path.string() + "'.");
 }
-)";
 
 } // namespace
 
@@ -81,14 +79,17 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
 {
     LUNA_ASSERT(m_cmd != nullptr, "RHI command list is null.");
 
+    const auto vertexShaderSource = loadFramePresenterShader("presenter.vert");
+    const auto fragmentShaderSource = loadFramePresenterShader("presenter.frag");
+
     m_vertex_shader = m_device.createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
-        .source = kPresenterVertexShaderSource,
+        .source = vertexShaderSource.c_str(),
     });
 
     m_fragment_shader = m_device.createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
-        .source = kPresenterFragmentShaderSource,
+        .source = fragmentShaderSource.c_str(),
     });
 
     m_bind_group_layout = m_device.createBindGroupLayout(rhi::BindGroupLayoutDesc{

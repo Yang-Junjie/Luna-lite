@@ -7,7 +7,13 @@
 #include <cstring>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <variant>
 
 using namespace lunalite::rhi;
@@ -15,43 +21,38 @@ using namespace lunalite::rhi;
 namespace lunalite::imgui {
 namespace {
 
-constexpr const char* kVertexShader = R"GLSL(
-#version 450 core
-layout(location = 0) in vec2 inPosition;
-layout(location = 1) in vec2 inUV;
-layout(location = 2) in vec4 inColor;
-
-uniform vec4 uPushConstants[4];
-
-out vec2 vertexUV;
-out vec4 vertexColor;
-
-void main()
-{
-    mat4 projection = mat4(uPushConstants[0], uPushConstants[1], uPushConstants[2], uPushConstants[3]);
-    gl_Position = projection * vec4(inPosition, 0.0, 1.0);
-    vertexUV = inUV;
-    vertexColor = inColor;
-}
-)GLSL";
-
-constexpr const char* kFragmentShader = R"GLSL(
-#version 450 core
-layout(binding = 0) uniform sampler2D uTexture;
-
-in vec2 vertexUV;
-in vec4 vertexColor;
-out vec4 outColor;
-
-void main()
-{
-    outColor = vertexColor * texture(uTexture, vertexUV);
-}
-)GLSL";
-
 constexpr size_t kInitialVertexBufferSize = 5'000 * sizeof(ImDrawVert);
 constexpr size_t kInitialIndexBufferSize = 10'000 * sizeof(ImDrawIdx);
 constexpr uint32_t kProjectionMatrixSize = 16 * sizeof(float);
+
+std::optional<std::string> readTextFile(const std::filesystem::path& path)
+{
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    if (!file) {
+        return std::nullopt;
+    }
+
+    std::ostringstream contents;
+    contents << file.rdbuf();
+    return contents.str();
+}
+
+std::string loadImGuiShader(const char* file_name)
+{
+    const auto relative_path = std::filesystem::path{"LunaLite"} / "imgui" / "shaders" / file_name;
+#ifdef LUNALITE_SOURCE_ROOT
+    const auto shader_path = std::filesystem::path{LUNALITE_SOURCE_ROOT} / relative_path;
+#else
+    const auto shader_path = relative_path;
+#endif
+
+    if (auto source = readTextFile(shader_path)) {
+        return *source;
+    }
+
+    throw std::runtime_error("Failed to load ImGui shader '" + std::string{file_name} + "' from '" +
+                             shader_path.string() + "'.");
+}
 
 ImTextureID textureIdFromBindGroup(BindGroupHandle bind_group)
 {
@@ -377,8 +378,13 @@ ImTextureID ImGuiRenderer::textureId(TextureViewHandle view)
 
 bool ImGuiRenderer::createStaticResources()
 {
-    m_vertex_shader = m_device->createShader(ShaderDesc{.stage = ShaderStage::Vertex, .source = kVertexShader});
-    m_fragment_shader = m_device->createShader(ShaderDesc{.stage = ShaderStage::Fragment, .source = kFragmentShader});
+    const auto vertexShaderSource = loadImGuiShader("imgui.vert");
+    const auto fragmentShaderSource = loadImGuiShader("imgui.frag");
+
+    m_vertex_shader =
+        m_device->createShader(ShaderDesc{.stage = ShaderStage::Vertex, .source = vertexShaderSource.c_str()});
+    m_fragment_shader =
+        m_device->createShader(ShaderDesc{.stage = ShaderStage::Fragment, .source = fragmentShaderSource.c_str()});
     m_sampler = m_device->createSampler(SamplerDesc{
         .min_filter = FilterMode::Linear,
         .mag_filter = FilterMode::Linear,
