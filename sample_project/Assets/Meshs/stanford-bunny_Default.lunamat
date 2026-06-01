@@ -1,0 +1,7 @@
+Material:
+  ShadingModel: Lit
+  Albedo: [0.8, 0.65, 0.5, 1.0]
+  Metallic: 0.0
+  Roughness: 0.5
+  Emission: [0.0, 0.0, 0.0]
+  EmissionStrength: 0.0

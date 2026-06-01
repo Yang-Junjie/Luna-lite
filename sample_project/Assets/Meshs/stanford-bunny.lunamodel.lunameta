@@ -1,0 +1,7 @@
+Asset:
+  Handle: 15330008245417503354
+  Type: Model
+  Name: stanford-bunny
+  FilePath: Assets/Meshs/stanford-bunny.lunamodel
+  MemoryOnly: false
+  Config: ~

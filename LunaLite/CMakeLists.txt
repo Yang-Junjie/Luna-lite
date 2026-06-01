@@ -69,8 +69,12 @@ add_library(LunaLite STATIC
     core/uuid.cpp
     asset/asset_importer.cpp
     asset/asset_manager.cpp
+    asset/material_asset_importer.cpp
+    asset/material_asset_loader.cpp
     asset/mesh_asset_importer.cpp
     asset/mesh_asset_loader.cpp
+    asset/model_asset_importer.cpp
+    asset/model_asset_loader.cpp
     asset/script_asset_importer.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp

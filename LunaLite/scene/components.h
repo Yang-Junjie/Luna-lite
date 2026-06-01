@@ -34,8 +34,8 @@ struct TransformComponent {
     }
 };
 
-struct MeshComponent {
-    asset::AssetHandle mesh{0};
+struct ModelComponent {
+    asset::AssetHandle model{0};
 };
 
 struct ScriptBinding {

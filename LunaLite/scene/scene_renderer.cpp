@@ -1,6 +1,6 @@
 #include "../asset/asset_database.h"
 #include "../core/log.h"
-#include "../renderer/interface/mesh.h"
+#include "../renderer/interface/model.h"
 #include "../renderer/interface/renderer.h"
 #include "components.h"
 #include "scene_renderer.h"
@@ -102,21 +102,21 @@ void SceneRenderer::renderScene(const Scene& scene,
     m_renderer->setSceneLighting(lighting);
     m_renderer->setViewProjection(view, projection, cameraPosition);
 
-    const auto meshView = scene.getRegistry().view<const TransformComponent, const MeshComponent>();
-    for (const auto entity : meshView) {
-        const auto& transform = meshView.get<const TransformComponent>(entity);
-        const auto& meshComponent = meshView.get<const MeshComponent>(entity);
-        if (!meshComponent.mesh.isValid()) {
+    const auto modelView = scene.getRegistry().view<const TransformComponent, const ModelComponent>();
+    for (const auto entity : modelView) {
+        const auto& transform = modelView.get<const TransformComponent>(entity);
+        const auto& modelComponent = modelView.get<const ModelComponent>(entity);
+        if (!modelComponent.model.isValid()) {
             continue;
         }
 
-        const auto* mesh = asset::AssetDatabase::get().get<renderer::interface::Mesh>(meshComponent.mesh);
-        if (mesh == nullptr) {
-            LUNA_CORE_ERROR("Entity {} has a null mesh asset", static_cast<uint32_t>(entity));
+        const auto* model = asset::AssetDatabase::get().get<renderer::interface::Model>(modelComponent.model);
+        if (model == nullptr) {
+            LUNA_CORE_ERROR("Entity {} has a null model asset", static_cast<uint32_t>(entity));
             continue;
         }
 
-        m_renderer->renderMesh(*mesh, transform.getTransform());
+        m_renderer->renderModel(*model, transform.getTransform());
     }
 }
 } // namespace lunalite::scene

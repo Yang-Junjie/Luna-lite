@@ -80,43 +80,7 @@ void SoftRasterizationRenderer::setSceneLighting(const interface::SceneLighting&
     }
 }
 
-void SoftRasterizationRenderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
-{
-    const auto& vertices = mesh.getVertices();
-    const auto& indices = mesh.getIndices();
-    if (vertices.empty()) {
-        return;
-    }
-
-    const auto normal_matrix = glm::transpose(glm::inverse(transform));
-    const auto drawTriangle = [&](uint32_t i0, uint32_t i1, uint32_t i2) {
-        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
-            return;
-        }
-
-        ScreenVertex v0;
-        ScreenVertex v1;
-        ScreenVertex v2;
-        if (!projectVertex(vertices[i0], transform, normal_matrix, v0) ||
-            !projectVertex(vertices[i1], transform, normal_matrix, v1) ||
-            !projectVertex(vertices[i2], transform, normal_matrix, v2)) {
-            return;
-        }
-
-        rasterizeTriangle(v0, v1, v2);
-    };
-
-    if (!indices.empty()) {
-        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
-            drawTriangle(indices[i], indices[i + 1], indices[i + 2]);
-        }
-        return;
-    }
-
-    for (uint32_t i = 0; static_cast<size_t>(i) + 2 < vertices.size(); i += 3) {
-        drawTriangle(i, i + 1, i + 2);
-    }
-}
+void SoftRasterizationRenderer::renderModel(const interface::Model&, const glm::mat4&) {}
 
 void SoftRasterizationRenderer::renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color)
 {

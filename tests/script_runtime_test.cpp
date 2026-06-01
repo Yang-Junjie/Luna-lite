@@ -55,7 +55,7 @@ return {
         end
 
         entity:add_camera()
-        entity:set_mesh("12712907297239299619")
+        entity:set_model("12712907297239299619")
         entity:set_tag("started")
     end,
 
@@ -70,8 +70,8 @@ return {
             entity:remove_camera()
         end
 
-        if entity:has_mesh() then
-            entity:remove_mesh()
+        if entity:has_model() then
+            entity:remove_model()
         end
     end,
 
@@ -103,12 +103,12 @@ return {
         std::cerr << "Lua on_create did not update tag.\n";
         return 1;
     }
-    if (!scene.hasComponent<scene::CameraComponent>(entity) || !scene.hasComponent<scene::MeshComponent>(entity)) {
+    if (!scene.hasComponent<scene::CameraComponent>(entity) || !scene.hasComponent<scene::ModelComponent>(entity)) {
         std::cerr << "Lua component API did not add components.\n";
         return 1;
     }
-    if (scene.getComponent<scene::MeshComponent>(entity).mesh != asset::AssetHandle{12'712'907'297'239'299'619ull}) {
-        std::cerr << "Lua component API did not preserve string mesh handle.\n";
+    if (scene.getComponent<scene::ModelComponent>(entity).model != asset::AssetHandle{12'712'907'297'239'299'619ull}) {
+        std::cerr << "Lua component API did not preserve string model handle.\n";
         return 1;
     }
     if (scene.getEntities().size() != 1) {
@@ -123,7 +123,7 @@ return {
         std::cerr << "Lua on_update did not update transform.\n";
         return 1;
     }
-    if (scene.hasComponent<scene::CameraComponent>(entity) || scene.hasComponent<scene::MeshComponent>(entity)) {
+    if (scene.hasComponent<scene::CameraComponent>(entity) || scene.hasComponent<scene::ModelComponent>(entity)) {
         std::cerr << "Lua component API did not remove components.\n";
         return 1;
     }

@@ -6,11 +6,43 @@
 
 #include <glm/geometric.hpp>
 #include <memory>
+#include <string>
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
 namespace lunalite::asset {
+namespace {
+struct SubMeshBuilder {
+    std::string name;
+    uint32_t material_slot{0};
+    std::vector<renderer::interface::Vertex> vertices;
+    std::vector<uint32_t> indices;
+};
+
+SubMeshBuilder& getOrCreateSubMesh(std::vector<SubMeshBuilder>& submeshes,
+                                   uint32_t materialSlot,
+                                   const std::string& meshName,
+                                   const std::vector<tinyobj::material_t>& materials)
+{
+    while (submeshes.size() <= materialSlot) {
+        const auto slot = static_cast<uint32_t>(submeshes.size());
+        std::string name = meshName;
+        if (slot < materials.size() && !materials[slot].name.empty()) {
+            name += "_" + materials[slot].name;
+        } else {
+            name += "_SubMesh" + std::to_string(slot);
+        }
+
+        submeshes.push_back(SubMeshBuilder{
+            .name = std::move(name),
+            .material_slot = slot,
+        });
+    }
+
+    return submeshes[materialSlot];
+}
+} // namespace
 
 std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetMetadata& metadata)
 {
@@ -25,8 +57,9 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetM
     std::string warn;
     std::string error;
 
-    const bool loaded =
-        tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &error, path.string().c_str(), nullptr, true);
+    const auto materialBasePath = (path.parent_path() / "").string();
+    const bool loaded = tinyobj::LoadObj(
+        &attrib, &shapes, &materials, &warn, &error, path.string().c_str(), materialBasePath.c_str(), true);
 
     if (!loaded) {
         LUNA_CORE_ERROR("Failed to load OBJ file '{}': {}", path.string(), error);
@@ -36,10 +69,11 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetM
         LUNA_CORE_WARN("OBJ load warning for '{}': {}", path.string(), warn);
     }
 
-    std::vector<renderer::interface::Vertex> vertices;
-    std::vector<uint32_t> indices;
+    const auto meshName = metadata.Name.empty() ? path.stem().string() : metadata.Name;
+    std::vector<SubMeshBuilder> submeshBuilders;
 
     for (const auto& shape : shapes) {
+        size_t faceIndex = 0;
         for (size_t i = 0; i + 2 < shape.mesh.indices.size(); i += 3) {
             const auto& index0 = shape.mesh.indices[i + 0];
             const auto& index1 = shape.mesh.indices[i + 1];
@@ -59,26 +93,50 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetM
                 vertex2.normal = surfaceNormal;
             }
 
-            vertices.push_back(vertex0);
-            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
+            const int materialId = faceIndex < shape.mesh.material_ids.size() ? shape.mesh.material_ids[faceIndex] : -1;
+            const auto materialSlot = materialId >= 0 ? static_cast<uint32_t>(materialId) : 0u;
+            auto& submesh = getOrCreateSubMesh(submeshBuilders, materialSlot, meshName, materials);
 
-            vertices.push_back(vertex1);
-            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
+            submesh.vertices.push_back(vertex0);
+            submesh.indices.push_back(static_cast<uint32_t>(submesh.vertices.size() - 1));
 
-            vertices.push_back(vertex2);
-            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
+            submesh.vertices.push_back(vertex1);
+            submesh.indices.push_back(static_cast<uint32_t>(submesh.vertices.size() - 1));
+
+            submesh.vertices.push_back(vertex2);
+            submesh.indices.push_back(static_cast<uint32_t>(submesh.vertices.size() - 1));
+
+            ++faceIndex;
         }
     }
 
-    if (vertices.empty()) {
+    if (submeshBuilders.empty()) {
         LUNA_CORE_ERROR("No valid vertices found in OBJ file '{}'", path.string());
+        return nullptr;
+    }
+
+    std::vector<renderer::interface::SubMesh> submeshes;
+    for (auto& builder : submeshBuilders) {
+        if (builder.vertices.empty()) {
+            continue;
+        }
+
+        renderer::interface::SubMesh submesh;
+        submesh.name = std::move(builder.name);
+        submesh.material_slot = builder.material_slot;
+        submesh.setVertices(std::move(builder.vertices));
+        submesh.setIndices(std::move(builder.indices));
+        submeshes.push_back(std::move(submesh));
+    }
+
+    if (submeshes.empty()) {
+        LUNA_CORE_ERROR("No valid submeshes found in OBJ file '{}'", path.string());
         return nullptr;
     }
 
     auto mesh = std::make_shared<renderer::interface::Mesh>();
     mesh->handle = metadata.Handle;
-    mesh->setVertices(std::move(vertices));
-    mesh->setIndices(std::move(indices));
+    mesh->setSubMeshes(std::move(submeshes));
 
     return mesh;
 }

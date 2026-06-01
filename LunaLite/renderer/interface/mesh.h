@@ -4,12 +4,15 @@
 
 #include <cstdint>
 
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace lunalite::renderer::interface {
-class Mesh : public asset::Asset {
-public:
+struct SubMesh {
+    std::string name;
+    uint32_t material_slot{0};
+
     const std::vector<Vertex>& getVertices() const
     {
         return m_vertices;
@@ -70,15 +73,36 @@ public:
         return m_index_version;
     }
 
+private:
+    std::vector<Vertex> m_vertices;
+    std::vector<uint32_t> m_indices;
+    uint64_t m_vertex_version{1};
+    uint64_t m_index_version{1};
+};
+
+class Mesh : public asset::Asset {
+public:
+    const std::vector<SubMesh>& getSubMeshes() const
+    {
+        return m_submeshes;
+    }
+
+    void setSubMeshes(std::vector<SubMesh> submeshes)
+    {
+        m_submeshes = std::move(submeshes);
+    }
+
+    std::vector<SubMesh>& editSubMeshes()
+    {
+        return m_submeshes;
+    }
+
     asset::AssetType getAssetsType() const override
     {
         return asset::AssetType::Mesh;
     }
 
 private:
-    std::vector<Vertex> m_vertices;
-    std::vector<uint32_t> m_indices;
-    uint64_t m_vertex_version{1};
-    uint64_t m_index_version{1};
+    std::vector<SubMesh> m_submeshes;
 };
 } // namespace lunalite::renderer::interface

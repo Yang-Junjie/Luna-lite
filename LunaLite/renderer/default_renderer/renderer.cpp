@@ -1,3 +1,4 @@
+#include "../../asset/asset_database.h"
 #include "../../core/log.h"
 #include "renderer.h"
 
@@ -117,7 +118,8 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                 rhi::BindGroupLayoutEntry{
                     .binding = 1,
                     .type = rhi::BindingType::UniformBuffer,
-                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex),
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex) |
+                              rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
                 },
             },
     });
@@ -644,9 +646,45 @@ void Renderer::setSceneLighting(const interface::SceneLighting& lighting)
     m_frame_uniforms_dirty = true;
 }
 
-void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
+void Renderer::renderModel(const interface::Model& model, const glm::mat4& transform)
 {
-    auto* gpu_mesh = getOrCreateMeshGpuData(mesh);
+    for (const auto& modelMesh : model.getMeshes()) {
+        if (!modelMesh.mesh.isValid()) {
+            continue;
+        }
+
+        const auto* mesh = asset::AssetDatabase::get().get<interface::Mesh>(modelMesh.mesh);
+        if (mesh == nullptr) {
+            LUNA_CORE_ERROR("Model {} has a null mesh asset", static_cast<uint64_t>(model.handle));
+            continue;
+        }
+
+        const auto& submeshes = mesh->getSubMeshes();
+        for (size_t submeshIndex = 0; submeshIndex < submeshes.size(); ++submeshIndex) {
+            const auto& submesh = submeshes[submeshIndex];
+            const interface::Material* material = &m_default_material;
+            if (submesh.material_slot < modelMesh.materials.size()) {
+                const auto materialHandle = modelMesh.materials[submesh.material_slot];
+                if (materialHandle.isValid()) {
+                    if (const auto* resolvedMaterial =
+                            asset::AssetDatabase::get().get<interface::Material>(materialHandle)) {
+                        material = resolvedMaterial;
+                    }
+                }
+            }
+
+            drawSubMesh(*mesh, submeshIndex, submesh, *material, transform);
+        }
+    }
+}
+
+void Renderer::drawSubMesh(const interface::Mesh& mesh,
+                           size_t submesh_index,
+                           const interface::SubMesh& submesh,
+                           const interface::Material& material,
+                           const glm::mat4& transform)
+{
+    auto* gpu_mesh = getOrCreateSubMeshGpuData(mesh, submesh_index, submesh);
     if (gpu_mesh == nullptr || !gpu_mesh->vertex_buffer || gpu_mesh->vertex_count == 0) {
         return;
     }
@@ -655,6 +693,13 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
 
     m_objectUniforms.model = transform;
     m_objectUniforms.normalMatrix = glm::transpose(glm::inverse(transform));
+    m_objectUniforms.materialAlbedo = material.albedo;
+    m_objectUniforms.materialEmission = material.emission;
+    m_objectUniforms.materialEmissionStrength = material.emission_strength;
+    m_objectUniforms.materialMetallic = material.metallic;
+    m_objectUniforms.materialRoughness = material.roughness;
+    m_objectUniforms.materialShadingModel =
+        material.shading_model == interface::Material::ShadingModel::Unlit ? 1u : 0u;
     m_device->updateBuffer(m_objectUniformBuffer, 0, &m_objectUniforms, sizeof(ObjectUniforms));
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);
@@ -703,10 +748,12 @@ void Renderer::flushFrameUniforms()
     m_frame_uniforms_dirty = false;
 }
 
-Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& mesh)
+Renderer::MeshGpuData* Renderer::getOrCreateSubMeshGpuData(const interface::Mesh& mesh,
+                                                           size_t submesh_index,
+                                                           const interface::SubMesh& submesh)
 {
-    const auto& vertices = mesh.getVertices();
-    const auto& indices = mesh.getIndices();
+    const auto& vertices = submesh.getVertices();
+    const auto& indices = submesh.getIndices();
     if (vertices.empty()) {
         return nullptr;
     }
@@ -716,13 +763,13 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
     LUNA_ASSERT(
         indices.size() <= std::numeric_limits<uint32_t>::max(), "Mesh has too many indices: {}", indices.size());
 
-    const auto key = getMeshCacheKey(mesh);
+    const auto key = getSubMeshCacheKey(mesh, submesh_index);
     auto& gpu_mesh = m_mesh_gpu_cache[key];
 
     const auto vertex_buffer_size = vertices.size() * sizeof(interface::Vertex);
     const auto index_buffer_size = indices.size() * sizeof(uint32_t);
-    const auto vertex_version = mesh.getVertexVersion();
-    const auto index_version = mesh.getIndexVersion();
+    const auto vertex_version = submesh.getVertexVersion();
+    const auto index_version = submesh.getIndexVersion();
     const auto vertex_changed =
         gpu_mesh.uploaded_vertex_version != 0 && gpu_mesh.uploaded_vertex_version != vertex_version;
     const auto index_changed = gpu_mesh.uploaded_index_version != 0 && gpu_mesh.uploaded_index_version != index_version;
@@ -792,12 +839,12 @@ Renderer::MeshGpuData* Renderer::getOrCreateMeshGpuData(const interface::Mesh& m
     return &gpu_mesh;
 }
 
-uint64_t Renderer::getMeshCacheKey(const interface::Mesh& mesh) const
+uint64_t Renderer::getSubMeshCacheKey(const interface::Mesh& mesh, size_t submesh_index) const
 {
     const auto handle = static_cast<uint64_t>(mesh.handle);
     LUNA_ASSERT(handle != 0);
 
-    return handle;
+    return handle ^ ((static_cast<uint64_t>(submesh_index) + 1u) * 0x9E'37'79'B9'7F'4A'7C'15ull);
 }
 
 } // namespace lunalite::renderer

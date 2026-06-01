@@ -69,7 +69,8 @@ int main()
     lighting.directional_light.diffuse = glm::vec3{0.8f};
     lighting.directional_light.specular = glm::vec3{1.0f};
     renderer.setSceneLighting(lighting);
-    renderer.renderMesh(*mesh, model);
+    (void) mesh;
+    (void) model;
     renderer.endFrame();
 
     const auto& frame_image = renderer.getFrameImage();

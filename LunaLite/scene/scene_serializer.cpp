@@ -77,7 +77,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     for (const auto entity : registry.view<const TransformComponent>()) {
         addEntity(entity);
     }
-    for (const auto entity : registry.view<const MeshComponent>()) {
+    for (const auto entity : registry.view<const ModelComponent>()) {
         addEntity(entity);
     }
     for (const auto entity : registry.view<const ScriptComponent>()) {
@@ -110,11 +110,11 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             serializedEntity["TransformComponent"] = node;
         }
 
-        if (registry.all_of<MeshComponent>(entity)) {
-            const auto& mesh = registry.get<MeshComponent>(entity);
+        if (registry.all_of<ModelComponent>(entity)) {
+            const auto& model = registry.get<ModelComponent>(entity);
             YAML::Node node;
-            node["Mesh"] = static_cast<uint64_t>(mesh.mesh);
-            serializedEntity["MeshComponent"] = node;
+            node["Model"] = static_cast<uint64_t>(model.model);
+            serializedEntity["ModelComponent"] = node;
         }
 
         if (registry.all_of<ScriptComponent>(entity)) {
@@ -210,9 +210,9 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                 transform.scale = readVec3(transformNode["Scale"], glm::vec3{1.0f});
             }
 
-            if (const auto meshNode = serializedEntity["MeshComponent"]) {
-                auto& mesh = scene.addComponent<MeshComponent>(entity);
-                mesh.mesh = asset::AssetHandle{meshNode["Mesh"].as<uint64_t>(0)};
+            if (const auto modelNode = serializedEntity["ModelComponent"]) {
+                auto& model = scene.addComponent<ModelComponent>(entity);
+                model.model = asset::AssetHandle{modelNode["Model"].as<uint64_t>(0)};
             }
 
             if (const auto scriptNode = serializedEntity["ScriptComponent"]) {

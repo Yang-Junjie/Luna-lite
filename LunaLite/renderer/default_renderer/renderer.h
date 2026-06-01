@@ -1,5 +1,6 @@
 #pragma once
 #include "../interface/frame_image.h"
+#include "../interface/material.h"
 #include "../interface/renderer.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
@@ -20,7 +21,7 @@ public:
     void resize(uint32_t width, uint32_t height) override;
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
     void setSceneLighting(const interface::SceneLighting& lighting) override;
-    void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
+    void renderModel(const interface::Model& model, const glm::mat4& transform) override;
     void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
     const interface::FrameImage& getFrameImage() const override;
 
@@ -48,6 +49,13 @@ public:
     struct alignas(16) ObjectUniforms {
         glm::mat4 model{1.0f};
         glm::mat4 normalMatrix{1.0f};
+        glm::vec4 materialAlbedo{0.8f, 0.65f, 0.5f, 1.0f};
+        glm::vec3 materialEmission{0.0f};
+        float materialEmissionStrength{0.0f};
+        float materialMetallic{0.0f};
+        float materialRoughness{0.5f};
+        uint32_t materialShadingModel{0};
+        float _pad0{0.0f};
     };
 
 private:
@@ -87,8 +95,14 @@ private:
 
     void ensureGBuffer(uint32_t width, uint32_t height);
     void flushFrameUniforms();
-    MeshGpuData* getOrCreateMeshGpuData(const interface::Mesh& mesh);
-    uint64_t getMeshCacheKey(const interface::Mesh& mesh) const;
+    void drawSubMesh(const interface::Mesh& mesh,
+                     size_t submesh_index,
+                     const interface::SubMesh& submesh,
+                     const interface::Material& material,
+                     const glm::mat4& transform);
+    MeshGpuData*
+        getOrCreateSubMeshGpuData(const interface::Mesh& mesh, size_t submesh_index, const interface::SubMesh& submesh);
+    uint64_t getSubMeshCacheKey(const interface::Mesh& mesh, size_t submesh_index) const;
 
     rhi::Device* m_device{nullptr};
     rhi::Swapchain* m_swapchain{nullptr};
@@ -111,6 +125,7 @@ private:
     GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
     ObjectUniforms m_objectUniforms;
+    interface::Material m_default_material;
     interface::FrameImage m_frame_image;
     bool m_frame_uniforms_dirty{true};
     std::unordered_map<uint64_t, MeshGpuData> m_mesh_gpu_cache;

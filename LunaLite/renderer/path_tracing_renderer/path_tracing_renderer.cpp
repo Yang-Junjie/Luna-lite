@@ -68,48 +68,7 @@ void PathTracingRenderer::setSceneLighting(const interface::SceneLighting& light
     }
 }
 
-void PathTracingRenderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transform)
-{
-    const auto& vertices = mesh.getVertices();
-    const auto& indices = mesh.getIndices();
-    if (vertices.empty()) {
-        return;
-    }
-
-    const auto normal_matrix = glm::transpose(glm::inverse(transform));
-    const auto pushTriangle = [&](uint32_t i0, uint32_t i1, uint32_t i2) {
-        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
-            return;
-        }
-
-        const auto& v0 = vertices[i0];
-        const auto& v1 = vertices[i1];
-        const auto& v2 = vertices[i2];
-
-        Triangle tri;
-        tri.p0 = glm::vec3(transform * glm::vec4(v0.position, 1.0f));
-        tri.p1 = glm::vec3(transform * glm::vec4(v1.position, 1.0f));
-        tri.p2 = glm::vec3(transform * glm::vec4(v2.position, 1.0f));
-        tri.n0 = glm::normalize(glm::mat3(normal_matrix) * v0.normal);
-        tri.n1 = glm::normalize(glm::mat3(normal_matrix) * v1.normal);
-        tri.n2 = glm::normalize(glm::mat3(normal_matrix) * v2.normal);
-        tri.c0 = v0.color;
-        tri.c1 = v1.color;
-        tri.c2 = v2.color;
-        m_triangles.push_back(tri);
-    };
-
-    if (!indices.empty()) {
-        for (size_t i = 0; i + 2 < indices.size(); i += 3) {
-            pushTriangle(indices[i], indices[i + 1], indices[i + 2]);
-        }
-        return;
-    }
-
-    for (uint32_t i = 0; static_cast<size_t>(i) + 2 < vertices.size(); i += 3) {
-        pushTriangle(i, i + 1, i + 2);
-    }
-}
+void PathTracingRenderer::renderModel(const interface::Model&, const glm::mat4&) {}
 
 void PathTracingRenderer::renderLine(const glm::vec3&, const glm::vec3&, const glm::vec3&) {}
 

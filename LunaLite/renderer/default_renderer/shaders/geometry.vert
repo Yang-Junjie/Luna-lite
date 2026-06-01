@@ -27,6 +27,13 @@ layout(std140, binding = 0) uniform FrameUniforms {
 layout(std140, binding = 1) uniform ObjectUniforms {
     mat4 model;
     mat4 normalMatrix;
+    vec4 materialAlbedo;
+    vec3 materialEmission;
+    float materialEmissionStrength;
+    float materialMetallic;
+    float materialRoughness;
+    uint materialShadingModel;
+    float _padObject0;
 };
 
 out vec3 vWorldPos;

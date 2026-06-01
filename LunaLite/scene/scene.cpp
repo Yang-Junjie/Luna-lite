@@ -43,8 +43,8 @@ void Scene::copyFrom(const Scene& other)
             getComponent<TransformComponent>(targetEntity) = other.getComponent<TransformComponent>(sourceEntity);
         }
 
-        if (other.hasComponent<MeshComponent>(sourceEntity)) {
-            addComponent<MeshComponent>(targetEntity) = other.getComponent<MeshComponent>(sourceEntity);
+        if (other.hasComponent<ModelComponent>(sourceEntity)) {
+            addComponent<ModelComponent>(targetEntity) = other.getComponent<ModelComponent>(sourceEntity);
         }
 
         if (other.hasComponent<ScriptComponent>(sourceEntity)) {

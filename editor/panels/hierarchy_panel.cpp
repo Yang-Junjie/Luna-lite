@@ -38,10 +38,10 @@ void createEntityFromAsset(scene::Scene& scene,
         return;
     }
 
-    if (payload.type == asset::AssetType::Mesh) {
+    if (payload.type == asset::AssetType::Model) {
         auto entity = scene.createEntity();
-        auto& mesh = scene.addComponent<scene::MeshComponent>(entity);
-        mesh.mesh = handle;
+        auto& model = scene.addComponent<scene::ModelComponent>(entity);
+        model.model = handle;
         setEntityTagFromAsset(scene, entity, handle);
         selectedEntity = entity;
         return;

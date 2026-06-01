@@ -52,8 +52,8 @@ void InspectorPanel::onImGuiRender()
     }
 
     if (ImGui::BeginPopup("AddComponent")) {
-        if (!m_scene.hasComponent<scene::MeshComponent>(m_selected_entity) && ImGui::MenuItem("Mesh")) {
-            m_scene.addComponent<scene::MeshComponent>(m_selected_entity);
+        if (!m_scene.hasComponent<scene::ModelComponent>(m_selected_entity) && ImGui::MenuItem("Model")) {
+            m_scene.addComponent<scene::ModelComponent>(m_selected_entity);
         }
 
         if (!m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity) && ImGui::MenuItem("Script")) {
@@ -100,21 +100,21 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::MeshComponent>(m_selected_entity)) {
-        const bool open = ImGui::CollapsingHeader("Mesh", ImGuiTreeNodeFlags_DefaultOpen);
-        if (ImGui::BeginPopupContextItem("MeshPopup")) {
+    if (m_scene.hasComponent<scene::ModelComponent>(m_selected_entity)) {
+        const bool open = ImGui::CollapsingHeader("Model", ImGuiTreeNodeFlags_DefaultOpen);
+        if (ImGui::BeginPopupContextItem("ModelPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::MeshComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::ModelComponent>(m_selected_entity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::MeshComponent>(m_selected_entity)) {
-            auto& mesh = m_scene.getComponent<scene::MeshComponent>(m_selected_entity);
-            uint64_t meshHandle = static_cast<uint64_t>(mesh.mesh);
-            if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &meshHandle)) {
-                mesh.mesh = asset::AssetHandle{meshHandle};
+        if (open && m_scene.hasComponent<scene::ModelComponent>(m_selected_entity)) {
+            auto& model = m_scene.getComponent<scene::ModelComponent>(m_selected_entity);
+            uint64_t modelHandle = static_cast<uint64_t>(model.model);
+            if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &modelHandle)) {
+                model.model = asset::AssetHandle{modelHandle};
             }
-            acceptAssetHandleDrop(asset::AssetType::Mesh, mesh.mesh);
+            acceptAssetHandleDrop(asset::AssetType::Model, model.model);
         }
     }
 

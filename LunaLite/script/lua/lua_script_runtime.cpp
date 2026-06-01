@@ -295,35 +295,35 @@ void LuaScriptRuntime::registerBindings()
                 EntityAPI::setScale(*entity.scene, entity.entity, toVec3(x, y, z));
             }
         },
-        "has_mesh",
+        "has_model",
         [](LuaScriptEntity& entity) {
-            return entity.scene != nullptr && EntityAPI::hasMesh(*entity.scene, entity.entity);
+            return entity.scene != nullptr && EntityAPI::hasModel(*entity.scene, entity.entity);
         },
-        "get_mesh",
+        "get_model",
         [](LuaScriptEntity& entity) {
             if (entity.scene == nullptr) {
                 return uint64_t{0};
             }
-            return static_cast<uint64_t>(EntityAPI::getMesh(*entity.scene, entity.entity));
+            return static_cast<uint64_t>(EntityAPI::getModel(*entity.scene, entity.entity));
         },
-        "set_mesh",
+        "set_model",
         [](LuaScriptEntity& entity, const sol::object& handle) {
             if (entity.scene == nullptr) {
                 return;
             }
 
-            const auto mesh = assetHandleFromLua(handle);
-            if (!mesh) {
-                LogAPI::error("Entity.set_mesh expects an integer handle or decimal handle string");
+            const auto model = assetHandleFromLua(handle);
+            if (!model) {
+                LogAPI::error("Entity.set_model expects an integer handle or decimal handle string");
                 return;
             }
 
-            EntityAPI::setMesh(*entity.scene, entity.entity, *mesh);
+            EntityAPI::setModel(*entity.scene, entity.entity, *model);
         },
-        "remove_mesh",
+        "remove_model",
         [](LuaScriptEntity& entity) {
             if (entity.scene != nullptr) {
-                EntityAPI::removeMesh(*entity.scene, entity.entity);
+                EntityAPI::removeModel(*entity.scene, entity.entity);
             }
         },
         "has_camera",

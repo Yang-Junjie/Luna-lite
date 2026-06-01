@@ -246,10 +246,10 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
         return;
     }
 
-    if (payload.type == asset::AssetType::Mesh) {
+    if (payload.type == asset::AssetType::Model) {
         auto entity = m_scene.createEntity();
-        auto& mesh = m_scene.addComponent<scene::MeshComponent>(entity);
-        mesh.mesh = handle;
+        auto& model = m_scene.addComponent<scene::ModelComponent>(entity);
+        model.model = handle;
 
         if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
             auto& tag = m_scene.getComponent<scene::TagComponent>(entity);

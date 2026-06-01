@@ -1,6 +1,8 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/project/project_manager.h"
+#include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/mesh.h"
+#include "../LunaLite/renderer/interface/model.h"
 
 #include <filesystem>
 #include <iostream>
@@ -77,11 +79,30 @@ int main()
     }
 
     const auto* mesh = asset::AssetManager::get().getAsset<renderer::interface::Mesh>(handle);
-    if (mesh == nullptr || mesh->getVertices().empty() || mesh->getIndices().empty()) {
+    if (mesh == nullptr || mesh->getSubMeshes().empty()) {
         std::cerr << "Failed to load mesh through AssetManager.\n";
         return 1;
     }
+    const auto& submesh = mesh->getSubMeshes().front();
+    if (submesh.getVertices().empty() || submesh.getIndices().empty()) {
+        std::cerr << "Failed to load submesh geometry through AssetManager.\n";
+        return 1;
+    }
 
-    std::cout << "AssetManager imported and loaded a mesh asset.\n";
+    const auto materialHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube_Default.lunamat");
+    const auto* material = asset::AssetManager::get().getAsset<renderer::interface::Material>(materialHandle);
+    if (material == nullptr || material->albedo.r < 0.7f) {
+        std::cerr << "Failed to load generated material through AssetManager.\n";
+        return 1;
+    }
+
+    const auto modelHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube.lunamodel");
+    const auto* model = asset::AssetManager::get().getAsset<renderer::interface::Model>(modelHandle);
+    if (model == nullptr || model->getMeshes().empty() || model->getMeshes().front().materials.empty()) {
+        std::cerr << "Failed to load model through AssetManager.\n";
+        return 1;
+    }
+
+    std::cout << "AssetManager imported and loaded mesh, material, and model assets.\n";
     return 0;
 }

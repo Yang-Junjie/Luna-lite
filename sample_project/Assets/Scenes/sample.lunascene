@@ -49,8 +49,8 @@ Entities:
         - 4.7
         - 0.3
         - 5.2
-    MeshComponent:
-      Mesh: 12712907297239299619
+    ModelComponent:
+      Model: 12712907297239299620
   - Entity: 1
     TagComponent:
       Tag: stanford-bunny
@@ -67,8 +67,8 @@ Entities:
         - 8
         - 8
         - 8
-    MeshComponent:
-      Mesh: 15330008245417503353
+    ModelComponent:
+      Model: 15330008245417503354
     ScriptComponent:
       Scripts:
         - Script: 18087706206740559173

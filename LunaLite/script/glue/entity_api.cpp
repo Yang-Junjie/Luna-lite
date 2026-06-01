@@ -122,37 +122,37 @@ void EntityAPI::setScale(scene::Scene& scene, scene::Entity entity, const glm::v
     scene.getComponent<scene::TransformComponent>(entity).scale = value;
 }
 
-bool EntityAPI::hasMesh(scene::Scene& scene, scene::Entity entity)
+bool EntityAPI::hasModel(scene::Scene& scene, scene::Entity entity)
 {
-    return scene.isValidEntity(entity) && scene.hasComponent<scene::MeshComponent>(entity);
+    return scene.isValidEntity(entity) && scene.hasComponent<scene::ModelComponent>(entity);
 }
 
-asset::AssetHandle EntityAPI::getMesh(scene::Scene& scene, scene::Entity entity)
+asset::AssetHandle EntityAPI::getModel(scene::Scene& scene, scene::Entity entity)
 {
-    if (!hasMesh(scene, entity)) {
+    if (!hasModel(scene, entity)) {
         return asset::AssetHandle{0};
     }
 
-    return scene.getComponent<scene::MeshComponent>(entity).mesh;
+    return scene.getComponent<scene::ModelComponent>(entity).model;
 }
 
-void EntityAPI::setMesh(scene::Scene& scene, scene::Entity entity, asset::AssetHandle mesh)
+void EntityAPI::setModel(scene::Scene& scene, scene::Entity entity, asset::AssetHandle model)
 {
     if (!scene.isValidEntity(entity)) {
         return;
     }
 
-    if (!scene.hasComponent<scene::MeshComponent>(entity)) {
-        scene.addComponent<scene::MeshComponent>(entity);
+    if (!scene.hasComponent<scene::ModelComponent>(entity)) {
+        scene.addComponent<scene::ModelComponent>(entity);
     }
 
-    scene.getComponent<scene::MeshComponent>(entity).mesh = mesh;
+    scene.getComponent<scene::ModelComponent>(entity).model = model;
 }
 
-void EntityAPI::removeMesh(scene::Scene& scene, scene::Entity entity)
+void EntityAPI::removeModel(scene::Scene& scene, scene::Entity entity)
 {
-    if (hasMesh(scene, entity)) {
-        scene.removeComponent<scene::MeshComponent>(entity);
+    if (hasModel(scene, entity)) {
+        scene.removeComponent<scene::ModelComponent>(entity);
     }
 }
 

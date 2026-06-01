@@ -1,8 +1,12 @@
 #include "../core/log.h"
 #include "../project/project_manager.h"
 #include "asset_manager.h"
+#include "material_asset_importer.h"
+#include "material_asset_loader.h"
 #include "mesh_asset_importer.h"
 #include "mesh_asset_loader.h"
+#include "model_asset_importer.h"
+#include "model_asset_loader.h"
 #include "script_asset_importer.h"
 
 #include <optional>
@@ -28,6 +32,10 @@ bool AssetManager::loadProjectAssets()
 
     if (!std::filesystem::exists(assetsRoot)) {
         LUNA_CORE_ERROR("Failed to load project assets: '{}' does not exist", assetsRoot.string());
+        return false;
+    }
+
+    if (!scanAssetsDirectory(assetsRoot)) {
         return false;
     }
 
@@ -105,6 +113,8 @@ void AssetManager::registerDefaultImporters()
     }
 
     m_importers.push_back(std::make_unique<MeshAssetImporter>());
+    m_importers.push_back(std::make_unique<MaterialAssetImporter>());
+    m_importers.push_back(std::make_unique<ModelAssetImporter>());
     m_importers.push_back(std::make_unique<ScriptAssetImporter>());
 }
 
@@ -157,6 +167,9 @@ bool AssetManager::importIfNeeded(const std::filesystem::path& assetPath)
     AssetMetadata metadata;
     if (std::filesystem::exists(metaPath)) {
         metadata = Importer::deserializeMetadata(metaPath);
+        if (metadata.Type == AssetType::Mesh) {
+            metadata = importer->import(assetPath);
+        }
     } else {
         metadata = importer->import(assetPath);
     }
@@ -172,6 +185,12 @@ bool AssetManager::registerMetadata(const AssetMetadata& metadata)
     }
 
     if (m_metadata_registry.contains(metadata.Handle)) {
+        const auto& existing = m_metadata_registry.at(metadata.Handle);
+        if (existing.Type == metadata.Type && existing.FilePath.lexically_normal().generic_string() ==
+                                                  metadata.FilePath.lexically_normal().generic_string()) {
+            return true;
+        }
+
         LUNA_CORE_ERROR("Failed to register asset metadata '{}': duplicate handle {}",
                         metadata.FilePath.string(),
                         metadata.Handle.toString());
@@ -207,6 +226,20 @@ bool AssetManager::loadAsset(const AssetMetadata& metadata)
                 return false;
             }
             return AssetDatabase::get().add(mesh).isValid();
+        }
+        case AssetType::Material: {
+            auto material = MaterialAssetLoader::load(metadata);
+            if (!material) {
+                return false;
+            }
+            return AssetDatabase::get().add(material).isValid();
+        }
+        case AssetType::Model: {
+            auto model = ModelAssetLoader::load(metadata);
+            if (!model) {
+                return false;
+            }
+            return AssetDatabase::get().add(model).isValid();
         }
         case AssetType::Script:
             return true;
