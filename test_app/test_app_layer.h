@@ -2,10 +2,10 @@
 #include "../LunaLite/core/layer.h"
 #include "../LunaLite/scene/scene.h"
 
-namespace lunalite::native_app {
-class NativeAppLayer final : public core::Layer {
+namespace lunalite::test_app {
+class TestAppLayer final : public core::Layer {
 public:
-    NativeAppLayer();
+    TestAppLayer();
 
     void onAttach() override;
     void onRender() override;
@@ -13,4 +13,4 @@ public:
 private:
     scene::Scene m_scene;
 };
-} // namespace lunalite::native_app
+} // namespace lunalite::test_app

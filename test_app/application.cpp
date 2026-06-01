@@ -1,5 +1,5 @@
 #include "../LunaLite/core/application.h"
-#include "native_app_layer.h"
+#include "test_app_layer.h"
 
 #include <memory>
 
@@ -11,7 +11,7 @@ Application* createApplication(int argc, char** argv)
     static_cast<void>(argv);
 
     ApplicationCreateInfo info;
-    info.name = "LunaLite Native App";
+    info.name = "LunaLite Test App";
     info.width = 1'280;
     info.height = 720;
     info.backend = rhi::BackendType::OpenGL;
@@ -21,7 +21,7 @@ Application* createApplication(int argc, char** argv)
     info.present_scene_to_swapchain = true;
 
     auto* app = new Application(info);
-    app->pushLayer(std::make_unique<native_app::NativeAppLayer>());
+    app->pushLayer(std::make_unique<test_app::TestAppLayer>());
 
     return app;
 }

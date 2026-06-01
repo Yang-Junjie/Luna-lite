@@ -4,14 +4,14 @@
 #include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
-#include "native_app_layer.h"
+#include "test_app_layer.h"
 
 #include <cstdint>
 
 #include <memory>
 #include <vector>
 
-namespace lunalite::native_app {
+namespace lunalite::test_app {
 namespace {
 renderer::interface::Vertex makeVertex(const glm::vec3& position, const glm::vec3& color)
 {
@@ -33,16 +33,16 @@ asset::AssetHandle createTriangleMesh()
     mesh->setIndices(std::vector<uint32_t>{0, 1, 2});
 
     const auto handle = asset::AssetDatabase::get().add(mesh);
-    LUNA_ASSERT(handle.isValid(), "Failed to register native triangle mesh.");
+    LUNA_ASSERT(handle.isValid(), "Failed to register test triangle mesh.");
     return handle;
 }
 } // namespace
 
-NativeAppLayer::NativeAppLayer()
-    : Layer("NativeAppLayer")
+TestAppLayer::TestAppLayer()
+    : Layer("TestAppLayer")
 {}
 
-void NativeAppLayer::onAttach()
+void TestAppLayer::onAttach()
 {
     const auto triangleMesh = createTriangleMesh();
 
@@ -65,8 +65,8 @@ void NativeAppLayer::onAttach()
     lightComponent.diffuse = {0.9f, 0.9f, 0.9f};
 }
 
-void NativeAppLayer::onRender()
+void TestAppLayer::onRender()
 {
     core::Application::get().getSceneRenderer().onRenderRuntime(m_scene);
 }
-} // namespace lunalite::native_app
+} // namespace lunalite::test_app
