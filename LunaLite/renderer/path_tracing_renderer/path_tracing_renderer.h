@@ -19,6 +19,7 @@ public:
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
     void setSceneLighting(const interface::SceneLighting& lighting) override;
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
+    void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
     const interface::FrameImage& getFrameImage() const override;
 
 private:

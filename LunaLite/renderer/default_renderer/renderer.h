@@ -21,6 +21,7 @@ public:
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
     void setSceneLighting(const interface::SceneLighting& lighting) override;
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
+    void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
     const interface::FrameImage& getFrameImage() const override;
 
     struct alignas(16) FrameUniforms {
@@ -100,9 +101,11 @@ private:
     rhi::PipelineLayoutHandle m_lighting_pipeline_layout{};
     rhi::PipelineHandle m_geometry_pipeline{};
     rhi::PipelineHandle m_lighting_pipeline{};
+    rhi::PipelineHandle m_line_pipeline{};
 
     rhi::BufferHandle m_frameUniformBuffer{};
     rhi::BufferHandle m_objectUniformBuffer{};
+    rhi::BufferHandle m_line_vertex_buffer{};
     rhi::BindGroupHandle m_geometry_bind_group{};
     rhi::SamplerHandle m_gbuffer_sampler{};
     GBuffer m_gbuffer{};

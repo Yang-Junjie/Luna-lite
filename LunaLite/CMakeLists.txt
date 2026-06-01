@@ -3,9 +3,10 @@ set(TINYRHI_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(TinyRHI)
 
 add_library(LunaLiteRenderer
-    renderer/controller/renderer_controller.cpp
+    renderer/debug_renderer.cpp
     renderer/default_renderer/renderer.cpp
-    renderer/frame_presenter/rhi_frame_presenter.cpp
+    renderer/renderer_controller.cpp
+    renderer/rhi_frame_presenter.cpp
 )
 
 target_link_libraries(LunaLiteRenderer

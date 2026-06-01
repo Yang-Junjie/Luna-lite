@@ -118,6 +118,31 @@ void SoftRasterizationRenderer::renderMesh(const interface::Mesh& mesh, const gl
     }
 }
 
+void SoftRasterizationRenderer::renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color)
+{
+    if (m_width == 0 || m_height == 0) {
+        return;
+    }
+
+    const glm::mat4 identity{1.0f};
+    const interface::Vertex v0{
+        .position = start,
+        .color = color,
+    };
+    const interface::Vertex v1{
+        .position = end,
+        .color = color,
+    };
+
+    ScreenVertex sv0;
+    ScreenVertex sv1;
+    if (!projectVertex(v0, identity, identity, sv0) || !projectVertex(v1, identity, identity, sv1)) {
+        return;
+    }
+
+    rasterizeLine(sv0, sv1);
+}
+
 const interface::FrameImage& SoftRasterizationRenderer::getFrameImage() const
 {
     return m_frame_image;
@@ -175,6 +200,30 @@ void SoftRasterizationRenderer::rasterizeTriangle(const ScreenVertex& v0,
             m_color_buffer[index] = color;
             m_depth_buffer[index] = depth;
         }
+    }
+}
+
+void SoftRasterizationRenderer::rasterizeLine(const ScreenVertex& v0, const ScreenVertex& v1)
+{
+    const auto delta = v1.position - v0.position;
+    const auto steps = std::max(1, static_cast<int32_t>(std::ceil(std::max(std::abs(delta.x), std::abs(delta.y)))));
+
+    for (int32_t i = 0; i <= steps; ++i) {
+        const auto t = static_cast<float>(i) / static_cast<float>(steps);
+        const auto position = v0.position + delta * t;
+        const auto x = static_cast<int32_t>(std::round(position.x));
+        const auto y = static_cast<int32_t>(std::round(position.y));
+        if (x < 0 || y < 0 || x >= static_cast<int32_t>(m_width) || y >= static_cast<int32_t>(m_height)) {
+            continue;
+        }
+
+        const auto index = pixelIndex(static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+        if (position.z >= m_depth_buffer[index]) {
+            continue;
+        }
+
+        m_color_buffer[index] = v0.color + (v1.color - v0.color) * t;
+        m_depth_buffer[index] = position.z;
     }
 }
 

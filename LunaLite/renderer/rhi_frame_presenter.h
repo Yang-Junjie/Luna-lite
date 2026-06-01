@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../interface/frame_image.h"
+#include "interface/frame_image.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
 

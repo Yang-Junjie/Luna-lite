@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../interface/frame_image.h"
-#include "../interface/renderer_kind.h"
+#include "interface/frame_image.h"
+#include "interface/renderer_kind.h"
 
 #include <cstdint>
 
@@ -10,7 +10,7 @@
 namespace lunalite::rhi {
 class Device;
 class Swapchain;
-}
+} // namespace lunalite::rhi
 
 namespace lunalite::renderer::interface {
 class Renderer;

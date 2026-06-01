@@ -18,6 +18,7 @@ public:
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
     void setSceneLighting(const interface::SceneLighting& lighting) override;
     void renderMesh(const interface::Mesh& mesh, const glm::mat4& transform) override;
+    void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
     const interface::FrameImage& getFrameImage() const override;
 
 private:
@@ -29,6 +30,7 @@ private:
     };
 
     void rasterizeTriangle(const ScreenVertex& v0, const ScreenVertex& v1, const ScreenVertex& v2);
+    void rasterizeLine(const ScreenVertex& v0, const ScreenVertex& v1);
     bool projectVertex(const interface::Vertex& vertex,
                        const glm::mat4& model,
                        const glm::mat4& normal_matrix,

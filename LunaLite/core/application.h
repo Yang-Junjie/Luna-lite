@@ -12,6 +12,7 @@
 #include <string>
 
 namespace lunalite::renderer {
+class DebugRenderer;
 class RHIFramePresenter;
 class RendererController;
 } // namespace lunalite::renderer
@@ -63,6 +64,7 @@ public:
     void switchRenderer(renderer::interface::RendererKind kind);
 
     scene::SceneRenderer& getSceneRenderer();
+    renderer::DebugRenderer& getDebugRenderer();
     imgui::ImGuiRenderer& getImGuiRenderer();
     const renderer::interface::FrameImage& getFrameImage() const;
 
@@ -89,6 +91,7 @@ private:
 
     std::unique_ptr<renderer::RendererController> m_renderer_controller;
     std::unique_ptr<renderer::RHIFramePresenter> m_frame_presenter;
+    std::unique_ptr<renderer::DebugRenderer> m_debug_renderer;
 
     std::unique_ptr<scene::SceneRenderer> m_scene_renderer;
     std::unique_ptr<imgui::ImGuiPlatform> m_imgui_platform;

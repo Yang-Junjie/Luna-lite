@@ -110,6 +110,9 @@ void PathTracingRenderer::renderMesh(const interface::Mesh& mesh, const glm::mat
         pushTriangle(i, i + 1, i + 2);
     }
 }
+
+void PathTracingRenderer::renderLine(const glm::vec3&, const glm::vec3&, const glm::vec3&) {}
+
 const interface::FrameImage& PathTracingRenderer::getFrameImage() const
 {
     return m_frame_image;

@@ -1,9 +1,8 @@
-#include "../default_renderer/renderer.h"
-#include "../interface/renderer.h"
-#include "../soft_rasterization_renderer/soft_rasterization_renderer.h"
+#include "../core/log.h"
+#include "default_renderer/renderer.h"
+#include "interface/renderer.h"
 #include "renderer_controller.h"
-
-#include "../../core/log.h"
+#include "soft_rasterization_renderer/soft_rasterization_renderer.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
 

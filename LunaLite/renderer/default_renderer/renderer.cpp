@@ -19,6 +19,11 @@ size_t growBufferCapacity(size_t current, size_t required)
     return capacity;
 }
 
+struct LineVertex {
+    glm::vec3 position{0.0f};
+    glm::vec3 color{1.0f};
+};
+
 constexpr const char* geometryVertexShaderSource = R"(
 #version 450 core
 
@@ -78,6 +83,65 @@ void main()
     gAlbedo = vec4(0.8, 0.65, 0.5, 1.0);
     gNormal = vec4(normalize(vNormal) * 0.5 + 0.5, 1.0);
     gMaterial = vec4(0.5, 0.5, 0.0, 1.0);
+}
+)";
+
+constexpr const char* lineVertexShaderSource = R"(
+#version 450 core
+
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec3 aColor;
+
+layout(std140, binding = 0) uniform FrameUniforms {
+    mat4 view;
+    mat4 projection;
+    vec3 cameraPos;
+    float _pad0;
+    vec3 lightDir;
+    float _pad1;
+    vec3 lightAmbient;
+    float _pad2;
+    vec3 lightDiffuse;
+    float _pad3;
+    vec3 lightSpecular;
+    float _pad4;
+    uint directionalLightCount;
+    float _pad5;
+    float _pad6;
+    float _pad7;
+    vec3 environmentAmbient;
+    float _pad8;
+};
+
+layout(std140, binding = 1) uniform ObjectUniforms {
+    mat4 model;
+    mat4 normalMatrix;
+};
+
+out vec3 vColor;
+
+void main()
+{
+    vColor = aColor;
+    gl_Position = projection * view * model * vec4(aPosition, 1.0);
+}
+)";
+
+constexpr const char* lineFragmentShaderSource = R"(
+#version 450 core
+
+in vec3 vColor;
+
+layout(location = 0) out vec4 gAlbedo;
+layout(location = 1) out vec4 gNormal;
+layout(location = 2) out vec4 gMaterial;
+
+void main()
+{
+    vec3 normal = vec3(0.0, 1.0, 0.0);
+    gAlbedo = vec4(vColor, 1.0);
+    gNormal = vec4(normal * 0.5 + 0.5, 1.0);
+    gMaterial = vec4(0.0, 0.0, 1.0, 1.0);
 }
 )";
 
@@ -143,6 +207,12 @@ void main()
     vec3 normal = normalize(texture(gNormalTexture, vUV).rgb * 2.0 - 1.0);
     vec3 material = texture(gMaterialTexture, vUV).rgb;
 
+    if (material.b > 0.5) {
+        vec3 unlitColor = pow(max(albedo, vec3(0.0)), vec3(1.0 / 2.2));
+        outColor = vec4(unlitColor, 1.0);
+        return;
+    }
+
     vec3 color = environmentAmbient * albedo;
     if (directionalLightCount > 0u) {
         vec3 L = normalize(-lightDir);
@@ -153,7 +223,6 @@ void main()
         color += ambient + diffuse;
     }
 
-    color += material.b * 0.0;
     color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
     outColor = vec4(color, 1.0);
 }
@@ -175,6 +244,16 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     const auto geometryFragmentShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
         .source = geometryFragmentShaderSource,
+    });
+
+    const auto lineVertexShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Vertex,
+        .source = lineVertexShaderSource,
+    });
+
+    const auto lineFragmentShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Fragment,
+        .source = lineFragmentShaderSource,
     });
 
     const auto lightingVertexShader = m_device->createShader(rhi::ShaderDesc{
@@ -286,6 +365,49 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                           },
                                   });
 
+    m_line_pipeline = m_device
+                          ->createPipeline(
+                              rhi::PipelineDesc{
+                                  .topology = rhi::PrimitiveTopology::Line,
+                                  .vertex_input =
+                                      rhi::VertexInputDesc{
+                                          .buffers =
+                                              {
+                                                  rhi::VertexBufferLayoutDesc{
+                                                      .binding = 0,
+                                                      .stride = sizeof(LineVertex),
+                                                      .attributes =
+                                                          {
+                                                              rhi::VertexAttributeDesc{
+                                                                  .location = 0,
+                                                                  .format = rhi::VertexFormat::Float3,
+                                                                  .offset = offsetof(LineVertex, position),
+                                                              },
+                                                              rhi::VertexAttributeDesc{
+                                                                  .location = 1,
+                                                                  .format = rhi::VertexFormat::Float3,
+                                                                  .offset = offsetof(LineVertex, color),
+                                                              },
+                                                          },
+                                                  },
+                                              },
+                                      },
+                                  .layout = m_geometry_pipeline_layout,
+                                  .vertex_shader = lineVertexShader,
+                                  .fragment_shader = lineFragmentShader,
+                                  .render_target_state =
+                                      rhi::RenderTargetState{
+                                          .color_targets =
+                                              {
+                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
+                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                                              },
+                                          .has_depth_stencil = true,
+                                          .depth_stencil_format = rhi::TextureFormat::Depth24Stencil8,
+                                      },
+                              });
+
     m_lighting_pipeline = m_device->createPipeline(rhi::PipelineDesc{
         .topology = rhi::PrimitiveTopology::Triangle,
         .vertex_input = rhi::VertexInputDesc{},
@@ -318,6 +440,14 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
         rhi::BufferDesc{
             .size = sizeof(ObjectUniforms),
             .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
+            .memory = rhi::MemoryUsage::CpuToGpu,
+        },
+        nullptr);
+
+    m_line_vertex_buffer = m_device->createBuffer(
+        rhi::BufferDesc{
+            .size = sizeof(LineVertex) * 2,
+            .usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::CopyDst,
             .memory = rhi::MemoryUsage::CpuToGpu,
         },
         nullptr);
@@ -358,6 +488,8 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
 
     LUNA_ASSERT(geometryVertexShader, "Failed to create geometry vertex shader.");
     LUNA_ASSERT(geometryFragmentShader, "Failed to create geometry fragment shader.");
+    LUNA_ASSERT(lineVertexShader, "Failed to create line vertex shader.");
+    LUNA_ASSERT(lineFragmentShader, "Failed to create line fragment shader.");
     LUNA_ASSERT(lightingVertexShader, "Failed to create lighting vertex shader.");
     LUNA_ASSERT(lightingFragmentShader, "Failed to create lighting fragment shader.");
     LUNA_ASSERT(m_geometry_bind_group_layout, "Failed to create geometry bind group layout.");
@@ -366,8 +498,10 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     LUNA_ASSERT(m_lighting_pipeline_layout, "Failed to create lighting pipeline layout.");
     LUNA_ASSERT(m_geometry_pipeline, "Failed to create geometry pipeline.");
     LUNA_ASSERT(m_lighting_pipeline, "Failed to create lighting pipeline.");
+    LUNA_ASSERT(m_line_pipeline, "Failed to create line pipeline.");
     LUNA_ASSERT(m_frameUniformBuffer, "Failed to create frame uniform buffer.");
     LUNA_ASSERT(m_objectUniformBuffer, "Failed to create object uniform buffer.");
+    LUNA_ASSERT(m_line_vertex_buffer, "Failed to create line vertex buffer.");
     LUNA_ASSERT(m_geometry_bind_group, "Failed to create geometry bind group.");
     LUNA_ASSERT(m_gbuffer_sampler, "Failed to create GBuffer sampler.");
     LUNA_CORE_DEBUG("Default renderer initialized");
@@ -694,6 +828,26 @@ void Renderer::renderMesh(const interface::Mesh& mesh, const glm::mat4& transfor
     }
 }
 
+void Renderer::renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color)
+{
+    const LineVertex vertices[] = {
+        LineVertex{.position = start, .color = color},
+        LineVertex{.position = end, .color = color},
+    };
+
+    flushFrameUniforms();
+
+    m_objectUniforms.model = glm::mat4{1.0f};
+    m_objectUniforms.normalMatrix = glm::mat4{1.0f};
+    m_device->updateBuffer(m_objectUniformBuffer, 0, &m_objectUniforms, sizeof(ObjectUniforms));
+    m_device->updateBuffer(m_line_vertex_buffer, 0, vertices, sizeof(vertices));
+
+    m_cmd->setPipeline(m_line_pipeline);
+    m_cmd->setBindGroup(0, m_geometry_bind_group);
+    m_cmd->setVertexBuffer(0, m_line_vertex_buffer);
+    m_cmd->draw(2);
+    m_cmd->setPipeline(m_geometry_pipeline);
+}
 
 const interface::FrameImage& Renderer::getFrameImage() const
 {

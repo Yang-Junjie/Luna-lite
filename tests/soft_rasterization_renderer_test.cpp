@@ -4,6 +4,9 @@
 #include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/renderer/soft_rasterization_renderer/soft_rasterization_renderer.h"
 
+#include <cstddef>
+#include <cstdint>
+
 #include <filesystem>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -76,6 +79,33 @@ int main()
         frame_image.color_space != renderer::interface::FrameImageColorSpace::SRGB || cpu_storage == nullptr ||
         cpu_storage->pixels == nullptr || cpu_storage->row_pitch != 512u * 4u) {
         std::cerr << "Soft rasterization renderer produced an invalid frame image.\n";
+        return 1;
+    }
+
+    renderer::SoftRasterizationRenderer lineRenderer(32, 32);
+    lineRenderer.beginFrame();
+    lineRenderer.setViewProjection(glm::mat4{1.0f}, glm::mat4{1.0f}, glm::vec3{0.0f});
+    lineRenderer.renderLine(glm::vec3{-0.8f, -0.8f, 0.0f}, glm::vec3{0.8f, 0.8f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f});
+    lineRenderer.endFrame();
+
+    const auto& line_frame_image = lineRenderer.getFrameImage();
+    const auto* line_cpu_storage = std::get_if<renderer::interface::CpuFrameStorage>(&line_frame_image.storage);
+    if (line_cpu_storage == nullptr || line_cpu_storage->pixels == nullptr) {
+        std::cerr << "Soft rasterization renderer produced an invalid line frame image.\n";
+        return 1;
+    }
+
+    bool has_line_pixel = false;
+    const auto* pixels = static_cast<const uint8_t*>(line_cpu_storage->pixels);
+    for (size_t i = 0; i < static_cast<size_t>(line_frame_image.width) * line_frame_image.height; ++i) {
+        const auto offset = i * 4;
+        if (pixels[offset] > 180 && pixels[offset + 1] < 120 && pixels[offset + 2] < 120) {
+            has_line_pixel = true;
+            break;
+        }
+    }
+    if (!has_line_pixel) {
+        std::cerr << "Soft rasterization renderer did not draw a test line.\n";
         return 1;
     }
 

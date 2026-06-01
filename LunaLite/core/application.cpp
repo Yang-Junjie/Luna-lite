@@ -1,7 +1,8 @@
 #include "../imgui/imgui_platform.h"
 #include "../imgui/imgui_renderer.h"
-#include "../renderer/controller/renderer_controller.h"
-#include "../renderer/frame_presenter/rhi_frame_presenter.h"
+#include "../renderer/debug_renderer.h"
+#include "../renderer/renderer_controller.h"
+#include "../renderer/rhi_frame_presenter.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
 #include "application_event.h"
@@ -68,6 +69,7 @@ void Application::run()
     LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
     LUNA_ASSERT(m_frame_presenter, "Frame presenter is null.");
     LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
+    LUNA_ASSERT(m_debug_renderer, "Debug renderer is null.");
 
     LUNA_CORE_INFO("Application main loop started");
     auto lastFrameTime = std::chrono::steady_clock::now();
@@ -83,13 +85,13 @@ void Application::run()
             layer->onUpdate(deltaTime.count());
         }
 
-        m_scene_renderer->beginFrame();
+        m_renderer_controller->getRenderer().beginFrame();
 
         for (auto& layer : m_layer_stack) {
             layer->onRender();
         }
 
-        m_scene_renderer->endFrame();
+        m_renderer_controller->getRenderer().endFrame();
 
         if (m_imgui_renderer) {
             if (m_present_scene_to_swapchain) {
@@ -103,7 +105,7 @@ void Application::run()
             }
 
             m_imgui_renderer->endFrame(m_present_scene_to_swapchain ? imgui::ImGuiRenderMode::OverlaySwapchain
-                                                                     : imgui::ImGuiRenderMode::ClearSwapchain);
+                                                                    : imgui::ImGuiRenderMode::ClearSwapchain);
         } else {
             m_frame_presenter->present(m_renderer_controller->getFrameImage());
         }
@@ -134,15 +136,23 @@ void Application::switchRenderer(renderer::interface::RendererKind kind)
 {
     LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
     LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
+    LUNA_ASSERT(m_debug_renderer, "Debug renderer is null.");
 
     m_renderer_controller->switchRenderer(kind);
     m_scene_renderer->setRenderer(m_renderer_controller->getRenderer());
+    m_debug_renderer->setRenderer(m_renderer_controller->getRenderer());
 }
 
 scene::SceneRenderer& Application::getSceneRenderer()
 {
     LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
     return *m_scene_renderer;
+}
+
+renderer::DebugRenderer& Application::getDebugRenderer()
+{
+    LUNA_ASSERT(m_debug_renderer, "Debug renderer is null.");
+    return *m_debug_renderer;
 }
 
 const renderer::interface::FrameImage& Application::getFrameImage() const
@@ -209,6 +219,7 @@ void Application::initialize(const ApplicationCreateInfo& info)
     m_renderer_controller = std::make_unique<renderer::RendererController>(
         *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
+    m_debug_renderer = std::make_unique<renderer::DebugRenderer>(m_renderer_controller->getRenderer());
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
     m_scene_renderer->setViewportSize(info.width, info.height);
 
@@ -257,6 +268,7 @@ void Application::shutdown()
     LUNA_CORE_INFO("Application shutdown started");
 
     shutdownImGui();
+    m_debug_renderer.reset();
     m_scene_renderer.reset();
     m_frame_presenter.reset();
     m_renderer_controller.reset();

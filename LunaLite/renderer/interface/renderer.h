@@ -33,6 +33,8 @@ public:
 
     virtual void renderMesh(const Mesh& mesh, const glm::mat4& transform) = 0;
 
+    virtual void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) = 0;
+
     virtual const FrameImage& getFrameImage() const = 0;
 };
 } // namespace lunalite::renderer::interface
