@@ -22,6 +22,8 @@ int main()
     using namespace lunalite;
 
     scene::Scene scene;
+    scene.getSettings().environment_map = asset::AssetHandle{126};
+    scene.getSettings().environment_intensity = 2.0f;
     {
         auto entity = scene.createEntity();
         auto& transform = scene.getComponent<scene::TransformComponent>(entity);
@@ -47,7 +49,8 @@ int main()
         auto entity = scene.createEntity();
         auto& light = scene.addComponent<scene::DirectionalLightComponent>(entity);
         light.direction = {0.0f, -1.0f, 0.0f};
-        light.diffuse = {0.7f, 0.8f, 0.9f};
+        light.color = {0.7f, 0.8f, 0.9f};
+        light.intensity = 3.0f;
     }
 
     const auto scenePath = std::filesystem::current_path() / "build" / "scene_serializer_test.lunascene";
@@ -89,6 +92,22 @@ int main()
     const auto lightView = loadedScene.getRegistry().view<const scene::DirectionalLightComponent>();
     if (countView(lightView) != 1) {
         std::cerr << "Unexpected light entity count.\n";
+        return 1;
+    }
+
+    if (loadedScene.getSettings().environment_map != asset::AssetHandle{126}) {
+        std::cerr << "Unexpected scene environment map.\n";
+        return 1;
+    }
+
+    if (loadedScene.getSettings().environment_intensity != 2.0f) {
+        std::cerr << "Unexpected scene environment intensity.\n";
+        return 1;
+    }
+
+    const auto& loadedLight = lightView.get<const scene::DirectionalLightComponent>(*lightView.begin());
+    if (loadedLight.color != glm::vec3{0.7f, 0.8f, 0.9f} || loadedLight.intensity != 3.0f) {
+        std::cerr << "Unexpected directional light parameters.\n";
         return 1;
     }
 

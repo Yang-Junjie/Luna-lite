@@ -10,23 +10,17 @@ layout(std140, binding = 0) uniform FrameUniforms {
     float _pad0;
     vec3 lightDir;
     float _pad1;
-    vec3 lightAmbient;
+    vec3 lightRadiance;
     float _pad2;
-    vec3 lightDiffuse;
-    float _pad3;
-    vec3 lightSpecular;
-    float _pad4;
     uint directionalLightCount;
+    float environmentIntensity;
+    float _pad3;
+    float _pad4;
+    mat4 inverseViewProjection;
+    float exposure;
     float _pad5;
     float _pad6;
     float _pad7;
-    vec3 environmentAmbient;
-    float _pad8;
-    mat4 inverseViewProjection;
-    float exposure;
-    float _pad9;
-    float _pad10;
-    float _pad11;
 };
 
 layout(std140, binding = 1) uniform ObjectUniforms {

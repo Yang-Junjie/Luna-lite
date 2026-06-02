@@ -3,7 +3,9 @@
 #include "texture_asset_loader.h"
 
 #include <cstdint>
+#include <cstring>
 
+#include <algorithm>
 #include <filesystem>
 #include <stb_image.h>
 #include <string>
@@ -90,6 +92,15 @@ renderer::interface::TextureImportSettings readTextureImportSettings(const YAML:
     settings.sampler.address_w = readTextureAddressMode(sampler["AddressW"], settings.sampler.address_w);
     return settings;
 }
+
+bool isHdrTexture(const std::filesystem::path& path)
+{
+    auto extension = path.extension().string();
+    std::ranges::transform(extension, extension.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return extension == ".hdr" || stbi_is_hdr(path.string().c_str()) != 0;
+}
 } // namespace
 
 std::shared_ptr<renderer::interface::Texture> TextureAssetLoader::load(const AssetMetadata& metadata)
@@ -101,6 +112,37 @@ std::shared_ptr<renderer::interface::Texture> TextureAssetLoader::load(const Ass
     int width = 0;
     int height = 0;
     int channels = 0;
+    auto settings = readTextureImportSettings(metadata.SpecializedConfig);
+    auto texture = std::make_shared<renderer::interface::Texture>();
+    texture->handle = metadata.Handle;
+
+    if (isHdrTexture(path)) {
+        float* rawPixels = stbi_loadf(path.string().c_str(), &width, &height, &channels, 4);
+        if (rawPixels == nullptr) {
+            LUNA_CORE_ERROR("Failed to load HDR texture '{}': {}", path.string(), stbi_failure_reason());
+            return nullptr;
+        }
+
+        if (width <= 0 || height <= 0) {
+            stbi_image_free(rawPixels);
+            LUNA_CORE_ERROR("Failed to load HDR texture '{}': invalid dimensions {}x{}", path.string(), width, height);
+            return nullptr;
+        }
+
+        const auto byteCount = static_cast<size_t>(width) * static_cast<size_t>(height) * 4 * sizeof(float);
+        std::vector<uint8_t> pixels(byteCount);
+        std::memcpy(pixels.data(), rawPixels, byteCount);
+        stbi_image_free(rawPixels);
+
+        settings.color_space = renderer::interface::TextureColorSpace::Linear;
+        texture->setImportSettings(settings);
+        texture->setPixels(static_cast<uint32_t>(width),
+                           static_cast<uint32_t>(height),
+                           renderer::interface::TextureFormat::RGBA32F,
+                           std::move(pixels));
+        return texture;
+    }
+
     stbi_uc* rawPixels = stbi_load(path.string().c_str(), &width, &height, &channels, 4);
     if (rawPixels == nullptr) {
         LUNA_CORE_ERROR("Failed to load texture '{}': {}", path.string(), stbi_failure_reason());
@@ -117,9 +159,7 @@ std::shared_ptr<renderer::interface::Texture> TextureAssetLoader::load(const Ass
     std::vector<uint8_t> pixels(rawPixels, rawPixels + pixelCount);
     stbi_image_free(rawPixels);
 
-    auto texture = std::make_shared<renderer::interface::Texture>();
-    texture->handle = metadata.Handle;
-    texture->setImportSettings(readTextureImportSettings(metadata.SpecializedConfig));
+    texture->setImportSettings(settings);
     texture->setPixels(static_cast<uint32_t>(width),
                        static_cast<uint32_t>(height),
                        renderer::interface::TextureFormat::RGBA8_UNorm,

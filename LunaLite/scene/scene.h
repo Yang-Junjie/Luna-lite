@@ -1,4 +1,5 @@
 #pragma once
+#include "../asset/asset.h"
 #include "../core/timestep.h"
 #include "../script/script_runtime.h"
 #include "entity.h"
@@ -9,6 +10,11 @@
 #include <vector>
 
 namespace lunalite::scene {
+struct SceneSettings {
+    asset::AssetHandle environment_map{0};
+    float environment_intensity{1.0f};
+};
+
 class Scene {
 public:
     Scene() = default;
@@ -23,6 +29,16 @@ public:
     void onRuntimeStop();
     bool isValidEntity(Entity entity) const;
     std::vector<Entity> getEntities() const;
+
+    SceneSettings& getSettings()
+    {
+        return m_settings;
+    }
+
+    const SceneSettings& getSettings() const
+    {
+        return m_settings;
+    }
 
     template <typename T, typename... Args> T& addComponent(Entity entity, Args&&... args)
     {
@@ -60,6 +76,7 @@ public:
     }
 
 private:
+    SceneSettings m_settings;
     entt::registry m_registry;
     std::unique_ptr<script::ScriptRuntime> m_script_runtime;
 };

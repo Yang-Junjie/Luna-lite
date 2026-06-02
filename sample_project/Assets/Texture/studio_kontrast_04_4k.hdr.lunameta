@@ -1,0 +1,16 @@
+Asset:
+  Handle: 5457211189259185584
+  Type: Texture
+  Name: studio_kontrast_04_4k
+  FilePath: Assets/Texture/studio_kontrast_04_4k.hdr
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: Linear
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: ClampToEdge
+      AddressW: ClampToEdge

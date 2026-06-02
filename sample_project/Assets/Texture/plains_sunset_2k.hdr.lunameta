@@ -1,0 +1,16 @@
+Asset:
+  Handle: 3958279366595773555
+  Type: Texture
+  Name: plains_sunset_2k
+  FilePath: Assets/Texture/plains_sunset_2k.hdr
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: Linear
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: ClampToEdge
+      AddressW: ClampToEdge

@@ -60,6 +60,8 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
 {
     YAML::Node root;
     root["Scene"] = scene_path.stem().string();
+    root["Settings"]["EnvironmentMap"] = static_cast<uint64_t>(scene.getSettings().environment_map);
+    root["Settings"]["EnvironmentIntensity"] = scene.getSettings().environment_intensity;
 
     YAML::Node entities(YAML::NodeType::Sequence);
     const auto& registry = scene.getRegistry();
@@ -144,9 +146,8 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             const auto& light = registry.get<DirectionalLightComponent>(entity);
             YAML::Node node;
             node["Direction"] = writeVec3(light.direction);
-            node["Ambient"] = writeVec3(light.ambient);
-            node["Diffuse"] = writeVec3(light.diffuse);
-            node["Specular"] = writeVec3(light.specular);
+            node["Color"] = writeVec3(light.color);
+            node["Intensity"] = light.intensity;
             serializedEntity["DirectionalLightComponent"] = node;
         }
 
@@ -196,6 +197,11 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
         }
 
         scene.clear();
+        if (const auto settingsNode = root["Settings"]) {
+            scene.getSettings().environment_map = asset::AssetHandle{settingsNode["EnvironmentMap"].as<uint64_t>(0)};
+            scene.getSettings().environment_intensity = settingsNode["EnvironmentIntensity"].as<float>(1.0f);
+        }
+
         for (const auto& serializedEntity : entities) {
             const auto entity = scene.createEntity();
 
@@ -245,9 +251,8 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             if (const auto lightNode = serializedEntity["DirectionalLightComponent"]) {
                 auto& light = scene.addComponent<DirectionalLightComponent>(entity);
                 light.direction = readVec3(lightNode["Direction"], glm::vec3{0.0f, -1.0f, 0.0f});
-                light.ambient = readVec3(lightNode["Ambient"], glm::vec3{0.05f});
-                light.diffuse = readVec3(lightNode["Diffuse"], glm::vec3{0.8f});
-                light.specular = readVec3(lightNode["Specular"], glm::vec3{1.0f});
+                light.color = readVec3(lightNode["Color"], glm::vec3{1.0f});
+                light.intensity = lightNode["Intensity"].as<float>(1.0f);
             }
         }
 

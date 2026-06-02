@@ -66,7 +66,7 @@ void main()
     float occlusion = mix(1.0, clamp(occlusionSample, 0.0, 1.0), occlusionStrength);
     vec3 normal = applyNormalMap(vNormal, vWorldPos, vUV);
 
-    gAlbedo = vec4(albedo, materialAlbedo.a * albedoSample.a);
+    gAlbedo = vec4(albedo, 1.0);
     gNormal = vec4(normal * 0.5 + 0.5, 1.0);
     gMaterial = vec4(metallic, roughness, materialShadingModel == 1u ? 1.0 : 0.0, occlusion);
     gEmission = vec4(emission, 1.0);

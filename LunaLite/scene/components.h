@@ -54,8 +54,7 @@ struct CameraComponent {
 
 struct DirectionalLightComponent {
     glm::vec3 direction{0.0f, -1.0f, 0.0f};
-    glm::vec3 ambient{0.05f, 0.05f, 0.05f};
-    glm::vec3 diffuse{0.8f, 0.8f, 0.8f};
-    glm::vec3 specular{1.0f, 1.0f, 1.0f};
+    glm::vec3 color{1.0f};
+    float intensity{1.0f};
 };
 } // namespace lunalite::scene

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../LunaLite/core/layer.h"
+#include "../LunaLite/renderer/interface/renderer.h"
 #include "../LunaLite/scene/scene.h"
 #include "editor_camera.h"
 #include "panels/content_browser_panel.h"
@@ -8,6 +9,7 @@
 #include "panels/hierarchy_panel.h"
 #include "panels/inspector_panel.h"
 #include "panels/material_editor_panel.h"
+#include "panels/scene_panel.h"
 
 #include <filesystem>
 
@@ -53,6 +55,7 @@ private:
 
     HierarchyPanel m_hierarchy_panel;
     InspectorPanel m_inspector_panel;
+    ScenePanel m_scene_panel;
     MaterialEditorPanel m_material_editor_panel;
     ContentBrowserPanel m_content_browser_panel;
     SceneState m_scene_state{SceneState::Edit};

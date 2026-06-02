@@ -4,6 +4,7 @@
 #include "../interface/texture.h"
 #include "renderer.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -16,6 +17,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace lunalite::renderer {
 namespace {
@@ -77,10 +79,27 @@ uint32_t fullMipLevelCount(uint32_t width, uint32_t height)
     return levels;
 }
 
-rhi::TextureFormat toRHITextureFormat(const interface::TextureImportSettings& settings)
+rhi::TextureFormat toRHITextureFormat(interface::TextureFormat format, const interface::TextureImportSettings& settings)
 {
-    return settings.color_space == interface::TextureColorSpace::SRGB ? rhi::TextureFormat::RGBA8_SRGB
-                                                                      : rhi::TextureFormat::RGBA8_UNorm;
+    switch (format) {
+        case interface::TextureFormat::RGBA32F:
+            return rhi::TextureFormat::RGBA32F;
+        case interface::TextureFormat::RGBA8_UNorm:
+        default:
+            return settings.color_space == interface::TextureColorSpace::SRGB ? rhi::TextureFormat::RGBA8_SRGB
+                                                                              : rhi::TextureFormat::RGBA8_UNorm;
+    }
+}
+
+size_t textureBytesPerPixel(interface::TextureFormat format)
+{
+    switch (format) {
+        case interface::TextureFormat::RGBA32F:
+            return sizeof(float) * 4;
+        case interface::TextureFormat::RGBA8_UNorm:
+        default:
+            return 4;
+    }
 }
 
 rhi::FilterMode toRHIFilter(interface::TextureFilter filter)
@@ -157,6 +176,274 @@ rhi::BindGroupEntry combinedTextureEntry(uint32_t binding, rhi::TextureViewHandl
     };
 }
 
+glm::vec3 cubemapDirection(uint32_t face, uint32_t x, uint32_t y, uint32_t size)
+{
+    const float u = (2.0f * (static_cast<float>(x) + 0.5f) / static_cast<float>(size)) - 1.0f;
+    const float v = (2.0f * (static_cast<float>(y) + 0.5f) / static_cast<float>(size)) - 1.0f;
+
+    switch (face) {
+        case 0:
+            return glm::normalize(glm::vec3{1.0f, -v, -u});
+        case 1:
+            return glm::normalize(glm::vec3{-1.0f, -v, u});
+        case 2:
+            return glm::normalize(glm::vec3{u, 1.0f, v});
+        case 3:
+            return glm::normalize(glm::vec3{u, -1.0f, -v});
+        case 4:
+            return glm::normalize(glm::vec3{u, -v, 1.0f});
+        case 5:
+        default:
+            return glm::normalize(glm::vec3{-u, -v, -1.0f});
+    }
+}
+
+void sampleEquirectangular(const float* pixels, uint32_t width, uint32_t height, const glm::vec3& direction, float* out)
+{
+    constexpr float pi = 3.14159265359f;
+    const float theta = std::atan2(direction.z, direction.x);
+    const float phi = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
+    float u = theta / (2.0f * pi) + 0.5f;
+    float v = 0.5f - phi / pi;
+
+    u -= std::floor(u);
+    v = std::clamp(v, 0.0f, 1.0f);
+
+    const auto x =
+        static_cast<uint32_t>(std::clamp(u * static_cast<float>(width - 1), 0.0f, static_cast<float>(width - 1)));
+    const auto y =
+        static_cast<uint32_t>(std::clamp(v * static_cast<float>(height - 1), 0.0f, static_cast<float>(height - 1)));
+    const auto* source = pixels + (static_cast<size_t>(y) * width + x) * 4;
+    out[0] = source[0];
+    out[1] = source[1];
+    out[2] = source[2];
+    out[3] = source[3];
+}
+
+std::vector<float> makeCubemapFace(const float* pixels, uint32_t width, uint32_t height, uint32_t face, uint32_t size)
+{
+    std::vector<float> facePixels(static_cast<size_t>(size) * static_cast<size_t>(size) * 4);
+    for (uint32_t y = 0; y < size; ++y) {
+        for (uint32_t x = 0; x < size; ++x) {
+            sampleEquirectangular(pixels,
+                                  width,
+                                  height,
+                                  cubemapDirection(face, x, y, size),
+                                  &facePixels[(static_cast<size_t>(y) * size + x) * 4]);
+        }
+    }
+    return facePixels;
+}
+
+constexpr float Pi = 3.14159265359f;
+constexpr uint32_t IrradianceCubeSize = 32;
+constexpr uint32_t IrradianceThetaSamples = 16;
+constexpr uint32_t IrradiancePhiSamples = 32;
+constexpr uint32_t PrefilterCubeSize = 128;
+constexpr uint32_t PrefilterSampleCount = 128;
+constexpr uint32_t BrdfLutSize = 128;
+constexpr uint32_t BrdfSampleCount = 256;
+
+glm::vec3 sampleEquirectangularColor(const float* pixels, uint32_t width, uint32_t height, const glm::vec3& direction)
+{
+    const float theta = std::atan2(direction.z, direction.x);
+    const float phi = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
+    float u = theta / (2.0f * Pi) + 0.5f;
+    float v = 0.5f - phi / Pi;
+
+    u -= std::floor(u);
+    v = std::clamp(v, 0.0f, 1.0f);
+
+    const float x = u * static_cast<float>(width - 1);
+    const float y = v * static_cast<float>(height - 1);
+    const auto x0 = static_cast<uint32_t>(std::floor(x));
+    const auto y0 = static_cast<uint32_t>(std::floor(y));
+    const uint32_t x1 = (x0 + 1) % width;
+    const uint32_t y1 = std::min(y0 + 1, height - 1);
+    const float tx = x - static_cast<float>(x0);
+    const float ty = y - static_cast<float>(y0);
+
+    const auto fetch = [&](uint32_t sx, uint32_t sy) {
+        const auto* source = pixels + (static_cast<size_t>(sy) * width + sx) * 4;
+        return glm::vec3{source[0], source[1], source[2]};
+    };
+
+    const auto top = glm::mix(fetch(x0, y0), fetch(x1, y0), tx);
+    const auto bottom = glm::mix(fetch(x0, y1), fetch(x1, y1), tx);
+    return glm::mix(top, bottom, ty);
+}
+
+void basisFromNormal(const glm::vec3& normal, glm::vec3& right, glm::vec3& up)
+{
+    up = std::abs(normal.y) < 0.999f ? glm::vec3{0.0f, 1.0f, 0.0f} : glm::vec3{1.0f, 0.0f, 0.0f};
+    right = glm::normalize(glm::cross(up, normal));
+    up = glm::normalize(glm::cross(normal, right));
+}
+
+float radicalInverseVdC(uint32_t bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55'55'55'55u) << 1u) | ((bits & 0xAA'AA'AA'AAu) >> 1u);
+    bits = ((bits & 0x33'33'33'33u) << 2u) | ((bits & 0xCC'CC'CC'CCu) >> 2u);
+    bits = ((bits & 0x0F'0F'0F'0Fu) << 4u) | ((bits & 0xF0'F0'F0'F0u) >> 4u);
+    bits = ((bits & 0x00'FF'00'FFu) << 8u) | ((bits & 0xFF'00'FF'00u) >> 8u);
+    return static_cast<float>(bits) * 2.3283064365386963e-10f;
+}
+
+glm::vec2 hammersley(uint32_t index, uint32_t count)
+{
+    return {static_cast<float>(index) / static_cast<float>(count), radicalInverseVdC(index)};
+}
+
+glm::vec3 importanceSampleGGX(const glm::vec2& xi, float roughness, const glm::vec3& normal)
+{
+    const float alpha = roughness * roughness;
+    const float phi = 2.0f * Pi * xi.x;
+    const float cosTheta = std::sqrt((1.0f - xi.y) / (1.0f + (alpha * alpha - 1.0f) * xi.y));
+    const float sinTheta = std::sqrt(std::max(1.0f - cosTheta * cosTheta, 0.0f));
+
+    const glm::vec3 tangentHalf{
+        std::cos(phi) * sinTheta,
+        std::sin(phi) * sinTheta,
+        cosTheta,
+    };
+
+    glm::vec3 right;
+    glm::vec3 up;
+    basisFromNormal(normal, right, up);
+    return glm::normalize(right * tangentHalf.x + up * tangentHalf.y + normal * tangentHalf.z);
+}
+
+std::vector<float> makeIrradianceFace(const float* pixels, uint32_t width, uint32_t height, uint32_t face)
+{
+    std::vector<float> facePixels(static_cast<size_t>(IrradianceCubeSize) * IrradianceCubeSize * 4);
+    for (uint32_t y = 0; y < IrradianceCubeSize; ++y) {
+        for (uint32_t x = 0; x < IrradianceCubeSize; ++x) {
+            const auto normal = cubemapDirection(face, x, y, IrradianceCubeSize);
+            glm::vec3 right;
+            glm::vec3 up;
+            basisFromNormal(normal, right, up);
+
+            glm::vec3 irradiance{0.0f};
+            for (uint32_t phiIndex = 0; phiIndex < IrradiancePhiSamples; ++phiIndex) {
+                const float phi =
+                    (static_cast<float>(phiIndex) + 0.5f) * 2.0f * Pi / static_cast<float>(IrradiancePhiSamples);
+                for (uint32_t thetaIndex = 0; thetaIndex < IrradianceThetaSamples; ++thetaIndex) {
+                    const float theta = (static_cast<float>(thetaIndex) + 0.5f) * 0.5f * Pi /
+                                        static_cast<float>(IrradianceThetaSamples);
+                    const float sinTheta = std::sin(theta);
+                    const float cosTheta = std::cos(theta);
+                    const glm::vec3 sampleDirection = glm::normalize(
+                        right * (std::cos(phi) * sinTheta) + up * (std::sin(phi) * sinTheta) + normal * cosTheta);
+                    irradiance +=
+                        sampleEquirectangularColor(pixels, width, height, sampleDirection) * cosTheta * sinTheta;
+                }
+            }
+
+            irradiance *= Pi / static_cast<float>(IrradiancePhiSamples * IrradianceThetaSamples);
+            auto* destination = &facePixels[(static_cast<size_t>(y) * IrradianceCubeSize + x) * 4];
+            destination[0] = irradiance.r;
+            destination[1] = irradiance.g;
+            destination[2] = irradiance.b;
+            destination[3] = 1.0f;
+        }
+    }
+    return facePixels;
+}
+
+std::vector<float> makePrefilterFace(
+    const float* pixels, uint32_t width, uint32_t height, uint32_t face, uint32_t size, float roughness)
+{
+    std::vector<float> facePixels(static_cast<size_t>(size) * size * 4);
+    for (uint32_t y = 0; y < size; ++y) {
+        for (uint32_t x = 0; x < size; ++x) {
+            const auto normal = cubemapDirection(face, x, y, size);
+            const auto view = normal;
+            glm::vec3 prefilteredColor{0.0f};
+            float totalWeight = 0.0f;
+
+            for (uint32_t sampleIndex = 0; sampleIndex < PrefilterSampleCount; ++sampleIndex) {
+                const auto xi = hammersley(sampleIndex, PrefilterSampleCount);
+                const auto halfVector = importanceSampleGGX(xi, roughness, normal);
+                const auto light = glm::normalize(2.0f * glm::dot(view, halfVector) * halfVector - view);
+                const float noL = std::max(glm::dot(normal, light), 0.0f);
+                if (noL > 0.0f) {
+                    prefilteredColor += sampleEquirectangularColor(pixels, width, height, light) * noL;
+                    totalWeight += noL;
+                }
+            }
+
+            if (totalWeight > 0.0f) {
+                prefilteredColor /= totalWeight;
+            }
+
+            auto* destination = &facePixels[(static_cast<size_t>(y) * size + x) * 4];
+            destination[0] = prefilteredColor.r;
+            destination[1] = prefilteredColor.g;
+            destination[2] = prefilteredColor.b;
+            destination[3] = 1.0f;
+        }
+    }
+    return facePixels;
+}
+
+float geometrySchlickGGXIBL(float noV, float roughness)
+{
+    const float alpha = roughness * roughness;
+    const float k = alpha / 2.0f;
+    return noV / std::max(noV * (1.0f - k) + k, 1e-6f);
+}
+
+float geometrySmithIBL(float noV, float noL, float roughness)
+{
+    return geometrySchlickGGXIBL(noV, roughness) * geometrySchlickGGXIBL(noL, roughness);
+}
+
+glm::vec2 integrateBRDF(float noV, float roughness)
+{
+    const glm::vec3 view{std::sqrt(std::max(1.0f - noV * noV, 0.0f)), 0.0f, noV};
+    const glm::vec3 normal{0.0f, 0.0f, 1.0f};
+
+    float scale = 0.0f;
+    float bias = 0.0f;
+    for (uint32_t sampleIndex = 0; sampleIndex < BrdfSampleCount; ++sampleIndex) {
+        const auto xi = hammersley(sampleIndex, BrdfSampleCount);
+        const auto halfVector = importanceSampleGGX(xi, roughness, normal);
+        const auto light = glm::normalize(2.0f * glm::dot(view, halfVector) * halfVector - view);
+
+        const float noL = std::max(light.z, 0.0f);
+        const float noH = std::max(halfVector.z, 0.0f);
+        const float voH = std::max(glm::dot(view, halfVector), 0.0f);
+        if (noL > 0.0f) {
+            const float geometry = geometrySmithIBL(noV, noL, roughness);
+            const float geometryVisibility = geometry * voH / std::max(noH * noV, 1e-6f);
+            const float fresnel = std::pow(1.0f - voH, 5.0f);
+            scale += (1.0f - fresnel) * geometryVisibility;
+            bias += fresnel * geometryVisibility;
+        }
+    }
+
+    return {scale / static_cast<float>(BrdfSampleCount), bias / static_cast<float>(BrdfSampleCount)};
+}
+
+std::vector<float> makeBrdfLut()
+{
+    std::vector<float> pixels(static_cast<size_t>(BrdfLutSize) * BrdfLutSize * 4);
+    for (uint32_t y = 0; y < BrdfLutSize; ++y) {
+        const float roughness = (static_cast<float>(y) + 0.5f) / static_cast<float>(BrdfLutSize);
+        for (uint32_t x = 0; x < BrdfLutSize; ++x) {
+            const float noV = (static_cast<float>(x) + 0.5f) / static_cast<float>(BrdfLutSize);
+            const auto brdf = integrateBRDF(noV, roughness);
+            auto* destination = &pixels[(static_cast<size_t>(y) * BrdfLutSize + x) * 4];
+            destination[0] = brdf.x;
+            destination[1] = brdf.y;
+            destination[2] = 0.0f;
+            destination[3] = 1.0f;
+        }
+    }
+    return pixels;
+}
+
 } // namespace
 
 size_t Renderer::MaterialTextureKeyHash::operator()(const MaterialTextureKey& key) const noexcept
@@ -187,6 +474,8 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     const auto lineFragmentShaderSource = loadDefaultRendererShader("line.frag");
     const auto lightingVertexShaderSource = loadDefaultRendererShader("lighting.vert");
     const auto lightingFragmentShaderSource = loadDefaultRendererShader("lighting.frag");
+    const auto skyboxVertexShaderSource = loadDefaultRendererShader("skybox.vert");
+    const auto skyboxFragmentShaderSource = loadDefaultRendererShader("skybox.frag");
 
     const auto geometryVertexShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
@@ -216,6 +505,16 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     const auto lightingFragmentShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
         .source = lightingFragmentShaderSource.c_str(),
+    });
+
+    const auto skyboxVertexShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Vertex,
+        .source = skyboxVertexShaderSource.c_str(),
+    });
+
+    const auto skyboxFragmentShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Fragment,
+        .source = skyboxFragmentShaderSource.c_str(),
     });
 
     m_geometry_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
@@ -303,12 +602,42 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             },
     });
 
+    m_environment_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
+        .entries =
+            {
+                rhi::BindGroupLayoutEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 1,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 2,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 3,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+            },
+    });
+
     m_geometry_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
         .bind_group_layouts = {m_geometry_bind_group_layout, m_material_texture_bind_group_layout},
     });
 
     m_lighting_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
-        .bind_group_layouts = {m_lighting_bind_group_layout},
+        .bind_group_layouts = {m_lighting_bind_group_layout, m_environment_bind_group_layout},
+    });
+
+    m_skybox_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
+        .bind_group_layouts = {m_geometry_bind_group_layout, m_environment_bind_group_layout},
     });
 
     m_geometry_pipeline = m_device
@@ -424,6 +753,29 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             },
     });
 
+    m_skybox_pipeline = m_device->createPipeline(rhi::PipelineDesc{
+        .topology = rhi::PrimitiveTopology::Triangle,
+        .vertex_input = rhi::VertexInputDesc{},
+        .layout = m_skybox_pipeline_layout,
+        .vertex_shader = skyboxVertexShader,
+        .fragment_shader = skyboxFragmentShader,
+        .render_target_state =
+            rhi::RenderTargetState{
+                .color_targets =
+                    {
+                        rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
+                    },
+                .has_depth_stencil = true,
+                .depth_stencil_format = rhi::TextureFormat::Depth24Stencil8,
+            },
+        .depth_state =
+            rhi::DepthState{
+                .enabled = true,
+                .write_enabled = false,
+                .compare = rhi::CompareOp::LessOrEqual,
+            },
+    });
+
     m_frameUniformBuffer = m_device->createBuffer(
         rhi::BufferDesc{
             .size = sizeof(FrameUniforms),
@@ -481,6 +833,23 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
         .address_u = rhi::AddressMode::ClampToEdge,
         .address_v = rhi::AddressMode::ClampToEdge,
     });
+    createBlackEnvironmentGpuResource();
+    createBrdfLutResource();
+    m_environment_bind_group = m_device->createBindGroup(rhi::BindGroupDesc{
+        .layout = m_environment_bind_group_layout,
+        .entries =
+            {
+                combinedTextureEntry(
+                    0, m_black_environment_gpu_resource.view, m_black_environment_gpu_resource.sampler),
+                combinedTextureEntry(1,
+                                     m_black_environment_gpu_resource.irradiance_view,
+                                     m_black_environment_gpu_resource.irradiance_sampler),
+                combinedTextureEntry(2,
+                                     m_black_environment_gpu_resource.prefilter_view,
+                                     m_black_environment_gpu_resource.prefilter_sampler),
+                combinedTextureEntry(3, m_brdf_lut_resource.view, m_brdf_lut_resource.sampler),
+            },
+    });
 
     LUNA_ASSERT(geometryVertexShader, "Failed to create geometry vertex shader.");
     LUNA_ASSERT(geometryFragmentShader, "Failed to create geometry fragment shader.");
@@ -488,25 +857,49 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     LUNA_ASSERT(lineFragmentShader, "Failed to create line fragment shader.");
     LUNA_ASSERT(lightingVertexShader, "Failed to create lighting vertex shader.");
     LUNA_ASSERT(lightingFragmentShader, "Failed to create lighting fragment shader.");
+    LUNA_ASSERT(skyboxVertexShader, "Failed to create skybox vertex shader.");
+    LUNA_ASSERT(skyboxFragmentShader, "Failed to create skybox fragment shader.");
     LUNA_ASSERT(m_geometry_bind_group_layout, "Failed to create geometry bind group layout.");
     LUNA_ASSERT(m_material_texture_bind_group_layout, "Failed to create material texture bind group layout.");
     LUNA_ASSERT(m_lighting_bind_group_layout, "Failed to create lighting bind group layout.");
+    LUNA_ASSERT(m_environment_bind_group_layout, "Failed to create environment bind group layout.");
     LUNA_ASSERT(m_geometry_pipeline_layout, "Failed to create geometry pipeline layout.");
     LUNA_ASSERT(m_lighting_pipeline_layout, "Failed to create lighting pipeline layout.");
+    LUNA_ASSERT(m_skybox_pipeline_layout, "Failed to create skybox pipeline layout.");
     LUNA_ASSERT(m_geometry_pipeline, "Failed to create geometry pipeline.");
     LUNA_ASSERT(m_lighting_pipeline, "Failed to create lighting pipeline.");
+    LUNA_ASSERT(m_skybox_pipeline, "Failed to create skybox pipeline.");
     LUNA_ASSERT(m_line_pipeline, "Failed to create line pipeline.");
     LUNA_ASSERT(m_frameUniformBuffer, "Failed to create frame uniform buffer.");
     LUNA_ASSERT(m_objectUniformBuffer, "Failed to create object uniform buffer.");
     LUNA_ASSERT(m_line_vertex_buffer, "Failed to create line vertex buffer.");
     LUNA_ASSERT(m_geometry_bind_group, "Failed to create geometry bind group.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.texture, "Failed to create black environment texture.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.view, "Failed to create black environment view.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.sampler, "Failed to create black environment sampler.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance_texture, "Failed to create black irradiance texture.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance_view, "Failed to create black irradiance view.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance_sampler, "Failed to create black irradiance sampler.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter_texture, "Failed to create black prefilter texture.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter_view, "Failed to create black prefilter view.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter_sampler, "Failed to create black prefilter sampler.");
+    LUNA_ASSERT(m_brdf_lut_resource.texture, "Failed to create BRDF LUT texture.");
+    LUNA_ASSERT(m_brdf_lut_resource.view, "Failed to create BRDF LUT view.");
+    LUNA_ASSERT(m_brdf_lut_resource.sampler, "Failed to create BRDF LUT sampler.");
+    LUNA_ASSERT(m_environment_bind_group, "Failed to create environment bind group.");
     LUNA_ASSERT(m_gbuffer_sampler, "Failed to create GBuffer sampler.");
     LUNA_CORE_DEBUG("Default renderer initialized");
 }
 
 Renderer::~Renderer()
 {
+    if (m_environment_bind_group) {
+        m_device->destroyBindGroup(m_environment_bind_group);
+        m_environment_bind_group = {};
+    }
     destroyMaterialTextureResources();
+    destroyTextureGpuResource(m_brdf_lut_resource);
+    destroyEnvironmentGpuResource(m_black_environment_gpu_resource);
 }
 
 const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asset::AssetHandle handle,
@@ -526,7 +919,7 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asse
     }
 
     const auto& settings = texture->getImportSettings();
-    const auto rhiFormat = toRHITextureFormat(settings);
+    const auto rhiFormat = toRHITextureFormat(texture->getFormat(), settings);
     const auto mipLevels = settings.generate_mipmaps ? fullMipLevelCount(texture->getWidth(), texture->getHeight()) : 1;
 
     TextureGpuResource resource;
@@ -541,14 +934,15 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asse
         return getOrCreateFallbackTexture(fallback);
     }
 
-    m_device->updateTexture(resource.texture,
-                            rhi::TextureUploadDesc{
-                                .width = texture->getWidth(),
-                                .height = texture->getHeight(),
-                                .format = rhiFormat,
-                                .data = texture->getPixels().data(),
-                                .row_pitch = static_cast<size_t>(texture->getWidth()) * 4,
-                            });
+    m_device->updateTexture(
+        resource.texture,
+        rhi::TextureUploadDesc{
+            .width = texture->getWidth(),
+            .height = texture->getHeight(),
+            .format = rhiFormat,
+            .data = texture->getPixels().data(),
+            .row_pitch = static_cast<size_t>(texture->getWidth()) * textureBytesPerPixel(texture->getFormat()),
+        });
 
     if (mipLevels > 1) {
         m_device->generateMipmaps(resource.texture);
@@ -650,6 +1044,352 @@ const Renderer::MaterialGpuResource&
     return m_material_gpu_cache.emplace(key, MaterialGpuResource{.bind_group = bindGroup}).first->second;
 }
 
+const Renderer::EnvironmentGpuResource* Renderer::getOrCreateEnvironmentGpuResource(asset::AssetHandle handle)
+{
+    if (!handle.isValid()) {
+        return nullptr;
+    }
+
+    if (const auto it = m_environment_gpu_cache.find(handle); it != m_environment_gpu_cache.end()) {
+        return &it->second;
+    }
+
+    const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
+    if (texture == nullptr || texture->getFormat() != interface::TextureFormat::RGBA32F || texture->getWidth() == 0 ||
+        texture->getHeight() == 0 || texture->getPixels().empty()) {
+        return nullptr;
+    }
+
+    const auto* pixels = reinterpret_cast<const float*>(texture->getPixels().data());
+    const uint32_t cubeSize = std::clamp(texture->getHeight(), 16u, 512u);
+    const uint32_t mipLevels = fullMipLevelCount(cubeSize, cubeSize);
+
+    EnvironmentGpuResource resource;
+    resource.texture = m_device->createTexture(rhi::TextureDesc{
+        .width = cubeSize,
+        .height = cubeSize,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .mip_levels = mipLevels,
+        .array_layers = 6,
+    });
+    if (!resource.texture) {
+        return nullptr;
+    }
+
+    for (uint32_t face = 0; face < 6; ++face) {
+        const auto facePixels = makeCubemapFace(pixels, texture->getWidth(), texture->getHeight(), face, cubeSize);
+        m_device->updateTexture(resource.texture,
+                                rhi::TextureUploadDesc{
+                                    .width = cubeSize,
+                                    .height = cubeSize,
+                                    .array_layer = face,
+                                    .format = rhi::TextureFormat::RGBA32F,
+                                    .data = facePixels.data(),
+                                    .row_pitch = static_cast<size_t>(cubeSize) * sizeof(float) * 4,
+                                });
+    }
+
+    if (mipLevels > 1) {
+        m_device->generateMipmaps(resource.texture);
+    }
+
+    resource.view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = resource.texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .mip_level_count = mipLevels,
+        .array_layer_count = 6,
+    });
+    resource.sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::Linear,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+
+    resource.irradiance_texture = m_device->createTexture(rhi::TextureDesc{
+        .width = IrradianceCubeSize,
+        .height = IrradianceCubeSize,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .array_layers = 6,
+    });
+    for (uint32_t face = 0; resource.irradiance_texture && face < 6; ++face) {
+        const auto facePixels = makeIrradianceFace(pixels, texture->getWidth(), texture->getHeight(), face);
+        m_device->updateTexture(resource.irradiance_texture,
+                                rhi::TextureUploadDesc{
+                                    .width = IrradianceCubeSize,
+                                    .height = IrradianceCubeSize,
+                                    .array_layer = face,
+                                    .format = rhi::TextureFormat::RGBA32F,
+                                    .data = facePixels.data(),
+                                    .row_pitch = static_cast<size_t>(IrradianceCubeSize) * sizeof(float) * 4,
+                                });
+    }
+    resource.irradiance_view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = resource.irradiance_texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .array_layer_count = 6,
+    });
+    resource.irradiance_sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::None,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+
+    const uint32_t prefilterMipLevels = fullMipLevelCount(PrefilterCubeSize, PrefilterCubeSize);
+    resource.prefilter_texture = m_device->createTexture(rhi::TextureDesc{
+        .width = PrefilterCubeSize,
+        .height = PrefilterCubeSize,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .mip_levels = prefilterMipLevels,
+        .array_layers = 6,
+    });
+    for (uint32_t mip = 0; resource.prefilter_texture && mip < prefilterMipLevels; ++mip) {
+        const uint32_t mipSize = std::max(PrefilterCubeSize >> mip, 1u);
+        const float roughness =
+            prefilterMipLevels > 1 ? static_cast<float>(mip) / static_cast<float>(prefilterMipLevels - 1) : 0.0f;
+        for (uint32_t face = 0; face < 6; ++face) {
+            const auto facePixels =
+                makePrefilterFace(pixels, texture->getWidth(), texture->getHeight(), face, mipSize, roughness);
+            m_device->updateTexture(resource.prefilter_texture,
+                                    rhi::TextureUploadDesc{
+                                        .width = mipSize,
+                                        .height = mipSize,
+                                        .mip_level = mip,
+                                        .array_layer = face,
+                                        .format = rhi::TextureFormat::RGBA32F,
+                                        .data = facePixels.data(),
+                                        .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
+                                    });
+        }
+    }
+    resource.prefilter_view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = resource.prefilter_texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .mip_level_count = prefilterMipLevels,
+        .array_layer_count = 6,
+    });
+    resource.prefilter_sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::Linear,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+
+    if (!resource.view || !resource.sampler || !resource.irradiance_view || !resource.irradiance_sampler ||
+        !resource.prefilter_view || !resource.prefilter_sampler) {
+        destroyEnvironmentGpuResource(resource);
+        return nullptr;
+    }
+
+    return &m_environment_gpu_cache.emplace(handle, resource).first->second;
+}
+
+void Renderer::createBlackEnvironmentGpuResource()
+{
+    constexpr float blackPixel[] = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    m_black_environment_gpu_resource.texture = m_device->createTexture(rhi::TextureDesc{
+        .width = 1,
+        .height = 1,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .array_layers = 6,
+    });
+    if (!m_black_environment_gpu_resource.texture) {
+        return;
+    }
+
+    for (uint32_t face = 0; face < 6; ++face) {
+        m_device->updateTexture(m_black_environment_gpu_resource.texture,
+                                rhi::TextureUploadDesc{
+                                    .width = 1,
+                                    .height = 1,
+                                    .array_layer = face,
+                                    .format = rhi::TextureFormat::RGBA32F,
+                                    .data = blackPixel,
+                                    .row_pitch = sizeof(blackPixel),
+                                });
+    }
+
+    m_black_environment_gpu_resource.view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = m_black_environment_gpu_resource.texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .array_layer_count = 6,
+    });
+    m_black_environment_gpu_resource.sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::None,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+
+    m_black_environment_gpu_resource.irradiance_texture = m_device->createTexture(rhi::TextureDesc{
+        .width = 1,
+        .height = 1,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .array_layers = 6,
+    });
+    if (m_black_environment_gpu_resource.irradiance_texture) {
+        for (uint32_t face = 0; face < 6; ++face) {
+            m_device->updateTexture(m_black_environment_gpu_resource.irradiance_texture,
+                                    rhi::TextureUploadDesc{
+                                        .width = 1,
+                                        .height = 1,
+                                        .array_layer = face,
+                                        .format = rhi::TextureFormat::RGBA32F,
+                                        .data = blackPixel,
+                                        .row_pitch = sizeof(blackPixel),
+                                    });
+        }
+    }
+    m_black_environment_gpu_resource.irradiance_view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = m_black_environment_gpu_resource.irradiance_texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .array_layer_count = 6,
+    });
+    m_black_environment_gpu_resource.irradiance_sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::None,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+
+    const uint32_t prefilterMipLevels = fullMipLevelCount(PrefilterCubeSize, PrefilterCubeSize);
+    m_black_environment_gpu_resource.prefilter_texture = m_device->createTexture(rhi::TextureDesc{
+        .width = PrefilterCubeSize,
+        .height = PrefilterCubeSize,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .mip_levels = prefilterMipLevels,
+        .array_layers = 6,
+    });
+    if (m_black_environment_gpu_resource.prefilter_texture) {
+        for (uint32_t mip = 0; mip < prefilterMipLevels; ++mip) {
+            const uint32_t mipSize = std::max(PrefilterCubeSize >> mip, 1u);
+            std::vector<float> pixels(static_cast<size_t>(mipSize) * mipSize * 4);
+            for (size_t i = 0; i < pixels.size(); i += 4) {
+                pixels[i + 3] = 1.0f;
+            }
+
+            for (uint32_t face = 0; face < 6; ++face) {
+                m_device->updateTexture(m_black_environment_gpu_resource.prefilter_texture,
+                                        rhi::TextureUploadDesc{
+                                            .width = mipSize,
+                                            .height = mipSize,
+                                            .mip_level = mip,
+                                            .array_layer = face,
+                                            .format = rhi::TextureFormat::RGBA32F,
+                                            .data = pixels.data(),
+                                            .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
+                                        });
+            }
+        }
+    }
+    m_black_environment_gpu_resource.prefilter_view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = m_black_environment_gpu_resource.prefilter_texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .mip_level_count = prefilterMipLevels,
+        .array_layer_count = 6,
+    });
+    m_black_environment_gpu_resource.prefilter_sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::Linear,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+}
+
+void Renderer::createBrdfLutResource()
+{
+    const auto pixels = makeBrdfLut();
+    m_brdf_lut_resource.texture = m_device->createTexture(rhi::TextureDesc{
+        .width = BrdfLutSize,
+        .height = BrdfLutSize,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+    });
+    if (m_brdf_lut_resource.texture) {
+        m_device->updateTexture(m_brdf_lut_resource.texture,
+                                rhi::TextureUploadDesc{
+                                    .width = BrdfLutSize,
+                                    .height = BrdfLutSize,
+                                    .format = rhi::TextureFormat::RGBA32F,
+                                    .data = pixels.data(),
+                                    .row_pitch = static_cast<size_t>(BrdfLutSize) * sizeof(float) * 4,
+                                });
+    }
+    m_brdf_lut_resource.view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = m_brdf_lut_resource.texture,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+    });
+    m_brdf_lut_resource.sampler = m_device->createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::None,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
+}
+
+void Renderer::updateEnvironmentBindGroup(const EnvironmentGpuResource& resource)
+{
+    if (!m_environment_bind_group || !resource.view || !resource.sampler || !resource.irradiance_view ||
+        !resource.irradiance_sampler || !resource.prefilter_view || !resource.prefilter_sampler ||
+        !m_brdf_lut_resource.view || !m_brdf_lut_resource.sampler) {
+        return;
+    }
+
+    m_device->updateBindGroup(
+        m_environment_bind_group,
+        rhi::BindGroupDesc{
+            .layout = m_environment_bind_group_layout,
+            .entries =
+                {
+                    combinedTextureEntry(0, resource.view, resource.sampler),
+                    combinedTextureEntry(1, resource.irradiance_view, resource.irradiance_sampler),
+                    combinedTextureEntry(2, resource.prefilter_view, resource.prefilter_sampler),
+                    combinedTextureEntry(3, m_brdf_lut_resource.view, m_brdf_lut_resource.sampler),
+                },
+        });
+}
+
 void Renderer::destroyTextureGpuResource(TextureGpuResource& resource)
 {
     if (resource.sampler) {
@@ -660,6 +1400,38 @@ void Renderer::destroyTextureGpuResource(TextureGpuResource& resource)
     }
     if (resource.texture) {
         m_device->destroyTexture(resource.texture);
+    }
+    resource = {};
+}
+
+void Renderer::destroyEnvironmentGpuResource(EnvironmentGpuResource& resource)
+{
+    if (resource.sampler) {
+        m_device->destroySampler(resource.sampler);
+    }
+    if (resource.view) {
+        m_device->destroyTextureView(resource.view);
+    }
+    if (resource.texture) {
+        m_device->destroyTexture(resource.texture);
+    }
+    if (resource.irradiance_sampler) {
+        m_device->destroySampler(resource.irradiance_sampler);
+    }
+    if (resource.irradiance_view) {
+        m_device->destroyTextureView(resource.irradiance_view);
+    }
+    if (resource.irradiance_texture) {
+        m_device->destroyTexture(resource.irradiance_texture);
+    }
+    if (resource.prefilter_sampler) {
+        m_device->destroySampler(resource.prefilter_sampler);
+    }
+    if (resource.prefilter_view) {
+        m_device->destroyTextureView(resource.prefilter_view);
+    }
+    if (resource.prefilter_texture) {
+        m_device->destroyTexture(resource.prefilter_texture);
     }
     resource = {};
 }
@@ -677,6 +1449,11 @@ void Renderer::destroyMaterialTextureResources()
         destroyTextureGpuResource(resource);
     }
     m_texture_gpu_cache.clear();
+
+    for (auto& [_, resource] : m_environment_gpu_cache) {
+        destroyEnvironmentGpuResource(resource);
+    }
+    m_environment_gpu_cache.clear();
 
     destroyTextureGpuResource(m_white_fallback_texture);
     destroyTextureGpuResource(m_flat_normal_fallback_texture);
@@ -875,6 +1652,7 @@ void Renderer::beginFrame()
 {
     ensureGBuffer(m_swapchain->getWidth(), m_swapchain->getHeight());
     LUNA_ASSERT(m_gbuffer.lighting_bind_group, "GBuffer is not initialized.");
+    LUNA_ASSERT(m_environment_bind_group, "Environment bind group is not initialized.");
 
     rhi::RenderPassBeginInfo pass;
     pass.color_attachments = {
@@ -882,7 +1660,7 @@ void Renderer::beginFrame()
             .view = m_gbuffer.albedo_view,
             .load_op = rhi::LoadOp::Clear,
             .store_op = rhi::StoreOp::Store,
-            .clear_color = rhi::ClearColor{0.0f, 0.0f, 0.0f, 1.0f},
+            .clear_color = rhi::ClearColor{0.0f, 0.0f, 0.0f, 0.0f},
         },
         rhi::ColorAttachmentDesc{
             .view = m_gbuffer.normal_view,
@@ -958,16 +1736,48 @@ void Renderer::endFrame()
         .view = m_gbuffer.final_color_view,
         .load_op = rhi::LoadOp::Clear,
         .store_op = rhi::StoreOp::Store,
-        .clear_color = rhi::ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
+        .clear_color = rhi::ClearColor{0.0f, 0.0f, 0.0f, 1.0f},
     });
-    lightingPass.width = m_swapchain->getWidth();
-    lightingPass.height = m_swapchain->getHeight();
+    lightingPass.width = m_gbuffer.width;
+    lightingPass.height = m_gbuffer.height;
 
     m_cmd->beginRenderPass(lightingPass);
     m_cmd->setPipeline(m_lighting_pipeline);
     m_cmd->setBindGroup(0, m_gbuffer.lighting_bind_group);
+    m_cmd->setBindGroup(1, m_environment_bind_group);
     m_cmd->draw(3);
     m_cmd->endRenderPass();
+
+    if (m_frameUniforms.environmentIntensity > 0.0f) {
+        const rhi::TextureBarrier depthAttachmentBarrier{
+            .texture = m_gbuffer.depth_texture,
+            .old_state = rhi::ResourceState::ShaderRead,
+            .new_state = rhi::ResourceState::DepthStencilWrite,
+        };
+        m_cmd->resourceBarrier(&depthAttachmentBarrier, 1);
+
+        rhi::RenderPassBeginInfo skyboxPass;
+        skyboxPass.color_attachments.push_back(rhi::ColorAttachmentDesc{
+            .view = m_gbuffer.final_color_view,
+            .load_op = rhi::LoadOp::Load,
+            .store_op = rhi::StoreOp::Store,
+        });
+        skyboxPass.has_depth_stencil_attachment = true;
+        skyboxPass.depth_stencil_attachment = rhi::DepthStencilAttachmentDesc{
+            .view = m_gbuffer.depth_view,
+            .depth_load_op = rhi::LoadOp::Load,
+            .depth_store_op = rhi::StoreOp::DontCare,
+        };
+        skyboxPass.width = m_gbuffer.width;
+        skyboxPass.height = m_gbuffer.height;
+
+        m_cmd->beginRenderPass(skyboxPass);
+        m_cmd->setPipeline(m_skybox_pipeline);
+        m_cmd->setBindGroup(0, m_geometry_bind_group);
+        m_cmd->setBindGroup(1, m_environment_bind_group);
+        m_cmd->draw(3);
+        m_cmd->endRenderPass();
+    }
 
     const rhi::TextureBarrier finalColorBarrier{
         .texture = m_gbuffer.final_color_texture,
@@ -997,21 +1807,20 @@ void Renderer::setViewProjection(const glm::mat4& view,
     m_frame_uniforms_dirty = true;
 }
 
-void Renderer::setSceneLighting(const interface::SceneLighting& lighting)
+void Renderer::setLighting(const interface::RenderLighting& lighting)
 {
     m_frameUniforms.directionalLightCount = lighting.directional_light_count > 0 ? 1u : 0u;
-    m_frameUniforms.environmentAmbient = lighting.environment_ambient;
+    const auto* environment = getOrCreateEnvironmentGpuResource(lighting.environment_map);
+    m_frameUniforms.environmentIntensity =
+        environment != nullptr ? std::max(lighting.environment_intensity, 0.0f) : 0.0f;
+    updateEnvironmentBindGroup(environment != nullptr ? *environment : m_black_environment_gpu_resource);
 
     if (m_frameUniforms.directionalLightCount > 0) {
         m_frameUniforms.lightDir = lighting.directional_light.direction;
-        m_frameUniforms.lightAmbient = lighting.directional_light.ambient;
-        m_frameUniforms.lightDiffuse = lighting.directional_light.diffuse;
-        m_frameUniforms.lightSpecular = lighting.directional_light.specular;
+        m_frameUniforms.lightRadiance = lighting.directional_light.radiance;
     } else {
         m_frameUniforms.lightDir = {0.0f, -1.0f, 0.0f};
-        m_frameUniforms.lightAmbient = {0.0f, 0.0f, 0.0f};
-        m_frameUniforms.lightDiffuse = {0.0f, 0.0f, 0.0f};
-        m_frameUniforms.lightSpecular = {0.0f, 0.0f, 0.0f};
+        m_frameUniforms.lightRadiance = {0.0f, 0.0f, 0.0f};
     }
 
     m_frame_uniforms_dirty = true;

@@ -23,7 +23,7 @@ public:
                            const glm::mat4& proj,
                            const glm::vec3& cameraPos,
                            float exposure) override;
-    void setSceneLighting(const interface::SceneLighting& lighting) override;
+    void setLighting(const interface::RenderLighting& lighting) override;
     void renderModel(const interface::Model& model, const glm::mat4& transform) override;
     void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
     const interface::FrameImage& getFrameImage() const override;
@@ -35,23 +35,17 @@ public:
         float _pad0{0.0f};
         glm::vec3 lightDir{0.0f, -1.0f, 0.0f};
         float _pad1{0.0f};
-        glm::vec3 lightAmbient{0.0f};
+        glm::vec3 lightRadiance{0.0f};
         float _pad2{0.0f};
-        glm::vec3 lightDiffuse{0.0f};
-        float _pad3{0.0f};
-        glm::vec3 lightSpecular{0.0f};
-        float _pad4{0.0f};
         uint32_t directionalLightCount{0};
+        float environmentIntensity{1.0f};
+        float _pad3{0.0f};
+        float _pad4{0.0f};
+        glm::mat4 inverseViewProjection{1.0f};
+        float exposure{1.0f};
         float _pad5{0.0f};
         float _pad6{0.0f};
         float _pad7{0.0f};
-        glm::vec3 environmentAmbient{0.0f};
-        float _pad8{0.0f};
-        glm::mat4 inverseViewProjection{1.0f};
-        float exposure{1.0f};
-        float _pad9{0.0f};
-        float _pad10{0.0f};
-        float _pad11{0.0f};
     };
 
     struct alignas(16) ObjectUniforms {
@@ -117,6 +111,18 @@ private:
         rhi::SamplerHandle sampler{};
     };
 
+    struct EnvironmentGpuResource {
+        rhi::TextureHandle texture{};
+        rhi::TextureViewHandle view{};
+        rhi::SamplerHandle sampler{};
+        rhi::TextureHandle irradiance_texture{};
+        rhi::TextureViewHandle irradiance_view{};
+        rhi::SamplerHandle irradiance_sampler{};
+        rhi::TextureHandle prefilter_texture{};
+        rhi::TextureViewHandle prefilter_view{};
+        rhi::SamplerHandle prefilter_sampler{};
+    };
+
     struct MaterialTextureKey {
         asset::AssetHandle albedo{};
         asset::AssetHandle normal{};
@@ -152,7 +158,12 @@ private:
     const TextureGpuResource& getOrCreateTextureGpuResource(asset::AssetHandle handle, FallbackTexture fallback);
     const TextureGpuResource& getOrCreateFallbackTexture(FallbackTexture fallback);
     const MaterialGpuResource& getOrCreateMaterialGpuResource(const interface::MaterialParameters& parameters);
+    const EnvironmentGpuResource* getOrCreateEnvironmentGpuResource(asset::AssetHandle handle);
+    void createBlackEnvironmentGpuResource();
+    void createBrdfLutResource();
+    void updateEnvironmentBindGroup(const EnvironmentGpuResource& resource);
     void destroyTextureGpuResource(TextureGpuResource& resource);
+    void destroyEnvironmentGpuResource(EnvironmentGpuResource& resource);
     void destroyMaterialTextureResources();
 
     rhi::Device* m_device{nullptr};
@@ -162,20 +173,26 @@ private:
     rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_material_texture_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{};
+    rhi::BindGroupLayoutHandle m_environment_bind_group_layout{};
 
     rhi::PipelineLayoutHandle m_geometry_pipeline_layout{};
     rhi::PipelineLayoutHandle m_lighting_pipeline_layout{};
+    rhi::PipelineLayoutHandle m_skybox_pipeline_layout{};
     rhi::PipelineHandle m_geometry_pipeline{};
     rhi::PipelineHandle m_lighting_pipeline{};
+    rhi::PipelineHandle m_skybox_pipeline{};
     rhi::PipelineHandle m_line_pipeline{};
 
     rhi::BufferHandle m_frameUniformBuffer{};
     rhi::BufferHandle m_objectUniformBuffer{};
     rhi::BufferHandle m_line_vertex_buffer{};
     rhi::BindGroupHandle m_geometry_bind_group{};
+    rhi::BindGroupHandle m_environment_bind_group{};
     rhi::SamplerHandle m_gbuffer_sampler{};
     TextureGpuResource m_white_fallback_texture{};
     TextureGpuResource m_flat_normal_fallback_texture{};
+    TextureGpuResource m_brdf_lut_resource{};
+    EnvironmentGpuResource m_black_environment_gpu_resource{};
     GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
     ObjectUniforms m_objectUniforms;
@@ -183,6 +200,7 @@ private:
     bool m_frame_uniforms_dirty{true};
     std::unordered_map<uint64_t, MeshGpuData> m_mesh_gpu_cache;
     std::unordered_map<asset::AssetHandle, TextureGpuResource> m_texture_gpu_cache;
+    std::unordered_map<asset::AssetHandle, EnvironmentGpuResource> m_environment_gpu_cache;
     std::unordered_map<MaterialTextureKey, MaterialGpuResource, MaterialTextureKeyHash> m_material_gpu_cache;
 };
 } // namespace lunalite::renderer

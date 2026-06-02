@@ -14,6 +14,8 @@
 #include <fstream>
 #include <iostream>
 
+#include "../third_party/stb/stb_image_write.h"
+
 namespace {
 std::filesystem::path findTestMesh()
 {
@@ -245,6 +247,20 @@ int main()
         textureMetadata << "      AddressW: Repeat\n";
     }
 
+    const auto targetHdrTexture = projectRoot / info.assets_path / "environment.hdr";
+    const float hdrPixels[] = {
+        1.0f,
+        0.5f,
+        0.25f,
+        0.25f,
+        0.5f,
+        1.0f,
+    };
+    if (stbi_write_hdr(targetHdrTexture.string().c_str(), 2, 1, 3, hdrPixels) == 0) {
+        std::cerr << "Failed to write HDR test texture.\n";
+        return 1;
+    }
+
     const auto texturedMaterialPath = projectRoot / info.assets_path / "Textured.lunamat";
     {
         std::ofstream material(texturedMaterialPath);
@@ -353,6 +369,16 @@ int main()
         textureSettings.sampler.address_v != renderer::interface::TextureAddressMode::MirroredRepeat ||
         textureSettings.sampler.address_w != renderer::interface::TextureAddressMode::Repeat) {
         std::cerr << "Failed to load texture config through AssetManager.\n";
+        return 1;
+    }
+
+    const auto hdrTextureHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/environment.hdr");
+    const auto* hdrTexture = asset::AssetManager::get().getAsset<renderer::interface::Texture>(hdrTextureHandle);
+    if (hdrTexture == nullptr || hdrTexture->getWidth() != 2 || hdrTexture->getHeight() != 1 ||
+        hdrTexture->getFormat() != renderer::interface::TextureFormat::RGBA32F ||
+        hdrTexture->getPixels().size() != 2 * 1 * 4 * sizeof(float) ||
+        hdrTexture->getImportSettings().color_space != renderer::interface::TextureColorSpace::Linear) {
+        std::cerr << "Failed to import and load HDR texture through AssetManager.\n";
         return 1;
     }
 

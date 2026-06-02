@@ -9,6 +9,7 @@
 namespace lunalite::renderer::interface {
 enum class TextureFormat {
     RGBA8_UNorm = 0,
+    RGBA32F,
 };
 
 enum class TextureColorSpace {

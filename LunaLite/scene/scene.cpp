@@ -26,11 +26,13 @@ void Scene::clear()
         m_script_runtime.reset();
     }
     m_registry.clear();
+    m_settings = {};
 }
 
 void Scene::copyFrom(const Scene& other)
 {
     clear();
+    m_settings = other.m_settings;
 
     for (const auto sourceEntity : other.getEntities()) {
         auto targetEntity = createEntity();

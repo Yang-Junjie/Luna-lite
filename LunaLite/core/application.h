@@ -19,7 +19,7 @@ class RendererController;
 
 namespace lunalite::renderer::interface {
 struct FrameImage;
-}
+} // namespace lunalite::renderer::interface
 
 namespace lunalite::imgui {
 class ImGuiRenderer;

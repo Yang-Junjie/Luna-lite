@@ -18,7 +18,8 @@ EditorLayer::EditorLayer()
     : Layer("EditorLayer"),
       m_editor_setting_panel(m_editor_camera),
       m_hierarchy_panel(m_scene, m_selected_entity),
-      m_inspector_panel(m_scene, m_selected_entity)
+      m_inspector_panel(m_scene, m_selected_entity),
+      m_scene_panel(m_scene)
 {}
 
 void EditorLayer::onAttach() {}
@@ -52,6 +53,7 @@ void EditorLayer::onImGuiRender()
     drawMenuBar();
     m_hierarchy_panel.onImGuiRender();
     m_inspector_panel.onImGuiRender();
+    m_scene_panel.onImGuiRender();
     m_material_editor_panel.onImGuiRender();
     m_editor_setting_panel.onImGuiRender();
     m_content_browser_panel.onImGuiRender();

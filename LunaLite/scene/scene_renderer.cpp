@@ -87,20 +87,20 @@ void SceneRenderer::renderScene(const Scene& scene,
                                 const glm::vec3& cameraPosition,
                                 float exposure)
 {
-    renderer::interface::SceneLighting lighting{};
+    renderer::interface::RenderLighting lighting{};
+    lighting.environment_map = scene.getSettings().environment_map;
+    lighting.environment_intensity = scene.getSettings().environment_intensity;
     {
         const auto lightView = scene.getRegistry().view<const DirectionalLightComponent>();
         if (!lightView.empty()) {
             const auto& light = lightView.get<const DirectionalLightComponent>(*lightView.begin());
             lighting.directional_light_count = 1;
             lighting.directional_light.direction = light.direction;
-            lighting.directional_light.ambient = light.ambient;
-            lighting.directional_light.diffuse = light.diffuse;
-            lighting.directional_light.specular = light.specular;
+            lighting.directional_light.radiance = light.color * light.intensity;
         }
     }
 
-    m_renderer->setSceneLighting(lighting);
+    m_renderer->setLighting(lighting);
     m_renderer->setViewProjection(view, projection, cameraPosition, exposure);
 
     const auto modelView = scene.getRegistry().view<const TransformComponent, const ModelComponent>();
