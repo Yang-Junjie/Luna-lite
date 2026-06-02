@@ -85,14 +85,14 @@ TextureFormat toRHITextureFormat(renderer::interface::FrameImageFormat format)
 {
     switch (format) {
         case renderer::interface::FrameImageFormat::RGBA8_UNorm:
-            return TextureFormat::RGBA8;
+            return TextureFormat::RGBA8_UNorm;
         case renderer::interface::FrameImageFormat::RGBA16_Float:
             return TextureFormat::RGBA16F;
         case renderer::interface::FrameImageFormat::RGBA32_Float:
             return TextureFormat::RGBA32F;
     }
 
-    return TextureFormat::RGBA8;
+    return TextureFormat::RGBA8_UNorm;
 }
 
 size_t frameImageBytesPerPixel(renderer::interface::FrameImageFormat format)
@@ -438,7 +438,7 @@ bool ImGuiRenderer::createStaticResources()
     pipelineDesc.layout = m_pipeline_layout;
     pipelineDesc.vertex_shader = m_vertex_shader;
     pipelineDesc.fragment_shader = m_fragment_shader;
-    ColorTargetState colorTarget{.format = TextureFormat::RGBA8};
+    ColorTargetState colorTarget{.format = TextureFormat::RGBA8_UNorm};
     colorTarget.blend.enabled = true;
     pipelineDesc.render_target_state.color_targets.push_back(colorTarget);
     pipelineDesc.depth_state.enabled = false;
@@ -462,12 +462,12 @@ bool ImGuiRenderer::createFontTexture()
     m_font_texture = m_device->createTexture(TextureDesc{
         .width = static_cast<uint32_t>(width),
         .height = static_cast<uint32_t>(height),
-        .format = TextureFormat::RGBA32,
+        .format = TextureFormat::RGBA8_UNorm,
         .usage = TextureUsage::Sampled | TextureUsage::CopyDst,
     });
     m_font_texture_view = m_device->createTextureView(TextureViewDesc{
         .texture = m_font_texture,
-        .format = TextureFormat::RGBA32,
+        .format = TextureFormat::RGBA8_UNorm,
         .aspect = TextureAspect::Color,
     });
 
@@ -488,7 +488,7 @@ bool ImGuiRenderer::createFontTexture()
     TextureUploadDesc upload{};
     upload.width = static_cast<uint32_t>(width);
     upload.height = static_cast<uint32_t>(height);
-    upload.format = TextureFormat::RGBA32;
+    upload.format = TextureFormat::RGBA8_UNorm;
     upload.data = pixels;
     upload.row_pitch = static_cast<size_t>(width) * static_cast<size_t>(bytesPerPixel);
     m_device->updateTexture(m_font_texture, upload);

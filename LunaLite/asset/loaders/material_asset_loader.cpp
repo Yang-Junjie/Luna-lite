@@ -59,11 +59,15 @@ std::shared_ptr<renderer::interface::Material> MaterialAssetLoader::load(const A
         parameters.roughness = materialNode["Roughness"].as<float>(parameters.roughness);
         parameters.emission = readVec3(materialNode["Emission"], parameters.emission);
         parameters.emission_strength = materialNode["EmissionStrength"].as<float>(parameters.emission_strength);
+        parameters.normal_scale = materialNode["NormalScale"].as<float>(parameters.normal_scale);
+        parameters.occlusion_strength = materialNode["OcclusionStrength"].as<float>(parameters.occlusion_strength);
 
         if (const auto textures = materialNode["Textures"]) {
             parameters.albedo_texture = AssetHandle{textures["Albedo"].as<uint64_t>(0)};
             parameters.normal_texture = AssetHandle{textures["Normal"].as<uint64_t>(0)};
             parameters.metallic_roughness_texture = AssetHandle{textures["MetallicRoughness"].as<uint64_t>(0)};
+            parameters.occlusion_texture = AssetHandle{textures["Occlusion"].as<uint64_t>(0)};
+            parameters.emission_texture = AssetHandle{textures["Emission"].as<uint64_t>(0)};
         }
 
         return material;

@@ -1,0 +1,16 @@
+Asset:
+  Handle: 3009192999781803060
+  Type: Texture
+  Name: WaterBottle_occlusionRoughnessMetallic
+  FilePath: Assets/Models/WaterBottle/WaterBottle_occlusionRoughnessMetallic.png
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: Linear
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: Repeat
+      AddressW: Repeat

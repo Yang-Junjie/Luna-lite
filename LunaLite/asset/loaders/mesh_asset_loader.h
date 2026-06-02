@@ -9,7 +9,9 @@
 namespace lunalite::asset {
 class MeshAssetLoader {
 public:
+    static std::shared_ptr<renderer::interface::Mesh> load(const AssetMetadata& metadata);
     static std::shared_ptr<renderer::interface::Mesh> loadObj(const AssetMetadata& metadata);
+    static std::shared_ptr<renderer::interface::Mesh> loadGltf(const AssetMetadata& metadata);
 
 private:
     static glm::vec3 calculateSurfaceNormal(const renderer::interface::Vertex& v0,

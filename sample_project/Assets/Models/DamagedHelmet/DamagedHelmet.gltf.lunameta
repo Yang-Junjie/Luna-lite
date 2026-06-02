@@ -1,0 +1,6 @@
+Asset:
+  Handle: 16102993038255778501
+  Type: Mesh
+  Name: DamagedHelmet
+  FilePath: Assets/Models/DamagedHelmet/DamagedHelmet.gltf
+  MemoryOnly: false

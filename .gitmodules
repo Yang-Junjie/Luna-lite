@@ -27,3 +27,9 @@
 [submodule "third_party/sol2"]
 	path = third_party/sol2
 	url = https://github.com/ThePhD/sol2.git
+[submodule "third_party/fastgltf"]
+	path = third_party/fastgltf
+	url = https://github.com/spnda/fastgltf.git
+[submodule "third_party/simdjson"]
+	path = third_party/simdjson
+	url = https://github.com/simdjson/simdjson.git

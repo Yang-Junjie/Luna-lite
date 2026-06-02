@@ -1,11 +1,14 @@
 #include "../../asset/asset_database.h"
 #include "../../asset/builtin/builtin_assets.h"
 #include "../../core/log.h"
+#include "../interface/texture.h"
 #include "renderer.h"
 
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -62,7 +65,115 @@ std::string loadDefaultRendererShader(const char* file_name)
                              shader_path.string() + "'.");
 }
 
+uint32_t fullMipLevelCount(uint32_t width, uint32_t height)
+{
+    uint32_t levels = 1;
+    uint32_t dimension = std::max(width, height);
+    while (dimension > 1) {
+        dimension /= 2;
+        ++levels;
+    }
+
+    return levels;
+}
+
+rhi::TextureFormat toRHITextureFormat(const interface::TextureImportSettings& settings)
+{
+    return settings.color_space == interface::TextureColorSpace::SRGB ? rhi::TextureFormat::RGBA8_SRGB
+                                                                      : rhi::TextureFormat::RGBA8_UNorm;
+}
+
+rhi::FilterMode toRHIFilter(interface::TextureFilter filter)
+{
+    switch (filter) {
+        case interface::TextureFilter::Nearest:
+            return rhi::FilterMode::Nearest;
+        case interface::TextureFilter::Linear:
+            return rhi::FilterMode::Linear;
+    }
+
+    return rhi::FilterMode::Linear;
+}
+
+rhi::MipFilter toRHIMipFilter(interface::TextureMipFilter filter)
+{
+    switch (filter) {
+        case interface::TextureMipFilter::None:
+            return rhi::MipFilter::None;
+        case interface::TextureMipFilter::Nearest:
+            return rhi::MipFilter::Nearest;
+        case interface::TextureMipFilter::Linear:
+            return rhi::MipFilter::Linear;
+    }
+
+    return rhi::MipFilter::Linear;
+}
+
+rhi::AddressMode toRHIAddressMode(interface::TextureAddressMode mode)
+{
+    switch (mode) {
+        case interface::TextureAddressMode::Repeat:
+            return rhi::AddressMode::Repeat;
+        case interface::TextureAddressMode::ClampToEdge:
+            return rhi::AddressMode::ClampToEdge;
+        case interface::TextureAddressMode::MirroredRepeat:
+            return rhi::AddressMode::MirroredRepeat;
+    }
+
+    return rhi::AddressMode::Repeat;
+}
+
+rhi::SamplerDesc toRHISamplerDesc(const interface::TextureSamplerDesc& sampler)
+{
+    return rhi::SamplerDesc{
+        .min_filter = toRHIFilter(sampler.min_filter),
+        .mag_filter = toRHIFilter(sampler.mag_filter),
+        .mip_filter = toRHIMipFilter(sampler.mip_filter),
+        .address_u = toRHIAddressMode(sampler.address_u),
+        .address_v = toRHIAddressMode(sampler.address_v),
+        .address_w = toRHIAddressMode(sampler.address_w),
+    };
+}
+
+rhi::SamplerDesc fallbackSamplerDesc()
+{
+    return rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = rhi::MipFilter::None,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    };
+}
+
+rhi::BindGroupEntry combinedTextureEntry(uint32_t binding, rhi::TextureViewHandle view, rhi::SamplerHandle sampler)
+{
+    return rhi::BindGroupEntry{
+        .binding = binding,
+        .type = rhi::BindingType::CombinedImageSampler,
+        .texture_view = view,
+        .sampler = sampler,
+    };
+}
+
 } // namespace
+
+size_t Renderer::MaterialTextureKeyHash::operator()(const MaterialTextureKey& key) const noexcept
+{
+    size_t seed = 0;
+    const auto combine = [&seed](asset::AssetHandle handle) {
+        const auto value = std::hash<asset::AssetHandle>{}(handle);
+        seed ^= value + 0x9E'37'79'B9u + (seed << 6) + (seed >> 2);
+    };
+
+    combine(key.albedo);
+    combine(key.normal);
+    combine(key.metallic_roughness);
+    combine(key.occlusion);
+    combine(key.emission);
+    return seed;
+}
 
 Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     : m_device(&device),
@@ -125,6 +236,37 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             },
     });
 
+    m_material_texture_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
+        .entries =
+            {
+                rhi::BindGroupLayoutEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 1,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 2,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 3,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 4,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+            },
+    });
+
     m_lighting_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
         .entries =
             {
@@ -153,11 +295,16 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                     .type = rhi::BindingType::CombinedImageSampler,
                     .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
                 },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 5,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
             },
     });
 
     m_geometry_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
-        .bind_group_layouts = {m_geometry_bind_group_layout},
+        .bind_group_layouts = {m_geometry_bind_group_layout, m_material_texture_bind_group_layout},
     });
 
     m_lighting_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
@@ -187,6 +334,11 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                                                       .format = rhi::VertexFormat::Float3,
                                                                       .offset = offsetof(interface::Vertex, normal),
                                                                   },
+                                                                  rhi::VertexAttributeDesc{
+                                                                      .location = 2,
+                                                                      .format = rhi::VertexFormat::Float2,
+                                                                      .offset = offsetof(interface::Vertex, uv),
+                                                                  },
                                                               },
                                                       },
                                                   },
@@ -198,9 +350,10 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                           rhi::RenderTargetState{
                                               .color_targets =
                                                   {
-                                                      rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                                                      rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
                                                       rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
-                                                      rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                                                      rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
+                                                      rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
                                                   },
                                               .has_depth_stencil = true,
                                               .depth_stencil_format = rhi::TextureFormat::Depth24Stencil8,
@@ -241,9 +394,10 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                       rhi::RenderTargetState{
                                           .color_targets =
                                               {
-                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
                                                   rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
-                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
+                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
                                               },
                                           .has_depth_stencil = true,
                                           .depth_stencil_format = rhi::TextureFormat::Depth24Stencil8,
@@ -260,7 +414,7 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             rhi::RenderTargetState{
                 .color_targets =
                     {
-                        rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                        rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
                     },
             },
         .depth_state =
@@ -335,6 +489,7 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     LUNA_ASSERT(lightingVertexShader, "Failed to create lighting vertex shader.");
     LUNA_ASSERT(lightingFragmentShader, "Failed to create lighting fragment shader.");
     LUNA_ASSERT(m_geometry_bind_group_layout, "Failed to create geometry bind group layout.");
+    LUNA_ASSERT(m_material_texture_bind_group_layout, "Failed to create material texture bind group layout.");
     LUNA_ASSERT(m_lighting_bind_group_layout, "Failed to create lighting bind group layout.");
     LUNA_ASSERT(m_geometry_pipeline_layout, "Failed to create geometry pipeline layout.");
     LUNA_ASSERT(m_lighting_pipeline_layout, "Failed to create lighting pipeline layout.");
@@ -347,6 +502,184 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     LUNA_ASSERT(m_geometry_bind_group, "Failed to create geometry bind group.");
     LUNA_ASSERT(m_gbuffer_sampler, "Failed to create GBuffer sampler.");
     LUNA_CORE_DEBUG("Default renderer initialized");
+}
+
+Renderer::~Renderer()
+{
+    destroyMaterialTextureResources();
+}
+
+const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asset::AssetHandle handle,
+                                                                            FallbackTexture fallback)
+{
+    if (!handle.isValid()) {
+        return getOrCreateFallbackTexture(fallback);
+    }
+
+    if (const auto it = m_texture_gpu_cache.find(handle); it != m_texture_gpu_cache.end()) {
+        return it->second;
+    }
+
+    const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
+    if (texture == nullptr || texture->getWidth() == 0 || texture->getHeight() == 0 || texture->getPixels().empty()) {
+        return getOrCreateFallbackTexture(fallback);
+    }
+
+    const auto& settings = texture->getImportSettings();
+    const auto rhiFormat = toRHITextureFormat(settings);
+    const auto mipLevels = settings.generate_mipmaps ? fullMipLevelCount(texture->getWidth(), texture->getHeight()) : 1;
+
+    TextureGpuResource resource;
+    resource.texture = m_device->createTexture(rhi::TextureDesc{
+        .width = texture->getWidth(),
+        .height = texture->getHeight(),
+        .format = rhiFormat,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .mip_levels = mipLevels,
+    });
+    if (!resource.texture) {
+        return getOrCreateFallbackTexture(fallback);
+    }
+
+    m_device->updateTexture(resource.texture,
+                            rhi::TextureUploadDesc{
+                                .width = texture->getWidth(),
+                                .height = texture->getHeight(),
+                                .format = rhiFormat,
+                                .data = texture->getPixels().data(),
+                                .row_pitch = static_cast<size_t>(texture->getWidth()) * 4,
+                            });
+
+    if (mipLevels > 1) {
+        m_device->generateMipmaps(resource.texture);
+    }
+
+    resource.view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = resource.texture,
+        .format = rhiFormat,
+        .aspect = rhi::TextureAspect::Color,
+        .mip_level_count = mipLevels,
+    });
+
+    auto samplerDesc = toRHISamplerDesc(settings.sampler);
+    if (mipLevels == 1) {
+        samplerDesc.mip_filter = rhi::MipFilter::None;
+    }
+    resource.sampler = m_device->createSampler(samplerDesc);
+
+    if (!resource.view || !resource.sampler) {
+        destroyTextureGpuResource(resource);
+        return getOrCreateFallbackTexture(fallback);
+    }
+
+    return m_texture_gpu_cache.emplace(handle, resource).first->second;
+}
+
+const Renderer::TextureGpuResource& Renderer::getOrCreateFallbackTexture(FallbackTexture fallback)
+{
+    auto& resource =
+        fallback == FallbackTexture::FlatNormal ? m_flat_normal_fallback_texture : m_white_fallback_texture;
+    if (resource.texture && resource.view && resource.sampler) {
+        return resource;
+    }
+
+    const std::array<uint8_t, 4> pixel = fallback == FallbackTexture::FlatNormal
+                                             ? std::array<uint8_t, 4>{128, 128, 255, 255}
+                                             : std::array<uint8_t, 4>{255, 255, 255, 255};
+
+    resource.texture = m_device->createTexture(rhi::TextureDesc{
+        .width = 1,
+        .height = 1,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+    });
+    resource.view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = resource.texture,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
+        .aspect = rhi::TextureAspect::Color,
+    });
+    resource.sampler = m_device->createSampler(fallbackSamplerDesc());
+
+    if (resource.texture) {
+        m_device->updateTexture(resource.texture,
+                                rhi::TextureUploadDesc{
+                                    .width = 1,
+                                    .height = 1,
+                                    .format = rhi::TextureFormat::RGBA8_UNorm,
+                                    .data = pixel.data(),
+                                    .row_pitch = pixel.size(),
+                                });
+    }
+
+    return resource;
+}
+
+const Renderer::MaterialGpuResource&
+    Renderer::getOrCreateMaterialGpuResource(const interface::MaterialParameters& parameters)
+{
+    const MaterialTextureKey key{
+        .albedo = parameters.albedo_texture,
+        .normal = parameters.normal_texture,
+        .metallic_roughness = parameters.metallic_roughness_texture,
+        .occlusion = parameters.occlusion_texture,
+        .emission = parameters.emission_texture,
+    };
+
+    if (const auto it = m_material_gpu_cache.find(key); it != m_material_gpu_cache.end()) {
+        return it->second;
+    }
+
+    const auto& albedo = getOrCreateTextureGpuResource(key.albedo, FallbackTexture::White);
+    const auto& normal = getOrCreateTextureGpuResource(key.normal, FallbackTexture::FlatNormal);
+    const auto& metallicRoughness = getOrCreateTextureGpuResource(key.metallic_roughness, FallbackTexture::White);
+    const auto& occlusion = getOrCreateTextureGpuResource(key.occlusion, FallbackTexture::White);
+    const auto& emission = getOrCreateTextureGpuResource(key.emission, FallbackTexture::White);
+
+    const auto bindGroup = m_device->createBindGroup(rhi::BindGroupDesc{
+        .layout = m_material_texture_bind_group_layout,
+        .entries =
+            {
+                combinedTextureEntry(0, albedo.view, albedo.sampler),
+                combinedTextureEntry(1, normal.view, normal.sampler),
+                combinedTextureEntry(2, metallicRoughness.view, metallicRoughness.sampler),
+                combinedTextureEntry(3, occlusion.view, occlusion.sampler),
+                combinedTextureEntry(4, emission.view, emission.sampler),
+            },
+    });
+
+    return m_material_gpu_cache.emplace(key, MaterialGpuResource{.bind_group = bindGroup}).first->second;
+}
+
+void Renderer::destroyTextureGpuResource(TextureGpuResource& resource)
+{
+    if (resource.sampler) {
+        m_device->destroySampler(resource.sampler);
+    }
+    if (resource.view) {
+        m_device->destroyTextureView(resource.view);
+    }
+    if (resource.texture) {
+        m_device->destroyTexture(resource.texture);
+    }
+    resource = {};
+}
+
+void Renderer::destroyMaterialTextureResources()
+{
+    for (const auto& [_, resource] : m_material_gpu_cache) {
+        if (resource.bind_group) {
+            m_device->destroyBindGroup(resource.bind_group);
+        }
+    }
+    m_material_gpu_cache.clear();
+
+    for (auto& [_, resource] : m_texture_gpu_cache) {
+        destroyTextureGpuResource(resource);
+    }
+    m_texture_gpu_cache.clear();
+
+    destroyTextureGpuResource(m_white_fallback_texture);
+    destroyTextureGpuResource(m_flat_normal_fallback_texture);
 }
 
 void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
@@ -367,6 +700,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         m_gbuffer.albedo_view,
         m_gbuffer.normal_view,
         m_gbuffer.material_view,
+        m_gbuffer.emission_view,
         m_gbuffer.depth_view,
         m_gbuffer.final_color_view,
     };
@@ -380,6 +714,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         m_gbuffer.albedo_texture,
         m_gbuffer.normal_texture,
         m_gbuffer.material_texture,
+        m_gbuffer.emission_texture,
         m_gbuffer.depth_texture,
         m_gbuffer.final_color_texture,
     };
@@ -394,7 +729,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
     m_gbuffer.albedo_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
-        .format = rhi::TextureFormat::RGBA8,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
     });
     m_gbuffer.normal_texture = m_device->createTexture(rhi::TextureDesc{
@@ -406,7 +741,13 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
     m_gbuffer.material_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
-        .format = rhi::TextureFormat::RGBA8,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
+        .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+    });
+    m_gbuffer.emission_texture = m_device->createTexture(rhi::TextureDesc{
+        .width = width,
+        .height = height,
+        .format = rhi::TextureFormat::RGBA16F,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
     });
     m_gbuffer.depth_texture = m_device->createTexture(rhi::TextureDesc{
@@ -418,13 +759,13 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
     m_gbuffer.final_color_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
-        .format = rhi::TextureFormat::RGBA8,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
     });
 
     m_gbuffer.albedo_view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = m_gbuffer.albedo_texture,
-        .format = rhi::TextureFormat::RGBA8,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
         .aspect = rhi::TextureAspect::Color,
     });
     m_gbuffer.normal_view = m_device->createTextureView(rhi::TextureViewDesc{
@@ -434,7 +775,12 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
     });
     m_gbuffer.material_view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = m_gbuffer.material_texture,
-        .format = rhi::TextureFormat::RGBA8,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
+        .aspect = rhi::TextureAspect::Color,
+    });
+    m_gbuffer.emission_view = m_device->createTextureView(rhi::TextureViewDesc{
+        .texture = m_gbuffer.emission_texture,
+        .format = rhi::TextureFormat::RGBA16F,
         .aspect = rhi::TextureAspect::Color,
     });
     m_gbuffer.depth_view = m_device->createTextureView(rhi::TextureViewDesc{
@@ -444,7 +790,7 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
     });
     m_gbuffer.final_color_view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = m_gbuffer.final_color_texture,
-        .format = rhi::TextureFormat::RGBA8,
+        .format = rhi::TextureFormat::RGBA8_UNorm,
         .aspect = rhi::TextureAspect::Color,
     });
 
@@ -488,17 +834,25 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
                                                             .texture_view = m_gbuffer.depth_view,
                                                             .sampler = m_gbuffer_sampler,
                                                         },
+                                                        rhi::BindGroupEntry{
+                                                            .binding = 5,
+                                                            .type = rhi::BindingType::CombinedImageSampler,
+                                                            .texture_view = m_gbuffer.emission_view,
+                                                            .sampler = m_gbuffer_sampler,
+                                                        },
                                                     },
                                             });
 
     LUNA_ASSERT(m_gbuffer.albedo_texture, "Failed to create GBuffer albedo texture.");
     LUNA_ASSERT(m_gbuffer.normal_texture, "Failed to create GBuffer normal texture.");
     LUNA_ASSERT(m_gbuffer.material_texture, "Failed to create GBuffer material texture.");
+    LUNA_ASSERT(m_gbuffer.emission_texture, "Failed to create GBuffer emission texture.");
     LUNA_ASSERT(m_gbuffer.depth_texture, "Failed to create GBuffer depth texture.");
     LUNA_ASSERT(m_gbuffer.final_color_texture, "Failed to create GBuffer final color texture.");
     LUNA_ASSERT(m_gbuffer.albedo_view, "Failed to create GBuffer albedo view.");
     LUNA_ASSERT(m_gbuffer.normal_view, "Failed to create GBuffer normal view.");
     LUNA_ASSERT(m_gbuffer.material_view, "Failed to create GBuffer material view.");
+    LUNA_ASSERT(m_gbuffer.emission_view, "Failed to create GBuffer emission view.");
     LUNA_ASSERT(m_gbuffer.depth_view, "Failed to create GBuffer depth view.");
     LUNA_ASSERT(m_gbuffer.final_color_view, "Failed to create GBuffer final color view.");
     LUNA_ASSERT(m_gbuffer.lighting_bind_group, "Failed to create GBuffer lighting bind group.");
@@ -542,6 +896,12 @@ void Renderer::beginFrame()
             .store_op = rhi::StoreOp::Store,
             .clear_color = rhi::ClearColor{0.0f, 0.0f, 0.0f, 1.0f},
         },
+        rhi::ColorAttachmentDesc{
+            .view = m_gbuffer.emission_view,
+            .load_op = rhi::LoadOp::Clear,
+            .store_op = rhi::StoreOp::Store,
+            .clear_color = rhi::ClearColor{0.0f, 0.0f, 0.0f, 1.0f},
+        },
     };
     pass.has_depth_stencil_attachment = true;
     pass.depth_stencil_attachment = rhi::DepthStencilAttachmentDesc{
@@ -581,12 +941,17 @@ void Renderer::endFrame()
             .new_state = rhi::ResourceState::ShaderRead,
         },
         rhi::TextureBarrier{
+            .texture = m_gbuffer.emission_texture,
+            .old_state = rhi::ResourceState::RenderTarget,
+            .new_state = rhi::ResourceState::ShaderRead,
+        },
+        rhi::TextureBarrier{
             .texture = m_gbuffer.depth_texture,
             .old_state = rhi::ResourceState::DepthStencilWrite,
             .new_state = rhi::ResourceState::ShaderRead,
         },
     };
-    m_cmd->resourceBarrier(barriers, 4);
+    m_cmd->resourceBarrier(barriers, 5);
 
     rhi::RenderPassBeginInfo lightingPass;
     lightingPass.color_attachments.push_back(rhi::ColorAttachmentDesc{
@@ -619,11 +984,16 @@ void Renderer::resize(uint32_t width, uint32_t height)
     ensureGBuffer(width, height);
 }
 
-void Renderer::setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos)
+void Renderer::setViewProjection(const glm::mat4& view,
+                                 const glm::mat4& proj,
+                                 const glm::vec3& cameraPos,
+                                 float exposure)
 {
     m_frameUniforms.view = view;
     m_frameUniforms.projection = proj;
+    m_frameUniforms.inverseViewProjection = glm::inverse(proj * view);
     m_frameUniforms.cameraPos = cameraPos;
+    m_frameUniforms.exposure = std::max(exposure, 0.0f);
     m_frame_uniforms_dirty = true;
 }
 
@@ -711,6 +1081,7 @@ void Renderer::drawSubMesh(const interface::Mesh& mesh,
 
     const interface::MaterialParameters defaultParameters;
     const auto& parameters = material.parameters != nullptr ? *material.parameters : defaultParameters;
+    const auto& materialGpu = getOrCreateMaterialGpuResource(parameters);
     m_objectUniforms.model = transform;
     m_objectUniforms.normalMatrix = glm::transpose(glm::inverse(transform));
     m_objectUniforms.materialAlbedo = parameters.albedo;
@@ -719,9 +1090,14 @@ void Renderer::drawSubMesh(const interface::Mesh& mesh,
     m_objectUniforms.materialMetallic = parameters.metallic;
     m_objectUniforms.materialRoughness = parameters.roughness;
     m_objectUniforms.materialShadingModel = parameters.shading_model == interface::ShadingModel::Unlit ? 1u : 0u;
+    m_objectUniforms.materialNormalScale = parameters.normal_scale;
+    m_objectUniforms.materialOcclusionStrength = parameters.occlusion_strength;
     m_device->updateBuffer(m_objectUniformBuffer, 0, &m_objectUniforms, sizeof(ObjectUniforms));
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);
+    if (materialGpu.bind_group) {
+        m_cmd->setBindGroup(1, materialGpu.bind_group);
+    }
 
     if (gpu_mesh->index_buffer && gpu_mesh->index_count > 0) {
         m_cmd->setIndexBuffer(gpu_mesh->index_buffer, rhi::IndexFormat::UInt32);

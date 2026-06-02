@@ -1,0 +1,16 @@
+Asset:
+  Handle: 3009192999781803059
+  Type: Texture
+  Name: WaterBottle_baseColor
+  FilePath: Assets/Models/WaterBottle/WaterBottle_baseColor.png
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: SRGB
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: Repeat
+      AddressW: Repeat

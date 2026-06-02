@@ -22,7 +22,6 @@ target_compile_definitions(LunaLiteRenderer
         LUNALITE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
 )
 
-
 add_library(LunaLiteImGui
     imgui/imgui_renderer.cpp
     platform/imgui/glfw_imgui_platform.cpp
@@ -56,9 +55,11 @@ add_library(LunaLite STATIC
     asset/importers/mesh_asset_importer.cpp
     asset/importers/model_asset_importer.cpp
     asset/importers/script_asset_importer.cpp
+    asset/importers/texture_asset_importer.cpp
     asset/loaders/material_asset_loader.cpp
     asset/loaders/mesh_asset_loader.cpp
     asset/loaders/model_asset_loader.cpp
+    asset/loaders/texture_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
     scene/scene.cpp
@@ -85,6 +86,7 @@ target_link_libraries(LunaLite
         EnTT::EnTT
         spdlog::spdlog
         tiny_obj_loader
+        fastgltf::fastgltf
         yaml-cpp::yaml-cpp
         TinyRHI::TinyRHI
         LunaLiteRenderer
@@ -92,4 +94,5 @@ target_link_libraries(LunaLite
         sol2::sol2
     PRIVATE
         glfw
+        stb::stb
 )

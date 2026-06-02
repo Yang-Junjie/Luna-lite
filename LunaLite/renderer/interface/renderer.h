@@ -29,7 +29,8 @@ public:
     virtual void beginFrame() = 0;
     virtual void endFrame() = 0;
     virtual void resize(uint32_t width, uint32_t height) = 0;
-    virtual void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) = 0;
+    virtual void
+        setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos, float exposure) = 0;
     virtual void setSceneLighting(const SceneLighting& lighting) = 0;
 
     virtual void renderModel(const Model& model, const glm::mat4& transform) = 0;

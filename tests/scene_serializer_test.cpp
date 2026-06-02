@@ -40,6 +40,7 @@ int main()
         auto entity = scene.createEntity();
         auto& camera = scene.addComponent<scene::CameraComponent>(entity);
         camera.primary = true;
+        camera.camera.setExposure(2.5f);
     }
 
     {
@@ -77,6 +78,11 @@ int main()
     const auto cameraView = loadedScene.getRegistry().view<const scene::CameraComponent>();
     if (countView(cameraView) != 1) {
         std::cerr << "Unexpected camera entity count.\n";
+        return 1;
+    }
+    const auto& loadedCamera = cameraView.get<const scene::CameraComponent>(*cameraView.begin());
+    if (loadedCamera.camera.getExposure() != 2.5f) {
+        std::cerr << "Unexpected camera exposure.\n";
         return 1;
     }
 

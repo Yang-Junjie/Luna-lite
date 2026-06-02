@@ -12,13 +12,16 @@ public:
 private:
     static AssetMetadata createOrLoadCompanionMetadata(const std::filesystem::path& assetPath,
                                                        AssetType type,
-                                                       AssetHandle suggestedHandle);
+                                                       AssetHandle suggestedHandle,
+                                                       const YAML::Node& config = {});
     static void writeDefaultMaterial(const std::filesystem::path& materialPath);
     static void writeMaterial(const std::filesystem::path& materialPath, const tinyobj::material_t& material);
     static void writeModel(const std::filesystem::path& modelPath,
                            AssetHandle meshHandle,
                            const std::vector<AssetHandle>& materialHandles);
-    static std::vector<AssetMetadata> generateModelCompanions(const std::filesystem::path& assetPath,
-                                                              const AssetMetadata& meshMetadata);
+    static std::vector<AssetMetadata> generateObjModelCompanions(const std::filesystem::path& assetPath,
+                                                                 const AssetMetadata& meshMetadata);
+    static std::vector<AssetMetadata> generateGltfModelCompanions(const std::filesystem::path& assetPath,
+                                                                  const AssetMetadata& meshMetadata);
 };
 } // namespace lunalite::asset

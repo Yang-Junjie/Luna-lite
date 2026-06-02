@@ -1,0 +1,16 @@
+Asset:
+  Handle: 16102993038255788503
+  Type: Texture
+  Name: Default_emissive
+  FilePath: Assets/Models/DamagedHelmet/Default_emissive.jpg
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: SRGB
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: Repeat
+      AddressW: Repeat

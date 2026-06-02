@@ -15,11 +15,14 @@ namespace lunalite::renderer {
 class Renderer : public interface::Renderer {
 public:
     Renderer(rhi::Device& device, rhi::Swapchain& swapchain);
-    ~Renderer() override = default;
+    ~Renderer() override;
     void beginFrame() override;
     void endFrame() override;
     void resize(uint32_t width, uint32_t height) override;
-    void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos) override;
+    void setViewProjection(const glm::mat4& view,
+                           const glm::mat4& proj,
+                           const glm::vec3& cameraPos,
+                           float exposure) override;
     void setSceneLighting(const interface::SceneLighting& lighting) override;
     void renderModel(const interface::Model& model, const glm::mat4& transform) override;
     void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
@@ -44,6 +47,11 @@ public:
         float _pad7{0.0f};
         glm::vec3 environmentAmbient{0.0f};
         float _pad8{0.0f};
+        glm::mat4 inverseViewProjection{1.0f};
+        float exposure{1.0f};
+        float _pad9{0.0f};
+        float _pad10{0.0f};
+        float _pad11{0.0f};
     };
 
     struct alignas(16) ObjectUniforms {
@@ -55,7 +63,10 @@ public:
         float materialMetallic{0.0f};
         float materialRoughness{0.5f};
         uint32_t materialShadingModel{0};
+        float materialNormalScale{1.0f};
+        float materialOcclusionStrength{1.0f};
         float _pad0{0.0f};
+        float _pad1{0.0f};
     };
 
 private:
@@ -81,16 +92,51 @@ private:
         rhi::TextureHandle albedo_texture{};
         rhi::TextureHandle normal_texture{};
         rhi::TextureHandle material_texture{};
+        rhi::TextureHandle emission_texture{};
         rhi::TextureHandle depth_texture{};
         rhi::TextureHandle final_color_texture{};
 
         rhi::TextureViewHandle albedo_view{};
         rhi::TextureViewHandle normal_view{};
         rhi::TextureViewHandle material_view{};
+        rhi::TextureViewHandle emission_view{};
         rhi::TextureViewHandle depth_view{};
         rhi::TextureViewHandle final_color_view{};
 
         rhi::BindGroupHandle lighting_bind_group{};
+    };
+
+    enum class FallbackTexture {
+        White,
+        FlatNormal
+    };
+
+    struct TextureGpuResource {
+        rhi::TextureHandle texture{};
+        rhi::TextureViewHandle view{};
+        rhi::SamplerHandle sampler{};
+    };
+
+    struct MaterialTextureKey {
+        asset::AssetHandle albedo{};
+        asset::AssetHandle normal{};
+        asset::AssetHandle metallic_roughness{};
+        asset::AssetHandle occlusion{};
+        asset::AssetHandle emission{};
+
+        bool operator==(const MaterialTextureKey& other) const
+        {
+            return albedo == other.albedo && normal == other.normal && metallic_roughness == other.metallic_roughness &&
+                   occlusion == other.occlusion && emission == other.emission;
+        }
+    };
+
+    struct MaterialTextureKeyHash {
+        size_t operator()(const MaterialTextureKey& key) const noexcept;
+    };
+
+    struct MaterialGpuResource {
+        rhi::BindGroupHandle bind_group{};
     };
 
     void ensureGBuffer(uint32_t width, uint32_t height);
@@ -103,12 +149,18 @@ private:
     MeshGpuData*
         getOrCreateSubMeshGpuData(const interface::Mesh& mesh, size_t submesh_index, const interface::SubMesh& submesh);
     uint64_t getSubMeshCacheKey(const interface::Mesh& mesh, size_t submesh_index) const;
+    const TextureGpuResource& getOrCreateTextureGpuResource(asset::AssetHandle handle, FallbackTexture fallback);
+    const TextureGpuResource& getOrCreateFallbackTexture(FallbackTexture fallback);
+    const MaterialGpuResource& getOrCreateMaterialGpuResource(const interface::MaterialParameters& parameters);
+    void destroyTextureGpuResource(TextureGpuResource& resource);
+    void destroyMaterialTextureResources();
 
     rhi::Device* m_device{nullptr};
     rhi::Swapchain* m_swapchain{nullptr};
     rhi::CommandList* m_cmd{nullptr};
 
     rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};
+    rhi::BindGroupLayoutHandle m_material_texture_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{};
 
     rhi::PipelineLayoutHandle m_geometry_pipeline_layout{};
@@ -122,11 +174,15 @@ private:
     rhi::BufferHandle m_line_vertex_buffer{};
     rhi::BindGroupHandle m_geometry_bind_group{};
     rhi::SamplerHandle m_gbuffer_sampler{};
+    TextureGpuResource m_white_fallback_texture{};
+    TextureGpuResource m_flat_normal_fallback_texture{};
     GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
     ObjectUniforms m_objectUniforms;
     interface::FrameImage m_frame_image;
     bool m_frame_uniforms_dirty{true};
     std::unordered_map<uint64_t, MeshGpuData> m_mesh_gpu_cache;
+    std::unordered_map<asset::AssetHandle, TextureGpuResource> m_texture_gpu_cache;
+    std::unordered_map<MaterialTextureKey, MaterialGpuResource, MaterialTextureKeyHash> m_material_gpu_cache;
 };
 } // namespace lunalite::renderer

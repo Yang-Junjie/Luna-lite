@@ -22,6 +22,7 @@ public:
     static AssetMetadata deserializeMetadata(const std::filesystem::path& metaPath);
 
 protected:
+    static bool hasSpecializedConfig(const YAML::Node& config);
     static AssetMetadata createMetadata(const std::filesystem::path& assetPath, AssetType type);
 };
 

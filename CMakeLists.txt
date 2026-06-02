@@ -24,11 +24,24 @@ set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_USE_STRICT_FLAGS OFF CACHE BOOL "" FORCE)
 
+set(SIMDJSON_INSTALL OFF CACHE BOOL "" FORCE)
+set(SIMDJSON_DEVELOPER_MODE OFF CACHE BOOL "" FORCE)
+set(SIMDJSON_ENABLE_THREADS OFF CACHE BOOL "" FORCE)
+
+set(FASTGLTF_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_ENABLE_DOCS OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(FASTGLTF_COMPILE_AS_CPP20 ON CACHE BOOL "" FORCE)
+
 add_subdirectory(third_party/glfw)
 add_subdirectory(third_party/glm)
 add_subdirectory(third_party/entt)
 add_subdirectory(third_party/spdlog)
 add_subdirectory(third_party/yaml-cpp)
+add_subdirectory(third_party/stb)
+add_subdirectory(third_party/simdjson)
+add_subdirectory(third_party/fastgltf)
 
 add_library(lua STATIC
     third_party/lua/lapi.c
@@ -64,7 +77,6 @@ add_library(lua STATIC
     third_party/lua/lvm.c
     third_party/lua/lzio.c
 )
-
 add_library(lua::lua ALIAS lua)
 
 target_include_directories(lua PUBLIC third_party/lua)
@@ -85,7 +97,6 @@ add_library(imgui STATIC
     third_party/imgui/imgui_tables.cpp
     third_party/imgui/imgui_widgets.cpp
 )
-
 add_library(imgui::imgui ALIAS imgui)
 
 target_include_directories(imgui
@@ -93,7 +104,6 @@ target_include_directories(imgui
         third_party/imgui
         third_party/imgui/backends
 )
-
 target_sources(imgui PRIVATE third_party/imgui/backends/imgui_impl_glfw.cpp)
 target_link_libraries(imgui PUBLIC glfw)
 

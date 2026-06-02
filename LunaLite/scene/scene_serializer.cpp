@@ -136,6 +136,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             YAML::Node node;
             node["Primary"] = camera.primary;
             node["ProjectionType"] = projectionTypeToString(camera.camera.getProjectionType());
+            node["Exposure"] = camera.camera.getExposure();
             serializedEntity["CameraComponent"] = node;
         }
 
@@ -230,6 +231,7 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             if (const auto cameraNode = serializedEntity["CameraComponent"]) {
                 auto& camera = scene.addComponent<CameraComponent>(entity);
                 camera.primary = cameraNode["Primary"].as<bool>(true);
+                camera.camera.setExposure(cameraNode["Exposure"].as<float>(1.0f));
 
                 const auto projectionType =
                     stringToProjectionType(cameraNode["ProjectionType"].as<std::string>("Perspective"));

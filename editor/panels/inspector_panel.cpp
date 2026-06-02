@@ -302,6 +302,10 @@ void InspectorPanel::onImGuiRender()
         if (open && m_scene.hasComponent<scene::CameraComponent>(m_selected_entity)) {
             auto& camera = m_scene.getComponent<scene::CameraComponent>(m_selected_entity);
             ImGui::Checkbox("Primary", &camera.primary);
+            float exposure = camera.camera.getExposure();
+            if (ImGui::DragFloat("Exposure", &exposure, 0.05f, 0.0f, 64.0f, "%.3f")) {
+                camera.camera.setExposure(exposure);
+            }
 
             using ProjectionType = renderer::interface::Camera::ProjectionType;
             int projectionType = camera.camera.getProjectionType() == ProjectionType::Orthographic ? 1 : 0;

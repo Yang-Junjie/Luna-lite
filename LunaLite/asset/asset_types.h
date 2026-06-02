@@ -8,6 +8,7 @@ enum class AssetType {
     Material,
     Model,
     Script,
+    Texture,
 };
 
 inline std::string assetTypeToString(AssetType type)
@@ -23,6 +24,8 @@ inline std::string assetTypeToString(AssetType type)
             return "Model";
         case AssetType::Script:
             return "Script";
+        case AssetType::Texture:
+            return "Texture";
         default:
             return "Unknown";
     }
@@ -41,6 +44,9 @@ inline AssetType stringToAssetType(const std::string& type)
     }
     if (type == "Script") {
         return AssetType::Script;
+    }
+    if (type == "Texture") {
+        return AssetType::Texture;
     }
     return AssetType::None;
 }

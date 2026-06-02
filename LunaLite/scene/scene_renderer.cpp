@@ -70,7 +70,7 @@ void SceneRenderer::onRenderRuntime(const Scene& scene)
     const float aspectRatio = static_cast<float>(m_viewport_width) / static_cast<float>(m_viewport_height);
     const auto view = glm::inverse(cameraTransform->getTransform());
     const auto projection = cameraComponent->camera.getProjection(aspectRatio);
-    renderScene(scene, view, projection, cameraTransform->translation);
+    renderScene(scene, view, projection, cameraTransform->translation, cameraComponent->camera.getExposure());
 }
 
 void SceneRenderer::onRenderEditor(const Scene& scene, const renderer::interface::Camera& camera)
@@ -78,13 +78,14 @@ void SceneRenderer::onRenderEditor(const Scene& scene, const renderer::interface
     LUNA_ASSERT(m_renderer, "SceneRenderer has no renderer.");
 
     const float aspectRatio = static_cast<float>(m_viewport_width) / static_cast<float>(m_viewport_height);
-    renderScene(scene, camera.getView(), camera.getProjection(aspectRatio), camera.getPosition());
+    renderScene(scene, camera.getView(), camera.getProjection(aspectRatio), camera.getPosition(), camera.getExposure());
 }
 
 void SceneRenderer::renderScene(const Scene& scene,
                                 const glm::mat4& view,
                                 const glm::mat4& projection,
-                                const glm::vec3& cameraPosition)
+                                const glm::vec3& cameraPosition,
+                                float exposure)
 {
     renderer::interface::SceneLighting lighting{};
     {
@@ -100,7 +101,7 @@ void SceneRenderer::renderScene(const Scene& scene,
     }
 
     m_renderer->setSceneLighting(lighting);
-    m_renderer->setViewProjection(view, projection, cameraPosition);
+    m_renderer->setViewProjection(view, projection, cameraPosition, exposure);
 
     const auto modelView = scene.getRegistry().view<const TransformComponent, const ModelComponent>();
     for (const auto entity : modelView) {

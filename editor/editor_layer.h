@@ -4,8 +4,10 @@
 #include "../LunaLite/scene/scene.h"
 #include "editor_camera.h"
 #include "panels/content_browser_panel.h"
+#include "panels/editor_setting_panel.h"
 #include "panels/hierarchy_panel.h"
 #include "panels/inspector_panel.h"
+#include "panels/material_editor_panel.h"
 
 #include <filesystem>
 
@@ -42,6 +44,7 @@ private:
     std::filesystem::path projectRelativePath(const std::filesystem::path& path) const;
 
     EditorCamera m_editor_camera;
+    EditorSettingPanel m_editor_setting_panel;
 
     scene::Scene m_scene;
     scene::Scene m_runtime_scene;
@@ -50,6 +53,7 @@ private:
 
     HierarchyPanel m_hierarchy_panel;
     InspectorPanel m_inspector_panel;
+    MaterialEditorPanel m_material_editor_panel;
     ContentBrowserPanel m_content_browser_panel;
     SceneState m_scene_state{SceneState::Edit};
     bool m_viewport_hovered{false};

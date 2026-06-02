@@ -4,9 +4,16 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <cctype>
 #include <glm/geometric.hpp>
 #include <memory>
+#include <numeric>
 #include <string>
+
+#include <fastgltf/core.hpp>
+#include <fastgltf/tools.hpp>
+#include <fastgltf/types.hpp>
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -42,7 +49,59 @@ SubMeshBuilder& getOrCreateSubMesh(std::vector<SubMeshBuilder>& submeshes,
 
     return submeshes[materialSlot];
 }
+
+std::string normalizeExtension(std::string extension)
+{
+    std::ranges::transform(extension, extension.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return extension;
+}
+
+fastgltf::Expected<fastgltf::Asset> loadGltfAsset(const std::filesystem::path& path)
+{
+    static constexpr auto extensions = fastgltf::Extensions::KHR_materials_emissive_strength |
+                                       fastgltf::Extensions::KHR_materials_unlit;
+    static constexpr auto options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
+                                    fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices;
+
+    auto gltfFile = fastgltf::MappedGltfFile::FromPath(path);
+    if (!gltfFile) {
+        return gltfFile.error();
+    }
+
+    fastgltf::Parser parser(extensions);
+    return parser.loadGltf(gltfFile.get(), path.parent_path(), options);
+}
+
+glm::vec3 toVec3(fastgltf::math::fvec3 value)
+{
+    return {value.x(), value.y(), value.z()};
+}
+
+glm::vec2 toVec2(fastgltf::math::fvec2 value)
+{
+    return {value.x(), value.y()};
+}
+
+void normalizeGeneratedNormals(std::vector<renderer::interface::Vertex>& vertices)
+{
+    for (auto& vertex : vertices) {
+        const auto length = glm::length(vertex.normal);
+        vertex.normal = length > 0.0f ? vertex.normal / length : glm::vec3{0.0f, 1.0f, 0.0f};
+    }
+}
 } // namespace
+
+std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::load(const AssetMetadata& metadata)
+{
+    const auto extension = normalizeExtension(metadata.FilePath.extension().string());
+    if (extension == ".gltf" || extension == ".glb") {
+        return loadGltf(metadata);
+    }
+
+    return loadObj(metadata);
+}
 
 std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetMetadata& metadata)
 {
@@ -138,6 +197,129 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetM
     mesh->handle = metadata.Handle;
     mesh->setSubMeshes(std::move(submeshes));
 
+    return mesh;
+}
+
+std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadGltf(const AssetMetadata& metadata)
+{
+    const auto projectRoot =
+        project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());
+    const auto path = projectRoot / metadata.FilePath;
+
+    auto loadedAsset = loadGltfAsset(path);
+    if (!loadedAsset) {
+        LUNA_CORE_ERROR("Failed to load glTF file '{}': {}", path.string(), fastgltf::getErrorMessage(loadedAsset.error()));
+        return nullptr;
+    }
+
+    auto asset = std::move(loadedAsset.get());
+    const auto meshName = metadata.Name.empty() ? path.stem().string() : metadata.Name;
+    std::vector<renderer::interface::SubMesh> submeshes;
+
+    for (size_t meshIndex = 0; meshIndex < asset.meshes.size(); ++meshIndex) {
+        const auto& gltfMesh = asset.meshes[meshIndex];
+        const auto gltfMeshName = gltfMesh.name.empty() ? meshName + "_Mesh" + std::to_string(meshIndex)
+                                                        : std::string{gltfMesh.name};
+
+        for (size_t primitiveIndex = 0; primitiveIndex < gltfMesh.primitives.size(); ++primitiveIndex) {
+            const auto& primitive = gltfMesh.primitives[primitiveIndex];
+            if (primitive.type != fastgltf::PrimitiveType::Triangles) {
+                LUNA_CORE_WARN("Skipped non-triangle glTF primitive '{}' in '{}'", primitiveIndex, path.string());
+                continue;
+            }
+
+            const auto positionAttribute = primitive.findAttribute("POSITION");
+            if (positionAttribute == primitive.attributes.cend()) {
+                LUNA_CORE_WARN("Skipped glTF primitive without POSITION in '{}'", path.string());
+                continue;
+            }
+
+            const auto& positionAccessor = asset.accessors[positionAttribute->accessorIndex];
+            std::vector<renderer::interface::Vertex> vertices(positionAccessor.count);
+            fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+                asset, positionAccessor, [&](fastgltf::math::fvec3 position, std::size_t index) {
+                    vertices[index].position = toVec3(position);
+                    vertices[index].normal = glm::vec3{0.0f};
+                });
+
+            bool hasNormals = false;
+            if (const auto normalAttribute = primitive.findAttribute("NORMAL");
+                normalAttribute != primitive.attributes.cend()) {
+                const auto& normalAccessor = asset.accessors[normalAttribute->accessorIndex];
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+                    asset, normalAccessor, [&](fastgltf::math::fvec3 normal, std::size_t index) {
+                        if (index < vertices.size()) {
+                            vertices[index].normal = toVec3(normal);
+                        }
+                    });
+                hasNormals = true;
+            }
+
+            if (const auto texcoordAttribute = primitive.findAttribute("TEXCOORD_0");
+                texcoordAttribute != primitive.attributes.cend()) {
+                const auto& texcoordAccessor = asset.accessors[texcoordAttribute->accessorIndex];
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(
+                    asset, texcoordAccessor, [&](fastgltf::math::fvec2 uv, std::size_t index) {
+                        if (index < vertices.size()) {
+                            vertices[index].uv = toVec2(uv);
+                        }
+                    });
+            }
+
+            std::vector<uint32_t> indices;
+            if (primitive.indicesAccessor) {
+                const auto& indexAccessor = asset.accessors[*primitive.indicesAccessor];
+                indices.resize(indexAccessor.count);
+
+                if (indexAccessor.componentType == fastgltf::ComponentType::UnsignedByte ||
+                    indexAccessor.componentType == fastgltf::ComponentType::UnsignedShort) {
+                    std::vector<uint16_t> shortIndices(indexAccessor.count);
+                    fastgltf::copyFromAccessor<uint16_t>(asset, indexAccessor, shortIndices.data());
+                    std::ranges::transform(shortIndices, indices.begin(), [](uint16_t index) {
+                        return static_cast<uint32_t>(index);
+                    });
+                } else {
+                    fastgltf::copyFromAccessor<uint32_t>(asset, indexAccessor, indices.data());
+                }
+            } else {
+                indices.resize(vertices.size());
+                std::iota(indices.begin(), indices.end(), 0u);
+            }
+
+            if (!hasNormals) {
+                for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+                    const auto i0 = indices[i + 0];
+                    const auto i1 = indices[i + 1];
+                    const auto i2 = indices[i + 2];
+                    if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+                        continue;
+                    }
+
+                    const auto normal = calculateSurfaceNormal(vertices[i0], vertices[i1], vertices[i2]);
+                    vertices[i0].normal += normal;
+                    vertices[i1].normal += normal;
+                    vertices[i2].normal += normal;
+                }
+                normalizeGeneratedNormals(vertices);
+            }
+
+            renderer::interface::SubMesh submesh;
+            submesh.name = gltfMeshName + "_Primitive" + std::to_string(primitiveIndex);
+            submesh.material_slot = primitive.materialIndex ? static_cast<uint32_t>(*primitive.materialIndex) : 0u;
+            submesh.setVertices(std::move(vertices));
+            submesh.setIndices(std::move(indices));
+            submeshes.push_back(std::move(submesh));
+        }
+    }
+
+    if (submeshes.empty()) {
+        LUNA_CORE_ERROR("No valid submeshes found in glTF file '{}'", path.string());
+        return nullptr;
+    }
+
+    auto mesh = std::make_shared<renderer::interface::Mesh>();
+    mesh->handle = metadata.Handle;
+    mesh->setSubMeshes(std::move(submeshes));
     return mesh;
 }
 

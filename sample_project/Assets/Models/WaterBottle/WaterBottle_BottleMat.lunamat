@@ -1,0 +1,12 @@
+Material:
+  ShadingModel: Lit
+  Albedo: [1, 1, 1, 1]
+  Metallic: 1
+  Roughness: 1
+  Emission: [1, 1, 1]
+  EmissionStrength: 1
+  Textures:
+    Albedo: 3009192999781803059
+    Normal: 3009192999781803061
+    MetallicRoughness: 3009192999781803060
+    Emission: 3009192999781803062

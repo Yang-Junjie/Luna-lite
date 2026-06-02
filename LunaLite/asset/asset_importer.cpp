@@ -1,9 +1,9 @@
+#include "../core/log.h"
 #include "asset_importer.h"
 
-#include "../core/log.h"
+#include <cctype>
 
 #include <algorithm>
-#include <cctype>
 #include <fstream>
 #include <system_error>
 
@@ -63,7 +63,8 @@ bool Importer::serializeMetadata(const AssetMetadata& metadata)
     std::error_code error;
     std::filesystem::create_directories(metaPath.parent_path(), error);
     if (error) {
-        LUNA_CORE_ERROR("Failed to create metadata directory '{}': {}", metaPath.parent_path().string(), error.message());
+        LUNA_CORE_ERROR(
+            "Failed to create metadata directory '{}': {}", metaPath.parent_path().string(), error.message());
         return false;
     }
 
@@ -73,7 +74,7 @@ bool Importer::serializeMetadata(const AssetMetadata& metadata)
     asset["Name"] = metadata.Name;
     asset["FilePath"] = metadata.FilePath.generic_string();
     asset["MemoryOnly"] = metadata.MemoryOnly;
-    if (metadata.SpecializedConfig) {
+    if (hasSpecializedConfig(metadata.SpecializedConfig)) {
         asset["Config"] = metadata.SpecializedConfig;
     }
 
@@ -123,8 +124,6 @@ AssetMetadata Importer::deserializeMetadata(const std::filesystem::path& metaPat
         }
         if (asset["Config"]) {
             metadata.SpecializedConfig = asset["Config"];
-        } else if (asset["SpecializedConfig"]) {
-            metadata.SpecializedConfig = asset["SpecializedConfig"];
         }
 
         return metadata;
@@ -146,6 +145,11 @@ AssetMetadata Importer::createMetadata(const std::filesystem::path& assetPath, A
     metadata.FilePath = makeProjectRelative(assetPath);
     metadata.MemoryOnly = false;
     return metadata;
+}
+
+bool Importer::hasSpecializedConfig(const YAML::Node& config)
+{
+    return config.IsDefined() && !config.IsNull();
 }
 
 } // namespace lunalite::asset

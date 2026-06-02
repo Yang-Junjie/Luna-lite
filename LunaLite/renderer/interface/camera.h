@@ -35,6 +35,16 @@ public:
         return m_projection_type;
     }
 
+    void setExposure(float exposure)
+    {
+        m_exposure = exposure < 0.0f ? 0.0f : exposure;
+    }
+
+    float getExposure() const
+    {
+        return m_exposure;
+    }
+
     virtual glm::mat4 getProjection(float aspectRatio) const
     {
         if (m_projection_type == ProjectionType::Orthographic) {
@@ -66,6 +76,8 @@ private:
     float m_orthographic_size{10.0f};
     float m_orthographic_near{0.1f};
     float m_orthographic_far{100.0f};
+
+    float m_exposure{1.0f};
 };
 
 } // namespace lunalite::renderer::interface

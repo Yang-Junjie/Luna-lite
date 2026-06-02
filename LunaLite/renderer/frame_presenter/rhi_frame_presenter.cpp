@@ -16,14 +16,14 @@ rhi::TextureFormat toRHITextureFormat(interface::FrameImageFormat format)
 {
     switch (format) {
         case interface::FrameImageFormat::RGBA8_UNorm:
-            return rhi::TextureFormat::RGBA8;
+            return rhi::TextureFormat::RGBA8_UNorm;
         case interface::FrameImageFormat::RGBA16_Float:
             return rhi::TextureFormat::RGBA16F;
         case interface::FrameImageFormat::RGBA32_Float:
             return rhi::TextureFormat::RGBA32F;
     }
 
-    return rhi::TextureFormat::RGBA8;
+    return rhi::TextureFormat::RGBA8_UNorm;
 }
 
 size_t frameImageBytesPerPixel(interface::FrameImageFormat format)
@@ -117,7 +117,7 @@ RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapch
             rhi::RenderTargetState{
                 .color_targets =
                     {
-                        rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8},
+                        rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
                     },
             },
         .depth_state =

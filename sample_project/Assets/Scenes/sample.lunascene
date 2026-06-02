@@ -1,6 +1,24 @@
 Scene: sample
 Entities:
-  - Entity: 5
+  - Entity: 7
+    TagComponent:
+      Tag: DamagedHelmet
+    TransformComponent:
+      Translation:
+        - 2
+        - 3.2
+        - 0.9
+      Rotation:
+        - 1.850049
+        - -0.03490665
+        - -4.1748683e-07
+      Scale:
+        - 1
+        - 1
+        - 1
+    ModelComponent:
+      Model: 16102993038255778502
+  - Entity: 6
     TagComponent:
       Tag: Plane
     TransformComponent:
@@ -10,15 +28,15 @@ Entities:
         - 0
       Rotation:
         - 0.6457718
-        - -0.38397393
-        - 1.6071429e-08
+        - -0.3839739
+        - 0
       Scale:
         - 3.2
         - 1
         - 2.5
     ModelComponent:
       Model: 5500388562279810050
-  - Entity: 4
+  - Entity: 5
     TagComponent:
       Tag: Cube
     TransformComponent:
@@ -27,8 +45,8 @@ Entities:
         - 2.9
         - 0
       Rotation:
-        - -0.15707979
-        - -0.64577174
+        - -0.15707982
+        - -0.6457716
         - -4.6645683e-09
       Scale:
         - 1
@@ -36,7 +54,7 @@ Entities:
         - 1
     ModelComponent:
       Model: 5500388562279810049
-  - Entity: 3
+  - Entity: 4
     TagComponent:
       Tag: camera
     TransformComponent:
@@ -59,7 +77,7 @@ Entities:
     CameraComponent:
       Primary: true
       ProjectionType: Perspective
-  - Entity: 2
+  - Entity: 3
     TagComponent:
       Tag: stanford-bunny
     TransformComponent:
@@ -81,7 +99,7 @@ Entities:
       Scripts:
         - Script: 18087706206740559173
           Enabled: true
-  - Entity: 1
+  - Entity: 2
     TagComponent:
       Tag: cube
     TransformComponent:
@@ -99,7 +117,7 @@ Entities:
         - 5.2
     ModelComponent:
       Model: 12712907297239299620
-  - Entity: 0
+  - Entity: 1
     TagComponent:
       Tag: "directional light "
     TransformComponent:
@@ -132,3 +150,21 @@ Entities:
         - 1
         - 1
         - 1
+  - Entity: 0
+    TagComponent:
+      Tag: WaterBottle
+    TransformComponent:
+      Translation:
+        - 0
+        - 3.3
+        - 4.3
+      Rotation:
+        - -3.1415925
+        - 1.5533439
+        - -3.1415925
+      Scale:
+        - 5
+        - 5
+        - 5
+    ModelComponent:
+      Model: 3009192999781793060

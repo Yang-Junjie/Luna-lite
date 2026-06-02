@@ -34,7 +34,8 @@ private:
     void renderScene(const Scene& scene,
                      const glm::mat4& view,
                      const glm::mat4& projection,
-                     const glm::vec3& cameraPosition);
+                     const glm::vec3& cameraPosition,
+                     float exposure);
 
 private:
     renderer::interface::Renderer* m_renderer{nullptr};

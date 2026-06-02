@@ -17,10 +17,14 @@ struct MaterialParameters {
     float roughness{0.5f};
     glm::vec3 emission{0.0f};
     float emission_strength{0.0f};
+    float normal_scale{1.0f};
+    float occlusion_strength{1.0f};
 
     asset::AssetHandle albedo_texture{0};
     asset::AssetHandle normal_texture{0};
     asset::AssetHandle metallic_roughness_texture{0};
+    asset::AssetHandle occlusion_texture{0};
+    asset::AssetHandle emission_texture{0};
 };
 
 class Material : public asset::Asset {

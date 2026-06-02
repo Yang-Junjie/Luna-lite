@@ -1,0 +1,6 @@
+Asset:
+  Handle: 3009192999781793059
+  Type: Mesh
+  Name: WaterBottle
+  FilePath: Assets/Models/WaterBottle/WaterBottle.gltf
+  MemoryOnly: false

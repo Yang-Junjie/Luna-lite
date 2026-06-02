@@ -9,9 +9,11 @@
 #include "importers/mesh_asset_importer.h"
 #include "importers/model_asset_importer.h"
 #include "importers/script_asset_importer.h"
+#include "importers/texture_asset_importer.h"
 #include "loaders/material_asset_loader.h"
 #include "loaders/mesh_asset_loader.h"
 #include "loaders/model_asset_loader.h"
+#include "loaders/texture_asset_loader.h"
 
 #include <optional>
 #include <string>
@@ -151,6 +153,7 @@ void AssetManager::registerDefaultImporters()
     m_importers.push_back(std::make_unique<MaterialAssetImporter>());
     m_importers.push_back(std::make_unique<ModelAssetImporter>());
     m_importers.push_back(std::make_unique<ScriptAssetImporter>());
+    m_importers.push_back(std::make_unique<TextureAssetImporter>());
 }
 
 bool AssetManager::registerBuiltinAssets()
@@ -311,7 +314,7 @@ bool AssetManager::loadAsset(const AssetMetadata& metadata)
 
     switch (metadata.Type) {
         case AssetType::Mesh: {
-            auto mesh = MeshAssetLoader::loadObj(metadata);
+            auto mesh = MeshAssetLoader::load(metadata);
             if (!mesh) {
                 return false;
             }
@@ -333,6 +336,13 @@ bool AssetManager::loadAsset(const AssetMetadata& metadata)
         }
         case AssetType::Script:
             return true;
+        case AssetType::Texture: {
+            auto texture = TextureAssetLoader::load(metadata);
+            if (!texture) {
+                return false;
+            }
+            return AssetDatabase::get().add(texture).isValid();
+        }
         default:
             return false;
     }

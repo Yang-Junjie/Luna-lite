@@ -22,6 +22,11 @@ layout(std140, binding = 0) uniform FrameUniforms {
     float _pad7;
     vec3 environmentAmbient;
     float _pad8;
+    mat4 inverseViewProjection;
+    float exposure;
+    float _pad9;
+    float _pad10;
+    float _pad11;
 };
 
 layout(std140, binding = 1) uniform ObjectUniforms {
