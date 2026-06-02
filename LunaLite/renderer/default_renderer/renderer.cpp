@@ -1,5 +1,6 @@
 #include "../../asset/asset_database.h"
 #include "../../asset/builtin/builtin_assets.h"
+#include "../../asset/lunacube.h"
 #include "../../core/log.h"
 #include "../interface/texture.h"
 #include "renderer.h"
@@ -176,102 +177,73 @@ rhi::BindGroupEntry combinedTextureEntry(uint32_t binding, rhi::TextureViewHandl
     };
 }
 
-glm::vec3 cubemapDirection(uint32_t face, uint32_t x, uint32_t y, uint32_t size)
+bool isUsableRgba32Cube(const asset::LunaCubeImage& cube)
 {
-    const float u = (2.0f * (static_cast<float>(x) + 0.5f) / static_cast<float>(size)) - 1.0f;
-    const float v = (2.0f * (static_cast<float>(y) + 0.5f) / static_cast<float>(size)) - 1.0f;
+    return cube.format == asset::LunaCubeFormat::RGBA32F && cube.size > 0 && cube.mip_count > 0 && !cube.pixels.empty();
+}
 
-    switch (face) {
-        case 0:
-            return glm::normalize(glm::vec3{1.0f, -v, -u});
-        case 1:
-            return glm::normalize(glm::vec3{-1.0f, -v, u});
-        case 2:
-            return glm::normalize(glm::vec3{u, 1.0f, v});
-        case 3:
-            return glm::normalize(glm::vec3{u, -1.0f, -v});
-        case 4:
-            return glm::normalize(glm::vec3{u, -v, 1.0f});
-        case 5:
-        default:
-            return glm::normalize(glm::vec3{-u, -v, -1.0f});
+rhi::TextureHandle createCubeTexture(rhi::Device& device, const asset::LunaCubeImage& cube)
+{
+    auto texture = device.createTexture(rhi::TextureDesc{
+        .width = cube.size,
+        .height = cube.size,
+        .dimension = rhi::TextureDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .mip_levels = cube.mip_count,
+        .array_layers = asset::LunaCubeFaceCount,
+    });
+    if (!texture) {
+        return {};
     }
-}
 
-void sampleEquirectangular(const float* pixels, uint32_t width, uint32_t height, const glm::vec3& direction, float* out)
-{
-    constexpr float pi = 3.14159265359f;
-    const float theta = std::atan2(direction.z, direction.x);
-    const float phi = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
-    float u = theta / (2.0f * pi) + 0.5f;
-    float v = 0.5f - phi / pi;
-
-    u -= std::floor(u);
-    v = std::clamp(v, 0.0f, 1.0f);
-
-    const auto x =
-        static_cast<uint32_t>(std::clamp(u * static_cast<float>(width - 1), 0.0f, static_cast<float>(width - 1)));
-    const auto y =
-        static_cast<uint32_t>(std::clamp(v * static_cast<float>(height - 1), 0.0f, static_cast<float>(height - 1)));
-    const auto* source = pixels + (static_cast<size_t>(y) * width + x) * 4;
-    out[0] = source[0];
-    out[1] = source[1];
-    out[2] = source[2];
-    out[3] = source[3];
-}
-
-std::vector<float> makeCubemapFace(const float* pixels, uint32_t width, uint32_t height, uint32_t face, uint32_t size)
-{
-    std::vector<float> facePixels(static_cast<size_t>(size) * static_cast<size_t>(size) * 4);
-    for (uint32_t y = 0; y < size; ++y) {
-        for (uint32_t x = 0; x < size; ++x) {
-            sampleEquirectangular(pixels,
-                                  width,
-                                  height,
-                                  cubemapDirection(face, x, y, size),
-                                  &facePixels[(static_cast<size_t>(y) * size + x) * 4]);
+    for (uint32_t mip = 0; mip < cube.mip_count; ++mip) {
+        const uint32_t mipSize = asset::getLunaCubeMipSize(cube, mip);
+        for (uint32_t face = 0; face < asset::LunaCubeFaceCount; ++face) {
+            device.updateTexture(texture,
+                                 rhi::TextureUploadDesc{
+                                     .width = mipSize,
+                                     .height = mipSize,
+                                     .mip_level = mip,
+                                     .array_layer = face,
+                                     .format = rhi::TextureFormat::RGBA32F,
+                                     .data = asset::getLunaCubeFaceData(cube, mip, face),
+                                     .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
+                                 });
         }
     }
-    return facePixels;
+
+    return texture;
+}
+
+rhi::TextureViewHandle createCubeTextureView(rhi::Device& device, rhi::TextureHandle texture, uint32_t mipCount)
+{
+    return device.createTextureView(rhi::TextureViewDesc{
+        .texture = texture,
+        .view_dimension = rhi::TextureViewDimension::TextureCube,
+        .format = rhi::TextureFormat::RGBA32F,
+        .aspect = rhi::TextureAspect::Color,
+        .mip_level_count = mipCount,
+        .array_layer_count = asset::LunaCubeFaceCount,
+    });
+}
+
+rhi::SamplerHandle createCubeSampler(rhi::Device& device, uint32_t mipCount)
+{
+    return device.createSampler(rhi::SamplerDesc{
+        .min_filter = rhi::FilterMode::Linear,
+        .mag_filter = rhi::FilterMode::Linear,
+        .mip_filter = mipCount > 1 ? rhi::MipFilter::Linear : rhi::MipFilter::None,
+        .address_u = rhi::AddressMode::ClampToEdge,
+        .address_v = rhi::AddressMode::ClampToEdge,
+        .address_w = rhi::AddressMode::ClampToEdge,
+    });
 }
 
 constexpr float Pi = 3.14159265359f;
-constexpr uint32_t IrradianceCubeSize = 32;
-constexpr uint32_t IrradianceThetaSamples = 16;
-constexpr uint32_t IrradiancePhiSamples = 32;
 constexpr uint32_t PrefilterCubeSize = 128;
-constexpr uint32_t PrefilterSampleCount = 128;
 constexpr uint32_t BrdfLutSize = 128;
 constexpr uint32_t BrdfSampleCount = 256;
-
-glm::vec3 sampleEquirectangularColor(const float* pixels, uint32_t width, uint32_t height, const glm::vec3& direction)
-{
-    const float theta = std::atan2(direction.z, direction.x);
-    const float phi = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
-    float u = theta / (2.0f * Pi) + 0.5f;
-    float v = 0.5f - phi / Pi;
-
-    u -= std::floor(u);
-    v = std::clamp(v, 0.0f, 1.0f);
-
-    const float x = u * static_cast<float>(width - 1);
-    const float y = v * static_cast<float>(height - 1);
-    const auto x0 = static_cast<uint32_t>(std::floor(x));
-    const auto y0 = static_cast<uint32_t>(std::floor(y));
-    const uint32_t x1 = (x0 + 1) % width;
-    const uint32_t y1 = std::min(y0 + 1, height - 1);
-    const float tx = x - static_cast<float>(x0);
-    const float ty = y - static_cast<float>(y0);
-
-    const auto fetch = [&](uint32_t sx, uint32_t sy) {
-        const auto* source = pixels + (static_cast<size_t>(sy) * width + sx) * 4;
-        return glm::vec3{source[0], source[1], source[2]};
-    };
-
-    const auto top = glm::mix(fetch(x0, y0), fetch(x1, y0), tx);
-    const auto bottom = glm::mix(fetch(x0, y1), fetch(x1, y1), tx);
-    return glm::mix(top, bottom, ty);
-}
 
 void basisFromNormal(const glm::vec3& normal, glm::vec3& right, glm::vec3& up)
 {
@@ -312,79 +284,6 @@ glm::vec3 importanceSampleGGX(const glm::vec2& xi, float roughness, const glm::v
     glm::vec3 up;
     basisFromNormal(normal, right, up);
     return glm::normalize(right * tangentHalf.x + up * tangentHalf.y + normal * tangentHalf.z);
-}
-
-std::vector<float> makeIrradianceFace(const float* pixels, uint32_t width, uint32_t height, uint32_t face)
-{
-    std::vector<float> facePixels(static_cast<size_t>(IrradianceCubeSize) * IrradianceCubeSize * 4);
-    for (uint32_t y = 0; y < IrradianceCubeSize; ++y) {
-        for (uint32_t x = 0; x < IrradianceCubeSize; ++x) {
-            const auto normal = cubemapDirection(face, x, y, IrradianceCubeSize);
-            glm::vec3 right;
-            glm::vec3 up;
-            basisFromNormal(normal, right, up);
-
-            glm::vec3 irradiance{0.0f};
-            for (uint32_t phiIndex = 0; phiIndex < IrradiancePhiSamples; ++phiIndex) {
-                const float phi =
-                    (static_cast<float>(phiIndex) + 0.5f) * 2.0f * Pi / static_cast<float>(IrradiancePhiSamples);
-                for (uint32_t thetaIndex = 0; thetaIndex < IrradianceThetaSamples; ++thetaIndex) {
-                    const float theta = (static_cast<float>(thetaIndex) + 0.5f) * 0.5f * Pi /
-                                        static_cast<float>(IrradianceThetaSamples);
-                    const float sinTheta = std::sin(theta);
-                    const float cosTheta = std::cos(theta);
-                    const glm::vec3 sampleDirection = glm::normalize(
-                        right * (std::cos(phi) * sinTheta) + up * (std::sin(phi) * sinTheta) + normal * cosTheta);
-                    irradiance +=
-                        sampleEquirectangularColor(pixels, width, height, sampleDirection) * cosTheta * sinTheta;
-                }
-            }
-
-            irradiance *= Pi / static_cast<float>(IrradiancePhiSamples * IrradianceThetaSamples);
-            auto* destination = &facePixels[(static_cast<size_t>(y) * IrradianceCubeSize + x) * 4];
-            destination[0] = irradiance.r;
-            destination[1] = irradiance.g;
-            destination[2] = irradiance.b;
-            destination[3] = 1.0f;
-        }
-    }
-    return facePixels;
-}
-
-std::vector<float> makePrefilterFace(
-    const float* pixels, uint32_t width, uint32_t height, uint32_t face, uint32_t size, float roughness)
-{
-    std::vector<float> facePixels(static_cast<size_t>(size) * size * 4);
-    for (uint32_t y = 0; y < size; ++y) {
-        for (uint32_t x = 0; x < size; ++x) {
-            const auto normal = cubemapDirection(face, x, y, size);
-            const auto view = normal;
-            glm::vec3 prefilteredColor{0.0f};
-            float totalWeight = 0.0f;
-
-            for (uint32_t sampleIndex = 0; sampleIndex < PrefilterSampleCount; ++sampleIndex) {
-                const auto xi = hammersley(sampleIndex, PrefilterSampleCount);
-                const auto halfVector = importanceSampleGGX(xi, roughness, normal);
-                const auto light = glm::normalize(2.0f * glm::dot(view, halfVector) * halfVector - view);
-                const float noL = std::max(glm::dot(normal, light), 0.0f);
-                if (noL > 0.0f) {
-                    prefilteredColor += sampleEquirectangularColor(pixels, width, height, light) * noL;
-                    totalWeight += noL;
-                }
-            }
-
-            if (totalWeight > 0.0f) {
-                prefilteredColor /= totalWeight;
-            }
-
-            auto* destination = &facePixels[(static_cast<size_t>(y) * size + x) * 4];
-            destination[0] = prefilteredColor.r;
-            destination[1] = prefilteredColor.g;
-            destination[2] = prefilteredColor.b;
-            destination[3] = 1.0f;
-        }
-    }
-    return facePixels;
 }
 
 float geometrySchlickGGXIBL(float noV, float roughness)
@@ -1044,9 +943,14 @@ const Renderer::MaterialGpuResource&
     return m_material_gpu_cache.emplace(key, MaterialGpuResource{.bind_group = bindGroup}).first->second;
 }
 
-const Renderer::EnvironmentGpuResource* Renderer::getOrCreateEnvironmentGpuResource(asset::AssetHandle handle)
+const Renderer::EnvironmentGpuResource*
+    Renderer::getOrCreateEnvironmentGpuResource(asset::AssetHandle handle,
+                                                const std::filesystem::path& environment_cube_path,
+                                                const std::filesystem::path& irradiance_cube_path,
+                                                const std::filesystem::path& prefilter_cube_path)
 {
-    if (!handle.isValid()) {
+    if (!handle.isValid() || environment_cube_path.empty() || irradiance_cube_path.empty() ||
+        prefilter_cube_path.empty()) {
         return nullptr;
     }
 
@@ -1054,145 +958,35 @@ const Renderer::EnvironmentGpuResource* Renderer::getOrCreateEnvironmentGpuResou
         return &it->second;
     }
 
-    const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
-    if (texture == nullptr || texture->getFormat() != interface::TextureFormat::RGBA32F || texture->getWidth() == 0 ||
-        texture->getHeight() == 0 || texture->getPixels().empty()) {
+    const auto environmentCube = asset::readLunaCube(environment_cube_path);
+    const auto irradianceCube = asset::readLunaCube(irradiance_cube_path);
+    const auto prefilterCube = asset::readLunaCube(prefilter_cube_path);
+    if (!environmentCube || !isUsableRgba32Cube(*environmentCube) || !irradianceCube ||
+        !isUsableRgba32Cube(*irradianceCube) || !prefilterCube || !isUsableRgba32Cube(*prefilterCube)) {
+        LUNA_CORE_ERROR("Failed to load environment IBL artifacts: '{}', '{}', '{}'",
+                        environment_cube_path.string(),
+                        irradiance_cube_path.string(),
+                        prefilter_cube_path.string());
         return nullptr;
     }
-
-    const auto* pixels = reinterpret_cast<const float*>(texture->getPixels().data());
-    const uint32_t cubeSize = std::clamp(texture->getHeight(), 16u, 512u);
-    const uint32_t mipLevels = fullMipLevelCount(cubeSize, cubeSize);
 
     EnvironmentGpuResource resource;
-    resource.texture = m_device->createTexture(rhi::TextureDesc{
-        .width = cubeSize,
-        .height = cubeSize,
-        .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .mip_levels = mipLevels,
-        .array_layers = 6,
-    });
-    if (!resource.texture) {
+    resource.texture = createCubeTexture(*m_device, *environmentCube);
+    resource.irradiance_texture = createCubeTexture(*m_device, *irradianceCube);
+    resource.prefilter_texture = createCubeTexture(*m_device, *prefilterCube);
+    if (!resource.texture || !resource.irradiance_texture || !resource.prefilter_texture) {
+        destroyEnvironmentGpuResource(resource);
         return nullptr;
     }
 
-    for (uint32_t face = 0; face < 6; ++face) {
-        const auto facePixels = makeCubemapFace(pixels, texture->getWidth(), texture->getHeight(), face, cubeSize);
-        m_device->updateTexture(resource.texture,
-                                rhi::TextureUploadDesc{
-                                    .width = cubeSize,
-                                    .height = cubeSize,
-                                    .array_layer = face,
-                                    .format = rhi::TextureFormat::RGBA32F,
-                                    .data = facePixels.data(),
-                                    .row_pitch = static_cast<size_t>(cubeSize) * sizeof(float) * 4,
-                                });
-    }
+    resource.view = createCubeTextureView(*m_device, resource.texture, environmentCube->mip_count);
+    resource.sampler = createCubeSampler(*m_device, environmentCube->mip_count);
 
-    if (mipLevels > 1) {
-        m_device->generateMipmaps(resource.texture);
-    }
+    resource.irradiance_view = createCubeTextureView(*m_device, resource.irradiance_texture, irradianceCube->mip_count);
+    resource.irradiance_sampler = createCubeSampler(*m_device, irradianceCube->mip_count);
 
-    resource.view = m_device->createTextureView(rhi::TextureViewDesc{
-        .texture = resource.texture,
-        .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .aspect = rhi::TextureAspect::Color,
-        .mip_level_count = mipLevels,
-        .array_layer_count = 6,
-    });
-    resource.sampler = m_device->createSampler(rhi::SamplerDesc{
-        .min_filter = rhi::FilterMode::Linear,
-        .mag_filter = rhi::FilterMode::Linear,
-        .mip_filter = rhi::MipFilter::Linear,
-        .address_u = rhi::AddressMode::ClampToEdge,
-        .address_v = rhi::AddressMode::ClampToEdge,
-        .address_w = rhi::AddressMode::ClampToEdge,
-    });
-
-    resource.irradiance_texture = m_device->createTexture(rhi::TextureDesc{
-        .width = IrradianceCubeSize,
-        .height = IrradianceCubeSize,
-        .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .array_layers = 6,
-    });
-    for (uint32_t face = 0; resource.irradiance_texture && face < 6; ++face) {
-        const auto facePixels = makeIrradianceFace(pixels, texture->getWidth(), texture->getHeight(), face);
-        m_device->updateTexture(resource.irradiance_texture,
-                                rhi::TextureUploadDesc{
-                                    .width = IrradianceCubeSize,
-                                    .height = IrradianceCubeSize,
-                                    .array_layer = face,
-                                    .format = rhi::TextureFormat::RGBA32F,
-                                    .data = facePixels.data(),
-                                    .row_pitch = static_cast<size_t>(IrradianceCubeSize) * sizeof(float) * 4,
-                                });
-    }
-    resource.irradiance_view = m_device->createTextureView(rhi::TextureViewDesc{
-        .texture = resource.irradiance_texture,
-        .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .aspect = rhi::TextureAspect::Color,
-        .array_layer_count = 6,
-    });
-    resource.irradiance_sampler = m_device->createSampler(rhi::SamplerDesc{
-        .min_filter = rhi::FilterMode::Linear,
-        .mag_filter = rhi::FilterMode::Linear,
-        .mip_filter = rhi::MipFilter::None,
-        .address_u = rhi::AddressMode::ClampToEdge,
-        .address_v = rhi::AddressMode::ClampToEdge,
-        .address_w = rhi::AddressMode::ClampToEdge,
-    });
-
-    const uint32_t prefilterMipLevels = fullMipLevelCount(PrefilterCubeSize, PrefilterCubeSize);
-    resource.prefilter_texture = m_device->createTexture(rhi::TextureDesc{
-        .width = PrefilterCubeSize,
-        .height = PrefilterCubeSize,
-        .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .mip_levels = prefilterMipLevels,
-        .array_layers = 6,
-    });
-    for (uint32_t mip = 0; resource.prefilter_texture && mip < prefilterMipLevels; ++mip) {
-        const uint32_t mipSize = std::max(PrefilterCubeSize >> mip, 1u);
-        const float roughness =
-            prefilterMipLevels > 1 ? static_cast<float>(mip) / static_cast<float>(prefilterMipLevels - 1) : 0.0f;
-        for (uint32_t face = 0; face < 6; ++face) {
-            const auto facePixels =
-                makePrefilterFace(pixels, texture->getWidth(), texture->getHeight(), face, mipSize, roughness);
-            m_device->updateTexture(resource.prefilter_texture,
-                                    rhi::TextureUploadDesc{
-                                        .width = mipSize,
-                                        .height = mipSize,
-                                        .mip_level = mip,
-                                        .array_layer = face,
-                                        .format = rhi::TextureFormat::RGBA32F,
-                                        .data = facePixels.data(),
-                                        .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
-                                    });
-        }
-    }
-    resource.prefilter_view = m_device->createTextureView(rhi::TextureViewDesc{
-        .texture = resource.prefilter_texture,
-        .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .aspect = rhi::TextureAspect::Color,
-        .mip_level_count = prefilterMipLevels,
-        .array_layer_count = 6,
-    });
-    resource.prefilter_sampler = m_device->createSampler(rhi::SamplerDesc{
-        .min_filter = rhi::FilterMode::Linear,
-        .mag_filter = rhi::FilterMode::Linear,
-        .mip_filter = rhi::MipFilter::Linear,
-        .address_u = rhi::AddressMode::ClampToEdge,
-        .address_v = rhi::AddressMode::ClampToEdge,
-        .address_w = rhi::AddressMode::ClampToEdge,
-    });
+    resource.prefilter_view = createCubeTextureView(*m_device, resource.prefilter_texture, prefilterCube->mip_count);
+    resource.prefilter_sampler = createCubeSampler(*m_device, prefilterCube->mip_count);
 
     if (!resource.view || !resource.sampler || !resource.irradiance_view || !resource.irradiance_sampler ||
         !resource.prefilter_view || !resource.prefilter_sampler) {
@@ -1810,7 +1604,10 @@ void Renderer::setViewProjection(const glm::mat4& view,
 void Renderer::setLighting(const interface::RenderLighting& lighting)
 {
     m_frameUniforms.directionalLightCount = lighting.directional_light_count > 0 ? 1u : 0u;
-    const auto* environment = getOrCreateEnvironmentGpuResource(lighting.environment_map);
+    const auto* environment = getOrCreateEnvironmentGpuResource(lighting.environment_map,
+                                                                lighting.environment_cube,
+                                                                lighting.environment_irradiance_cube,
+                                                                lighting.environment_prefilter_cube);
     m_frameUniforms.environmentIntensity =
         environment != nullptr ? std::max(lighting.environment_intensity, 0.0f) : 0.0f;
     updateEnvironmentBindGroup(environment != nullptr ? *environment : m_black_environment_gpu_resource);

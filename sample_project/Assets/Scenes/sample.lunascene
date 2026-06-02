@@ -1,60 +1,93 @@
 Scene: sample
+Settings:
+  EnvironmentMap: 12342259277423478970
+  EnvironmentIntensity: 1
 Entities:
   - Entity: 7
     TagComponent:
-      Tag: DamagedHelmet
+      Tag: WaterBottle
     TransformComponent:
       Translation:
-        - 2
-        - 3.2
-        - 0.9
+        - 0
+        - 3.3
+        - 4.3
       Rotation:
-        - 1.850049
-        - -0.03490665
-        - -4.1748683e-07
+        - -3.1415925
+        - 1.5533439
+        - -3.1415925
       Scale:
-        - 1
-        - 1
-        - 1
+        - 5
+        - 5
+        - 5
     ModelComponent:
-      Model: 16102993038255778502
+      Model: 3009192999781793060
   - Entity: 6
     TagComponent:
-      Tag: Plane
+      Tag: "directional light "
     TransformComponent:
       Translation:
-        - -1.9
-        - 3.5
+        - 0
+        - 0
         - 0
       Rotation:
-        - 0.6457718
-        - -0.3839739
+        - 0
+        - -0
         - 0
       Scale:
-        - 3.2
         - 1
-        - 2.5
-    ModelComponent:
-      Model: 5500388562279810050
+        - 1
+        - 1
+    DirectionalLightComponent:
+      Direction:
+        - 0
+        - -1
+        - 0
+      Color:
+        - 1
+        - 1
+        - 1
+      Intensity: 1
   - Entity: 5
     TagComponent:
-      Tag: Cube
+      Tag: cube
     TransformComponent:
       Translation:
-        - 2.1
-        - 2.9
+        - 0
+        - 1.2
         - 0
       Rotation:
-        - -0.15707982
-        - -0.6457716
-        - -4.6645683e-09
+        - 0
+        - -0
+        - 0
       Scale:
-        - 1
-        - 1.7
-        - 1
+        - 4.7
+        - 0.3
+        - 5.2
     ModelComponent:
-      Model: 5500388562279810049
+      Model: 12712907297239299620
   - Entity: 4
+    TagComponent:
+      Tag: stanford-bunny
+    TransformComponent:
+      Translation:
+        - 0
+        - 1.6
+        - 0.1
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 8
+        - 8
+        - 8
+    ModelComponent:
+      Model: 15330008245417503354
+    ScriptComponent:
+      Scripts:
+        - Script: 18087706206740559173
+          Enabled: true
+  - Entity: 3
     TagComponent:
       Tag: camera
     TransformComponent:
@@ -77,94 +110,58 @@ Entities:
     CameraComponent:
       Primary: true
       ProjectionType: Perspective
-  - Entity: 3
-    TagComponent:
-      Tag: stanford-bunny
-    TransformComponent:
-      Translation:
-        - 0
-        - 1.6
-        - 0.1
-      Rotation:
-        - 0
-        - -0
-        - 0
-      Scale:
-        - 8
-        - 8
-        - 8
-    ModelComponent:
-      Model: 15330008245417503354
-    ScriptComponent:
-      Scripts:
-        - Script: 18087706206740559173
-          Enabled: true
+      Exposure: 1
   - Entity: 2
     TagComponent:
-      Tag: cube
+      Tag: Cube
     TransformComponent:
       Translation:
-        - 0
-        - 1.2
+        - 2.1
+        - 2.9
         - 0
       Rotation:
-        - 0
-        - -0
-        - 0
+        - -0.15707982
+        - -0.64577156
+        - -9.329137e-09
       Scale:
-        - 4.7
-        - 0.3
-        - 5.2
+        - 1
+        - 1.7
+        - 1
     ModelComponent:
-      Model: 12712907297239299620
+      Model: 5500388562279810049
   - Entity: 1
     TagComponent:
-      Tag: "directional light "
+      Tag: Plane
     TransformComponent:
       Translation:
-        - 0
-        - 0
+        - -1.9
+        - 3.5
         - 0
       Rotation:
-        - 0
-        - -0
+        - 0.6457718
+        - -0.38397387
         - 0
       Scale:
+        - 3.2
         - 1
-        - 1
-        - 1
-    DirectionalLightComponent:
-      Direction:
-        - 0
-        - -1
-        - 0
-      Ambient:
-        - 0.05
-        - 0.05
-        - 0.05
-      Diffuse:
-        - 0.8
-        - 0.8
-        - 0.8
-      Specular:
-        - 1
-        - 1
-        - 1
+        - 2.5
+    ModelComponent:
+      Model: 5500388562279810050
   - Entity: 0
     TagComponent:
-      Tag: WaterBottle
+      Tag: DamagedHelmet
     TransformComponent:
       Translation:
-        - 0
-        - 3.3
-        - 4.3
+        - 2
+        - 3.2
+        - 0.9
       Rotation:
-        - -3.1415925
-        - 1.5533439
-        - -3.1415925
+        - 1.850049
+        - -0.03490665
+        - -4.1748683e-07
       Scale:
-        - 5
-        - 5
-        - 5
+        - 1
+        - 1
+        - 1
     ModelComponent:
-      Model: 3009192999781793060
+      Model: 16102993038255778502

@@ -30,6 +30,11 @@ bool Importer::supports(const std::filesystem::path& assetPath) const
     return false;
 }
 
+bool Importer::shouldRefreshExistingMetadata(const AssetMetadata&, const std::filesystem::path&) const
+{
+    return false;
+}
+
 std::filesystem::path Importer::getProjectRoot()
 {
     return project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());

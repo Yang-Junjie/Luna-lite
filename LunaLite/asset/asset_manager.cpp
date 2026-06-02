@@ -27,6 +27,13 @@ bool isMetaFile(const std::filesystem::path& path)
     return path.extension() == ".lunameta";
 }
 
+std::filesystem::path metadataSidecarPathFor(const std::filesystem::path& assetPath)
+{
+    auto metadataPath = assetPath;
+    metadataPath += ".lunameta";
+    return metadataPath;
+}
+
 AssetMetadata
     createBuiltinMetadata(AssetHandle handle, AssetType type, std::string name, std::filesystem::path filePath)
 {
@@ -224,7 +231,7 @@ bool AssetManager::importAssets(const std::vector<std::filesystem::path>& assetP
                                 std::vector<AssetMetadata>& importedMetadata)
 {
     for (const auto& assetPath : assetPaths) {
-        auto metadataList = importIfNeeded(assetPath);
+        auto metadataList = importOrReuseMetadata(assetPath);
         if (metadataList.empty()) {
             return false;
         }
@@ -235,22 +242,20 @@ bool AssetManager::importAssets(const std::vector<std::filesystem::path>& assetP
     return true;
 }
 
-std::vector<AssetMetadata> AssetManager::importIfNeeded(const std::filesystem::path& assetPath)
+std::vector<AssetMetadata> AssetManager::importOrReuseMetadata(const std::filesystem::path& assetPath)
 {
     auto* importer = findImporter(assetPath);
     if (importer == nullptr) {
         return {};
     }
 
-    auto metaPath = assetPath;
-    metaPath += ".lunameta";
-
-    if (std::filesystem::exists(metaPath)) {
-        const auto metadata = Importer::deserializeMetadata(metaPath);
+    const auto metadataPath = metadataSidecarPathFor(assetPath);
+    if (std::filesystem::exists(metadataPath)) {
+        const auto metadata = Importer::deserializeMetadata(metadataPath);
         if (!metadata.Handle.isValid()) {
             return {};
         }
-        if (metadata.Type == AssetType::Mesh) {
+        if (importer->shouldRefreshExistingMetadata(metadata, assetPath)) {
             return importer->import(assetPath);
         }
         return {metadata};

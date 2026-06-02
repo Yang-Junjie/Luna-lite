@@ -257,6 +257,12 @@ std::vector<std::string> MeshAssetImporter::getSupportedExtensions() const
     return {".obj", ".gltf", ".glb"};
 }
 
+bool MeshAssetImporter::shouldRefreshExistingMetadata(const AssetMetadata&, const std::filesystem::path&) const
+{
+    // Mesh imports emit companion model/material metadata, so the sidecar alone is not the full import result.
+    return true;
+}
+
 AssetMetadata MeshAssetImporter::createOrLoadCompanionMetadata(const std::filesystem::path& assetPath,
                                                                AssetType type,
                                                                AssetHandle suggestedHandle,

@@ -6,5 +6,7 @@ class TextureAssetImporter final : public Importer {
 public:
     std::vector<AssetMetadata> import(const std::filesystem::path& assetPath) override;
     std::vector<std::string> getSupportedExtensions() const override;
+    bool shouldRefreshExistingMetadata(const AssetMetadata& metadata,
+                                       const std::filesystem::path& assetPath) const override;
 };
 } // namespace lunalite::asset

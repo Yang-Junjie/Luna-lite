@@ -40,13 +40,18 @@ vec3 applyNormalMap(vec3 normal, vec3 worldPos, vec2 uv)
     vec2 duv1 = dFdx(uv);
     vec2 duv2 = dFdy(uv);
     float det = duv1.x * duv2.y - duv1.y * duv2.x;
-    if (abs(det) < 1e-6) {
+    if (abs(det) < 1e-12) {
         return N;
     }
 
     tangentNormal.xy *= materialNormalScale;
     vec3 T = normalize((dp1 * duv2.y - dp2 * duv1.y) / det);
-    T = normalize(T - N * dot(N, T));
+    T = T - N * dot(N, T);
+    if (dot(T, T) < 1e-12) {
+        return N;
+    }
+
+    T = normalize(T);
     vec3 B = normalize(cross(N, T) * sign(det));
     return normalize(mat3(T, B, N) * tangentNormal);
 }

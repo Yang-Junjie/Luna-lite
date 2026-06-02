@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <filesystem>
 #include <glm/glm.hpp>
 #include <unordered_map>
 
@@ -158,7 +159,10 @@ private:
     const TextureGpuResource& getOrCreateTextureGpuResource(asset::AssetHandle handle, FallbackTexture fallback);
     const TextureGpuResource& getOrCreateFallbackTexture(FallbackTexture fallback);
     const MaterialGpuResource& getOrCreateMaterialGpuResource(const interface::MaterialParameters& parameters);
-    const EnvironmentGpuResource* getOrCreateEnvironmentGpuResource(asset::AssetHandle handle);
+    const EnvironmentGpuResource* getOrCreateEnvironmentGpuResource(asset::AssetHandle handle,
+                                                                    const std::filesystem::path& environment_cube_path,
+                                                                    const std::filesystem::path& irradiance_cube_path,
+                                                                    const std::filesystem::path& prefilter_cube_path);
     void createBlackEnvironmentGpuResource();
     void createBrdfLutResource();
     void updateEnvironmentBindGroup(const EnvironmentGpuResource& resource);

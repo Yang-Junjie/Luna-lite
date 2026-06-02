@@ -1,10 +1,13 @@
+#include "../LunaLite/asset/asset_cache.h"
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
+#include "../LunaLite/asset/lunacube.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/renderer/interface/model.h"
 #include "../LunaLite/renderer/interface/texture.h"
+#include "../third_party/stb/stb_image_write.h"
 
 #include <cmath>
 #include <cstdint>
@@ -13,8 +16,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-
-#include "../third_party/stb/stb_image_write.h"
 
 namespace {
 std::filesystem::path findTestMesh()
@@ -65,6 +66,17 @@ template <typename T, std::size_t Size> void writeArray(std::ofstream& out, cons
 bool nearlyEqual(float lhs, float rhs)
 {
     return std::abs(lhs - rhs) <= 0.001f;
+}
+
+uint32_t fullMipLevelCount(uint32_t size)
+{
+    uint32_t levels = 1;
+    while (size > 1) {
+        size >>= 1;
+        ++levels;
+    }
+
+    return levels;
 }
 
 bool writeGltfTriangle(const std::filesystem::path& gltfPath,
@@ -248,6 +260,7 @@ int main()
     }
 
     const auto targetHdrTexture = projectRoot / info.assets_path / "environment.hdr";
+    const auto expectedHdrTextureHandle = asset::AssetHandle{987'654'321ull};
     const float hdrPixels[] = {
         1.0f,
         0.5f,
@@ -259,6 +272,29 @@ int main()
     if (stbi_write_hdr(targetHdrTexture.string().c_str(), 2, 1, 3, hdrPixels) == 0) {
         std::cerr << "Failed to write HDR test texture.\n";
         return 1;
+    }
+    {
+        std::ofstream hdrMetadata(targetHdrTexture.string() + ".lunameta");
+        hdrMetadata << "Asset:\n";
+        hdrMetadata << "  Handle: " << static_cast<uint64_t>(expectedHdrTextureHandle) << "\n";
+        hdrMetadata << "  Type: Texture\n";
+        hdrMetadata << "  Name: environment\n";
+        hdrMetadata << "  FilePath: GameAssets/environment.hdr\n";
+        hdrMetadata << "  MemoryOnly: false\n";
+        hdrMetadata << "  Config:\n";
+        hdrMetadata << "    GenerateMipmaps: true\n";
+        hdrMetadata << "    ColorSpace: Linear\n";
+        hdrMetadata << "    Sampler:\n";
+        hdrMetadata << "      MinFilter: Linear\n";
+        hdrMetadata << "      MagFilter: Linear\n";
+        hdrMetadata << "      MipFilter: Linear\n";
+        hdrMetadata << "      AddressU: Repeat\n";
+        hdrMetadata << "      AddressV: ClampToEdge\n";
+        hdrMetadata << "      AddressW: ClampToEdge\n";
+        hdrMetadata << "    Environment:\n";
+        hdrMetadata << "      CubemapSize: 4\n";
+        hdrMetadata << "      IrradianceSize: 4\n";
+        hdrMetadata << "      PrefilterSize: 4\n";
     }
 
     const auto texturedMaterialPath = projectRoot / info.assets_path / "Textured.lunamat";
@@ -373,12 +409,59 @@ int main()
     }
 
     const auto hdrTextureHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/environment.hdr");
+    if (hdrTextureHandle != expectedHdrTextureHandle) {
+        std::cerr << "Failed to preserve HDR texture metadata handle.\n";
+        return 1;
+    }
     const auto* hdrTexture = asset::AssetManager::get().getAsset<renderer::interface::Texture>(hdrTextureHandle);
     if (hdrTexture == nullptr || hdrTexture->getWidth() != 2 || hdrTexture->getHeight() != 1 ||
         hdrTexture->getFormat() != renderer::interface::TextureFormat::RGBA32F ||
         hdrTexture->getPixels().size() != 2 * 1 * 4 * sizeof(float) ||
         hdrTexture->getImportSettings().color_space != renderer::interface::TextureColorSpace::Linear) {
         std::cerr << "Failed to import and load HDR texture through AssetManager.\n";
+        return 1;
+    }
+    const auto* hdrMetadata = asset::AssetManager::get().getMetadata(hdrTextureHandle);
+    const auto environment = hdrMetadata != nullptr ? hdrMetadata->SpecializedConfig["Environment"] : YAML::Node{};
+    const auto artifacts = environment ? environment["Artifacts"] : YAML::Node{};
+    const auto environmentArtifact =
+        environment && environment["Artifacts"] ? environment["Artifacts"]["EnvironmentCube"].as<std::string>("") : "";
+    const auto irradianceArtifact = artifacts ? artifacts["IrradianceCube"].as<std::string>("") : "";
+    const auto prefilterArtifact = artifacts ? artifacts["PrefilterCube"].as<std::string>("") : "";
+    if (!environment || environment["Type"].as<std::string>("") != "EquirectangularHDR" ||
+        environment["SourceHash"].as<std::string>("").empty() || environment["CubemapSize"].as<uint32_t>(0) != 4 ||
+        environment["IrradianceSize"].as<uint32_t>(0) != 4 || environment["PrefilterSize"].as<uint32_t>(0) != 4 ||
+        environmentArtifact.empty() || irradianceArtifact.empty() || prefilterArtifact.empty()) {
+        std::cerr << "Failed to write HDR environment artifact metadata.\n";
+        return 1;
+    }
+    const auto environmentCube = asset::readLunaCube(asset::cache::resolveProjectPath(environmentArtifact));
+    const auto irradianceCube = asset::readLunaCube(asset::cache::resolveProjectPath(irradianceArtifact));
+    const auto prefilterCube = asset::readLunaCube(asset::cache::resolveProjectPath(prefilterArtifact));
+    const auto expectedEnvironmentCubePayloadSize =
+        asset::calculateLunaCubePayloadSize(asset::LunaCubeFormat::RGBA32F, 4, 1);
+    const auto expectedIrradianceCubePayloadSize =
+        asset::calculateLunaCubePayloadSize(asset::LunaCubeFormat::RGBA32F, 4, 1);
+    const auto expectedPrefilterMipCount = fullMipLevelCount(4);
+    const auto expectedPrefilterCubePayloadSize =
+        asset::calculateLunaCubePayloadSize(asset::LunaCubeFormat::RGBA32F, 4, expectedPrefilterMipCount);
+    if (!environmentCube || !expectedEnvironmentCubePayloadSize ||
+        environmentCube->format != asset::LunaCubeFormat::RGBA32F || environmentCube->size != 4 ||
+        environmentCube->mip_count != 1 || environmentCube->pixels.size() != *expectedEnvironmentCubePayloadSize) {
+        std::cerr << "Failed to write HDR environment .lunacube artifact.\n";
+        return 1;
+    }
+    if (!irradianceCube || !expectedIrradianceCubePayloadSize ||
+        irradianceCube->format != asset::LunaCubeFormat::RGBA32F || irradianceCube->size != 4 ||
+        irradianceCube->mip_count != 1 || irradianceCube->pixels.size() != *expectedIrradianceCubePayloadSize) {
+        std::cerr << "Failed to write HDR irradiance .lunacube artifact.\n";
+        return 1;
+    }
+    if (!prefilterCube || !expectedPrefilterCubePayloadSize ||
+        prefilterCube->format != asset::LunaCubeFormat::RGBA32F || prefilterCube->size != 4 ||
+        prefilterCube->mip_count != expectedPrefilterMipCount ||
+        prefilterCube->pixels.size() != *expectedPrefilterCubePayloadSize) {
+        std::cerr << "Failed to write HDR prefilter .lunacube artifact.\n";
         return 1;
     }
 

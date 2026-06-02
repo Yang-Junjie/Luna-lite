@@ -14,3 +14,13 @@ Asset:
       AddressU: Repeat
       AddressV: ClampToEdge
       AddressW: ClampToEdge
+    Environment:
+      Type: EquirectangularHDR
+      SourceHash: 6364206386105590318
+      CubemapSize: 1024
+      Artifacts:
+        EnvironmentCube: Cache/ImportedAssets/12342259277423478970/environment.lunacube
+        IrradianceCube: Cache/ImportedAssets/12342259277423478970/irradiance.lunacube
+        PrefilterCube: Cache/ImportedAssets/12342259277423478970/prefilter.lunacube
+      IrradianceSize: 32
+      PrefilterSize: 128

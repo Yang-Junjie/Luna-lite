@@ -48,7 +48,7 @@ private:
     bool importAssets(const std::vector<std::filesystem::path>& assetPaths,
                       std::vector<AssetMetadata>& importedMetadata);
 
-    std::vector<AssetMetadata> importIfNeeded(const std::filesystem::path& assetPath);
+    std::vector<AssetMetadata> importOrReuseMetadata(const std::filesystem::path& assetPath);
     bool registerMetadata(const std::vector<AssetMetadata>& metadataList);
     bool registerMetadata(const AssetMetadata& metadata);
     bool loadAllAssets();
