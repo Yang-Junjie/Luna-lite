@@ -39,7 +39,7 @@ float materialRoughness(const tinyobj::material_t& material)
 }
 } // namespace
 
-AssetMetadata MeshAssetImporter::import(const std::filesystem::path& assetPath)
+std::vector<AssetMetadata> MeshAssetImporter::import(const std::filesystem::path& assetPath)
 {
     auto metadata = createMetadata(assetPath, AssetType::Mesh);
     const auto metaPath = getMetaFilePath(metadata);
@@ -61,8 +61,10 @@ AssetMetadata MeshAssetImporter::import(const std::filesystem::path& assetPath)
         return {};
     }
 
-    generateModelCompanions(assetPath, metadata);
-    return metadata;
+    auto importedMetadata = std::vector<AssetMetadata>{metadata};
+    auto companionMetadata = generateModelCompanions(assetPath, metadata);
+    importedMetadata.insert(importedMetadata.end(), companionMetadata.begin(), companionMetadata.end());
+    return importedMetadata;
 }
 
 std::vector<std::string> MeshAssetImporter::getSupportedExtensions() const
@@ -153,8 +155,8 @@ void MeshAssetImporter::writeModel(const std::filesystem::path& modelPath,
     }
 }
 
-void MeshAssetImporter::generateModelCompanions(const std::filesystem::path& assetPath,
-                                                const AssetMetadata& meshMetadata)
+std::vector<AssetMetadata> MeshAssetImporter::generateModelCompanions(const std::filesystem::path& assetPath,
+                                                                      const AssetMetadata& meshMetadata)
 {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
@@ -162,6 +164,7 @@ void MeshAssetImporter::generateModelCompanions(const std::filesystem::path& ass
     std::string warn;
     std::string error;
 
+    std::vector<AssetMetadata> companionMetadata;
     const auto materialBasePath = (assetPath.parent_path() / "").string();
     const bool loaded = tinyobj::LoadObj(
         &attrib, &shapes, &materials, &warn, &error, assetPath.string().c_str(), materialBasePath.c_str(), true);
@@ -183,6 +186,7 @@ void MeshAssetImporter::generateModelCompanions(const std::filesystem::path& ass
                 AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 2 + static_cast<uint64_t>(i)});
             if (materialMetadata.Handle.isValid()) {
                 materialHandles.push_back(materialMetadata.Handle);
+                companionMetadata.push_back(materialMetadata);
             }
         }
     }
@@ -194,13 +198,19 @@ void MeshAssetImporter::generateModelCompanions(const std::filesystem::path& ass
             materialPath, AssetType::Material, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 2});
         if (materialMetadata.Handle.isValid()) {
             materialHandles.push_back(materialMetadata.Handle);
+            companionMetadata.push_back(materialMetadata);
         }
     }
 
     const auto modelPath = assetPath.parent_path() / (assetPath.stem().string() + ".lunamodel");
     writeModel(modelPath, meshMetadata.Handle, materialHandles);
-    createOrLoadCompanionMetadata(
+    const auto modelMetadata = createOrLoadCompanionMetadata(
         modelPath, AssetType::Model, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
+    if (modelMetadata.Handle.isValid()) {
+        companionMetadata.push_back(modelMetadata);
+    }
+
+    return companionMetadata;
 }
 
 } // namespace lunalite::asset

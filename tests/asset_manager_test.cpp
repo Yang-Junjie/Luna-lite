@@ -49,7 +49,7 @@ int main()
 
     project::ProjectInfo info;
     info.name = "AssetManagerTestProject";
-    info.assets_path = "Assets";
+    info.assets_path = "GameAssets";
     if (!project::ProjectManager::instance().createProject(projectRoot, info)) {
         std::cerr << "Failed to create test project.\n";
         return 1;
@@ -62,12 +62,31 @@ int main()
         return 1;
     }
 
+    const auto ignoredAssetDir = projectRoot / "Assets";
+    std::filesystem::create_directories(ignoredAssetDir, error);
+    if (error) {
+        std::cerr << "Failed to create ignored asset directory: " << error.message() << "\n";
+        return 1;
+    }
+    std::filesystem::copy_file(
+        sourceMesh, ignoredAssetDir / "ignored.obj", std::filesystem::copy_options::overwrite_existing, error);
+    if (error) {
+        std::cerr << "Failed to copy ignored test mesh: " << error.message() << "\n";
+        return 1;
+    }
+
     if (!asset::AssetManager::get().loadProjectAssets()) {
         std::cerr << "Failed to load project assets.\n";
         return 1;
     }
 
-    const auto handle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube.obj");
+    const auto ignoredHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/ignored.obj");
+    if (ignoredHandle.isValid()) {
+        std::cerr << "Imported an asset outside the configured assets path.\n";
+        return 1;
+    }
+
+    const auto handle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube.obj");
     if (!handle.isValid()) {
         std::cerr << "Failed to resolve imported mesh handle.\n";
         return 1;
@@ -90,7 +109,7 @@ int main()
         return 1;
     }
 
-    const auto materialHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube_Default.lunamat");
+    const auto materialHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube_Default.lunamat");
     const auto* material = asset::AssetManager::get().getAsset<renderer::interface::Material>(materialHandle);
     if (material == nullptr || material->parameters->albedo.r < 0.7f) {
         std::cerr << "Failed to load generated material through AssetManager.\n";
@@ -109,7 +128,7 @@ int main()
         return 1;
     }
 
-    const auto modelHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube.lunamodel");
+    const auto modelHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube.lunamodel");
     const auto* model = asset::AssetManager::get().getAsset<renderer::interface::Model>(modelHandle);
     if (model == nullptr || model->getMeshes().empty() || model->getMeshes().front().materials.empty()) {
         std::cerr << "Failed to load model through AssetManager.\n";

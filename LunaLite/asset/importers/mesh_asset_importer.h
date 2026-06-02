@@ -6,7 +6,7 @@
 namespace lunalite::asset {
 class MeshAssetImporter final : public Importer {
 public:
-    AssetMetadata import(const std::filesystem::path& assetPath) override;
+    std::vector<AssetMetadata> import(const std::filesystem::path& assetPath) override;
     std::vector<std::string> getSupportedExtensions() const override;
 
 private:
@@ -18,6 +18,7 @@ private:
     static void writeModel(const std::filesystem::path& modelPath,
                            AssetHandle meshHandle,
                            const std::vector<AssetHandle>& materialHandles);
-    static void generateModelCompanions(const std::filesystem::path& assetPath, const AssetMetadata& meshMetadata);
+    static std::vector<AssetMetadata> generateModelCompanions(const std::filesystem::path& assetPath,
+                                                              const AssetMetadata& meshMetadata);
 };
 } // namespace lunalite::asset

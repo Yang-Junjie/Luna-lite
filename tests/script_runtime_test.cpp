@@ -22,7 +22,6 @@ int main()
     using namespace lunalite;
 
     const auto projectRoot = std::filesystem::current_path() / "build" / "script_runtime_test_project";
-    std::filesystem::create_directories(projectRoot / "Scripts");
 
     project::ProjectInfo projectInfo;
     projectInfo.name = "script_runtime_test_project";
@@ -33,8 +32,10 @@ int main()
         return 1;
     }
 
+    std::filesystem::create_directories(projectRoot / projectInfo.assets_path / "Scripts");
+
     {
-        std::ofstream script(projectRoot / "Scripts" / "rotate.lua");
+        std::ofstream script(projectRoot / projectInfo.assets_path / "Scripts" / "rotate.lua");
         script << R"(
 return {
     on_create = function(entity)
@@ -87,7 +88,7 @@ return {
         return 1;
     }
 
-    const auto scriptHandle = asset::AssetManager::get().getHandleByRelativePath("Scripts/rotate.lua");
+    const auto scriptHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/Scripts/rotate.lua");
     if (!scriptHandle.isValid()) {
         std::cerr << "Failed to find script asset handle.\n";
         return 1;

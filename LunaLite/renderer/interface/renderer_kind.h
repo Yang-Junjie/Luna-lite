@@ -3,8 +3,7 @@
 namespace lunalite::renderer::interface {
 
 enum class RendererKind {
-    Default,
-    SoftRasterization
+    Default
 };
 
 } // namespace lunalite::renderer::interface

@@ -43,8 +43,13 @@ private:
     bool registerBuiltinAssets();
     Importer* findImporter(const std::filesystem::path& assetPath) const;
 
-    bool scanAssetsDirectory(const std::filesystem::path& assetsRoot);
-    bool importIfNeeded(const std::filesystem::path& assetPath);
+    bool discoverAssets(const std::filesystem::path& assetsRoot, std::vector<std::filesystem::path>& assetPaths) const;
+
+    bool importAssets(const std::vector<std::filesystem::path>& assetPaths,
+                      std::vector<AssetMetadata>& importedMetadata);
+
+    std::vector<AssetMetadata> importIfNeeded(const std::filesystem::path& assetPath);
+    bool registerMetadata(const std::vector<AssetMetadata>& metadataList);
     bool registerMetadata(const AssetMetadata& metadata);
     bool loadAllAssets();
     bool loadAsset(const AssetMetadata& metadata);

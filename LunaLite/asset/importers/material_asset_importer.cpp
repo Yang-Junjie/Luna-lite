@@ -4,7 +4,7 @@
 
 namespace lunalite::asset {
 
-AssetMetadata MaterialAssetImporter::import(const std::filesystem::path& assetPath)
+std::vector<AssetMetadata> MaterialAssetImporter::import(const std::filesystem::path& assetPath)
 {
     auto metadata = createMetadata(assetPath, AssetType::Material);
     const auto metaPath = getMetaFilePath(metadata);
@@ -26,7 +26,7 @@ AssetMetadata MaterialAssetImporter::import(const std::filesystem::path& assetPa
         return {};
     }
 
-    return metadata;
+    return {metadata};
 }
 
 std::vector<std::string> MaterialAssetImporter::getSupportedExtensions() const

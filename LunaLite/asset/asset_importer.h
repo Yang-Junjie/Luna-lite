@@ -10,7 +10,7 @@ namespace lunalite::asset {
 class Importer {
 public:
     virtual ~Importer() = default;
-    virtual AssetMetadata import(const std::filesystem::path& assetPath) = 0;
+    virtual std::vector<AssetMetadata> import(const std::filesystem::path& assetPath) = 0;
     virtual std::vector<std::string> getSupportedExtensions() const = 0;
 
     bool supports(const std::filesystem::path& assetPath) const;

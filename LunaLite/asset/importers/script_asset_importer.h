@@ -4,7 +4,7 @@
 namespace lunalite::asset {
 class ScriptAssetImporter final : public Importer {
 public:
-    AssetMetadata import(const std::filesystem::path& assetPath) override;
+    std::vector<AssetMetadata> import(const std::filesystem::path& assetPath) override;
     std::vector<std::string> getSupportedExtensions() const override;
 };
 } // namespace lunalite::asset

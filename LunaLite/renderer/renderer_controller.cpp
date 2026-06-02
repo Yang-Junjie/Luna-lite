@@ -2,7 +2,6 @@
 #include "default_renderer/renderer.h"
 #include "interface/renderer.h"
 #include "renderer_controller.h"
-#include "soft_rasterization_renderer/soft_rasterization_renderer.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
 
@@ -14,8 +13,6 @@ const char* rendererKindName(interface::RendererKind kind)
     switch (kind) {
         case interface::RendererKind::Default:
             return "Default";
-        case interface::RendererKind::SoftRasterization:
-            return "SoftRasterization";
     }
 
     return "Unknown";
@@ -97,8 +94,6 @@ std::unique_ptr<interface::Renderer> RendererController::createRenderer(interfac
     switch (kind) {
         case interface::RendererKind::Default:
             return std::make_unique<Renderer>(m_device, m_swapchain);
-        case interface::RendererKind::SoftRasterization:
-            return std::make_unique<SoftRasterizationRenderer>(m_width, m_height);
     }
 
     return std::make_unique<Renderer>(m_device, m_swapchain);

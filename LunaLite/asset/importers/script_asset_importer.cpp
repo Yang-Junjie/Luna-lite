@@ -4,7 +4,7 @@
 
 namespace lunalite::asset {
 
-AssetMetadata ScriptAssetImporter::import(const std::filesystem::path& assetPath)
+std::vector<AssetMetadata> ScriptAssetImporter::import(const std::filesystem::path& assetPath)
 {
     auto metadata = createMetadata(assetPath, AssetType::Script);
     const auto metaPath = getMetaFilePath(metadata);
@@ -26,7 +26,7 @@ AssetMetadata ScriptAssetImporter::import(const std::filesystem::path& assetPath
         return {};
     }
 
-    return metadata;
+    return {metadata};
 }
 
 std::vector<std::string> ScriptAssetImporter::getSupportedExtensions() const

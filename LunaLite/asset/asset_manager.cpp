@@ -42,30 +42,43 @@ bool AssetManager::loadProjectAssets()
 {
     registerDefaultImporters();
 
-    clear();
-
     const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
-
-    const auto assetsRoot = *projectRoot;
-
-    if (!std::filesystem::exists(assetsRoot)) {
-        LUNA_CORE_ERROR("Failed to load project assets: '{}' does not exist", assetsRoot.string());
+    const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
+    if (!projectRoot || !projectInfo) {
+        LUNA_CORE_ERROR("Failed to load project assets: no project is loaded");
         return false;
     }
+
+    if (projectInfo->assets_path.is_absolute()) {
+        LUNA_CORE_ERROR("Failed to load project assets: assets path must be relative to the project root: '{}'",
+                        projectInfo->assets_path.string());
+        return false;
+    }
+
+    const auto assetsRoot = (*projectRoot / projectInfo->assets_path).lexically_normal();
+
+    if (!std::filesystem::exists(assetsRoot) || !std::filesystem::is_directory(assetsRoot)) {
+        LUNA_CORE_ERROR("Failed to load project assets: '{}' is not a directory", assetsRoot.string());
+        return false;
+    }
+
+    clear();
 
     if (!registerBuiltinAssets()) {
         return false;
     }
 
-    if (!scanAssetsDirectory(assetsRoot)) {
+    std::vector<std::filesystem::path> assetPaths;
+    if (!discoverAssets(assetsRoot, assetPaths)) {
         return false;
     }
 
-    if (!scanAssetsDirectory(assetsRoot)) {
+    std::vector<AssetMetadata> importedMetadata;
+    if (!importAssets(assetPaths, importedMetadata)) {
         return false;
     }
 
-    return loadAllAssets();
+    return registerMetadata(importedMetadata) && loadAllAssets();
 }
 
 void AssetManager::clear()
@@ -180,7 +193,8 @@ Importer* AssetManager::findImporter(const std::filesystem::path& assetPath) con
     return nullptr;
 }
 
-bool AssetManager::scanAssetsDirectory(const std::filesystem::path& assetsRoot)
+bool AssetManager::discoverAssets(const std::filesystem::path& assetsRoot,
+                                  std::vector<std::filesystem::path>& assetPaths) const
 {
     std::error_code error;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(assetsRoot, error)) {
@@ -197,35 +211,60 @@ bool AssetManager::scanAssetsDirectory(const std::filesystem::path& assetsRoot)
             continue;
         }
 
-        if (!importIfNeeded(entry.path())) {
-            return false;
-        }
+        assetPaths.push_back(entry.path());
     }
 
     return true;
 }
 
-bool AssetManager::importIfNeeded(const std::filesystem::path& assetPath)
+bool AssetManager::importAssets(const std::vector<std::filesystem::path>& assetPaths,
+                                std::vector<AssetMetadata>& importedMetadata)
+{
+    for (const auto& assetPath : assetPaths) {
+        auto metadataList = importIfNeeded(assetPath);
+        if (metadataList.empty()) {
+            return false;
+        }
+
+        importedMetadata.insert(importedMetadata.end(), metadataList.begin(), metadataList.end());
+    }
+
+    return true;
+}
+
+std::vector<AssetMetadata> AssetManager::importIfNeeded(const std::filesystem::path& assetPath)
 {
     auto* importer = findImporter(assetPath);
     if (importer == nullptr) {
-        return true;
+        return {};
     }
 
     auto metaPath = assetPath;
     metaPath += ".lunameta";
 
-    AssetMetadata metadata;
     if (std::filesystem::exists(metaPath)) {
-        metadata = Importer::deserializeMetadata(metaPath);
-        if (metadata.Type == AssetType::Mesh) {
-            metadata = importer->import(assetPath);
+        const auto metadata = Importer::deserializeMetadata(metaPath);
+        if (!metadata.Handle.isValid()) {
+            return {};
         }
-    } else {
-        metadata = importer->import(assetPath);
+        if (metadata.Type == AssetType::Mesh) {
+            return importer->import(assetPath);
+        }
+        return {metadata};
     }
 
-    return registerMetadata(metadata);
+    return importer->import(assetPath);
+}
+
+bool AssetManager::registerMetadata(const std::vector<AssetMetadata>& metadataList)
+{
+    for (const auto& metadata : metadataList) {
+        if (!registerMetadata(metadata)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool AssetManager::registerMetadata(const AssetMetadata& metadata)

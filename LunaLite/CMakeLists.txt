@@ -13,7 +13,6 @@ target_link_libraries(LunaLiteRenderer
     PUBLIC
         glm::glm
         TinyRHI::TinyRHI
-        LunaLiteSoftRasterizationRenderer
     PRIVATE
         spdlog::spdlog
 )
@@ -23,25 +22,6 @@ target_compile_definitions(LunaLiteRenderer
         LUNALITE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
 )
 
-add_library(LunaLiteSoftRasterizationRenderer
-    renderer/soft_rasterization_renderer/soft_rasterization_renderer.cpp
-)
-
-target_link_libraries(LunaLiteSoftRasterizationRenderer
-    PUBLIC
-        glm::glm
-        TinyRHI::TinyRHI
-)
-
-add_library(LunaLitePathTracingRenderer
-    renderer/path_tracing_renderer/path_tracing_renderer.cpp
-)
-
-target_link_libraries(LunaLitePathTracingRenderer
-    PUBLIC
-        glm::glm
-        TinyRHI::TinyRHI
-)
 
 add_library(LunaLiteImGui
     imgui/imgui_renderer.cpp
