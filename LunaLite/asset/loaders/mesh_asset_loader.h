@@ -1,6 +1,6 @@
 #pragma once
-#include "../renderer/interface/mesh.h"
-#include "asset_metadata.h"
+#include "../../renderer/interface/mesh.h"
+#include "../asset_metadata.h"
 
 #include <filesystem>
 #include <memory>

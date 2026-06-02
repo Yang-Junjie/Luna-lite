@@ -1,4 +1,4 @@
-#include "../core/log.h"
+#include "../../core/log.h"
 #include "mesh_asset_importer.h"
 
 #include <cctype>

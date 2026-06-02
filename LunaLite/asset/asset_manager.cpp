@@ -1,22 +1,40 @@
 #include "../core/log.h"
 #include "../project/project_manager.h"
 #include "asset_manager.h"
-#include "material_asset_importer.h"
-#include "material_asset_loader.h"
-#include "mesh_asset_importer.h"
-#include "mesh_asset_loader.h"
-#include "model_asset_importer.h"
-#include "model_asset_loader.h"
-#include "script_asset_importer.h"
+#include "builtin/builtin_assets.h"
+#include "builtin/material_factory.h"
+#include "builtin/mesh_factory.h"
+#include "builtin/model_factory.h"
+#include "importers/material_asset_importer.h"
+#include "importers/mesh_asset_importer.h"
+#include "importers/model_asset_importer.h"
+#include "importers/script_asset_importer.h"
+#include "loaders/material_asset_loader.h"
+#include "loaders/mesh_asset_loader.h"
+#include "loaders/model_asset_loader.h"
 
 #include <optional>
+#include <string>
 #include <system_error>
+#include <utility>
 
 namespace lunalite::asset {
 namespace {
 bool isMetaFile(const std::filesystem::path& path)
 {
     return path.extension() == ".lunameta";
+}
+
+AssetMetadata
+    createBuiltinMetadata(AssetHandle handle, AssetType type, std::string name, std::filesystem::path filePath)
+{
+    AssetMetadata metadata;
+    metadata.Handle = handle;
+    metadata.Type = type;
+    metadata.Name = std::move(name);
+    metadata.FilePath = std::move(filePath);
+    metadata.MemoryOnly = true;
+    return metadata;
 }
 } // namespace
 
@@ -32,6 +50,10 @@ bool AssetManager::loadProjectAssets()
 
     if (!std::filesystem::exists(assetsRoot)) {
         LUNA_CORE_ERROR("Failed to load project assets: '{}' does not exist", assetsRoot.string());
+        return false;
+    }
+
+    if (!registerBuiltinAssets()) {
         return false;
     }
 
@@ -116,6 +138,35 @@ void AssetManager::registerDefaultImporters()
     m_importers.push_back(std::make_unique<MaterialAssetImporter>());
     m_importers.push_back(std::make_unique<ModelAssetImporter>());
     m_importers.push_back(std::make_unique<ScriptAssetImporter>());
+}
+
+bool AssetManager::registerBuiltinAssets()
+{
+    const auto defaultMaterialMetadata = createBuiltinMetadata(
+        builtin::defaultMaterialHandle(), AssetType::Material, "DefaultMaterial", "Builtin/Materials/Default.lunamat");
+    const auto errorMaterialMetadata = createBuiltinMetadata(
+        builtin::errorMaterialHandle(), AssetType::Material, "ErrorMaterial", "Builtin/Materials/Error.lunamat");
+    const auto cubeMeshMetadata =
+        createBuiltinMetadata(builtin::cubeMeshHandle(), AssetType::Mesh, "CubeMesh", "Builtin/Meshes/Cube.mesh");
+    const auto planeMeshMetadata =
+        createBuiltinMetadata(builtin::planeMeshHandle(), AssetType::Mesh, "PlaneMesh", "Builtin/Meshes/Plane.mesh");
+    const auto cubeModelMetadata =
+        createBuiltinMetadata(builtin::cubeModelHandle(), AssetType::Model, "CubeModel", "Builtin/Models/Cube.model");
+    const auto planeModelMetadata = createBuiltinMetadata(
+        builtin::planeModelHandle(), AssetType::Model, "PlaneModel", "Builtin/Models/Plane.model");
+
+    if (!registerMetadata(defaultMaterialMetadata) || !registerMetadata(errorMaterialMetadata) ||
+        !registerMetadata(cubeMeshMetadata) || !registerMetadata(planeMeshMetadata) ||
+        !registerMetadata(cubeModelMetadata) || !registerMetadata(planeModelMetadata)) {
+        return false;
+    }
+
+    return AssetDatabase::get().add(MaterialFactory::createDefault()).isValid() &&
+           AssetDatabase::get().add(MaterialFactory::createError()).isValid() &&
+           AssetDatabase::get().add(MeshFactory::createCube()).isValid() &&
+           AssetDatabase::get().add(MeshFactory::createPlane()).isValid() &&
+           AssetDatabase::get().add(ModelFactory::createCube()).isValid() &&
+           AssetDatabase::get().add(ModelFactory::createPlane()).isValid();
 }
 
 Importer* AssetManager::findImporter(const std::filesystem::path& assetPath) const

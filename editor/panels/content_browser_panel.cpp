@@ -1,7 +1,6 @@
-#include "content_browser_panel.h"
-
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/project/project_manager.h"
+#include "content_browser_panel.h"
 
 #include <imgui.h>
 
@@ -23,7 +22,7 @@ void ContentBrowserPanel::onImGuiRender()
     ImGui::Separator();
 
     for (const auto& [_, metadata] : asset::AssetManager::get().getMetadataRegistry()) {
-        if (!metadata.Handle.isValid() || metadata.Type == asset::AssetType::None) {
+        if (!metadata.Handle.isValid() || metadata.Type == asset::AssetType::None || metadata.MemoryOnly) {
             continue;
         }
 

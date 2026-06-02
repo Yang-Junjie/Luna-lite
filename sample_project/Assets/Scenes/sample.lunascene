@@ -1,6 +1,105 @@
 Scene: sample
 Entities:
+  - Entity: 5
+    TagComponent:
+      Tag: Plane
+    TransformComponent:
+      Translation:
+        - -1.9
+        - 3.5
+        - 0
+      Rotation:
+        - 0.6457718
+        - -0.38397393
+        - 1.6071429e-08
+      Scale:
+        - 3.2
+        - 1
+        - 2.5
+    ModelComponent:
+      Model: 5500388562279810050
+  - Entity: 4
+    TagComponent:
+      Tag: Cube
+    TransformComponent:
+      Translation:
+        - 2.1
+        - 2.9
+        - 0
+      Rotation:
+        - -0.15707979
+        - -0.64577174
+        - -4.6645683e-09
+      Scale:
+        - 1
+        - 1.7
+        - 1
+    ModelComponent:
+      Model: 5500388562279810049
   - Entity: 3
+    TagComponent:
+      Tag: camera
+    TransformComponent:
+      Translation:
+        - 0
+        - 2.7
+        - 7.1
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    ScriptComponent:
+      Scripts:
+        - Script: 9557520703294432819
+          Enabled: true
+    CameraComponent:
+      Primary: true
+      ProjectionType: Perspective
+  - Entity: 2
+    TagComponent:
+      Tag: stanford-bunny
+    TransformComponent:
+      Translation:
+        - 0
+        - 1.6
+        - 0.1
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 8
+        - 8
+        - 8
+    ModelComponent:
+      Model: 15330008245417503354
+    ScriptComponent:
+      Scripts:
+        - Script: 18087706206740559173
+          Enabled: true
+  - Entity: 1
+    TagComponent:
+      Tag: cube
+    TransformComponent:
+      Translation:
+        - 0
+        - 1.2
+        - 0
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 4.7
+        - 0.3
+        - 5.2
+    ModelComponent:
+      Model: 12712907297239299620
+  - Entity: 0
     TagComponent:
       Tag: "directional light "
     TransformComponent:
@@ -33,66 +132,3 @@ Entities:
         - 1
         - 1
         - 1
-  - Entity: 2
-    TagComponent:
-      Tag: cube
-    TransformComponent:
-      Translation:
-        - 0
-        - 1.2
-        - 0
-      Rotation:
-        - 0
-        - -0
-        - 0
-      Scale:
-        - 4.7
-        - 0.3
-        - 5.2
-    ModelComponent:
-      Model: 12712907297239299620
-  - Entity: 1
-    TagComponent:
-      Tag: stanford-bunny
-    TransformComponent:
-      Translation:
-        - 0
-        - 1.6
-        - 0.1
-      Rotation:
-        - 0
-        - -0
-        - 0
-      Scale:
-        - 8
-        - 8
-        - 8
-    ModelComponent:
-      Model: 15330008245417503354
-    ScriptComponent:
-      Scripts:
-        - Script: 18087706206740559173
-          Enabled: true
-  - Entity: 0
-    TagComponent:
-      Tag: camera
-    TransformComponent:
-      Translation:
-        - 0
-        - 2.7
-        - 7.1
-      Rotation:
-        - 0
-        - -0
-        - 0
-      Scale:
-        - 1
-        - 1
-        - 1
-    ScriptComponent:
-      Scripts:
-        - Script: 9557520703294432819
-          Enabled: true
-    CameraComponent:
-      Primary: true
-      ProjectionType: Perspective

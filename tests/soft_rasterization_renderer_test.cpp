@@ -1,5 +1,5 @@
 #include "../LunaLite/asset/asset_database.h"
-#include "../LunaLite/asset/mesh_asset_loader.h"
+#include "../LunaLite/asset/loaders/mesh_asset_loader.h"
 #include "../LunaLite/renderer/interface/frame_image.h"
 #include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/renderer/soft_rasterization_renderer/soft_rasterization_renderer.h"

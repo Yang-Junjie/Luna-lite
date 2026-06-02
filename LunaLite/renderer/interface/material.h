@@ -2,15 +2,15 @@
 #include "../../asset/asset.h"
 
 #include <glm/glm.hpp>
+#include <memory>
 
 namespace lunalite::renderer::interface {
-class Material : public asset::Asset {
-public:
-    enum class ShadingModel {
-        Lit = 0,
-        Unlit
-    };
+enum class ShadingModel {
+    Lit = 0,
+    Unlit
+};
 
+struct MaterialParameters {
     ShadingModel shading_model{ShadingModel::Lit};
     glm::vec4 albedo{0.8f, 0.65f, 0.5f, 1.0f};
     float metallic{0.0f};
@@ -21,6 +21,13 @@ public:
     asset::AssetHandle albedo_texture{0};
     asset::AssetHandle normal_texture{0};
     asset::AssetHandle metallic_roughness_texture{0};
+};
+
+class Material : public asset::Asset {
+public:
+    using ShadingModel = interface::ShadingModel;
+
+    std::shared_ptr<MaterialParameters> parameters{std::make_shared<MaterialParameters>()};
 
     asset::AssetType getAssetsType() const override
     {

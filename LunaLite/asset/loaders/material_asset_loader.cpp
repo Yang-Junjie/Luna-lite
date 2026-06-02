@@ -1,5 +1,5 @@
-#include "../core/log.h"
-#include "../project/project_manager.h"
+#include "../../core/log.h"
+#include "../../project/project_manager.h"
 #include "material_asset_loader.h"
 
 #include <filesystem>
@@ -25,18 +25,18 @@ glm::vec4 readVec4(const YAML::Node& node, const glm::vec4& fallback)
     return {node[0].as<float>(), node[1].as<float>(), node[2].as<float>(), node[3].as<float>()};
 }
 
-renderer::interface::Material::ShadingModel readShadingModel(const YAML::Node& node)
+renderer::interface::ShadingModel readShadingModel(const YAML::Node& node)
 {
     if (!node) {
-        return renderer::interface::Material::ShadingModel::Lit;
+        return renderer::interface::ShadingModel::Lit;
     }
 
     const auto value = node.as<std::string>("Lit");
     if (value == "Unlit") {
-        return renderer::interface::Material::ShadingModel::Unlit;
+        return renderer::interface::ShadingModel::Unlit;
     }
 
-    return renderer::interface::Material::ShadingModel::Lit;
+    return renderer::interface::ShadingModel::Lit;
 }
 } // namespace
 
@@ -52,17 +52,18 @@ std::shared_ptr<renderer::interface::Material> MaterialAssetLoader::load(const A
 
         auto material = std::make_shared<renderer::interface::Material>();
         material->handle = metadata.Handle;
-        material->shading_model = readShadingModel(materialNode["ShadingModel"]);
-        material->albedo = readVec4(materialNode["Albedo"], material->albedo);
-        material->metallic = materialNode["Metallic"].as<float>(material->metallic);
-        material->roughness = materialNode["Roughness"].as<float>(material->roughness);
-        material->emission = readVec3(materialNode["Emission"], material->emission);
-        material->emission_strength = materialNode["EmissionStrength"].as<float>(material->emission_strength);
+        auto& parameters = *material->parameters;
+        parameters.shading_model = readShadingModel(materialNode["ShadingModel"]);
+        parameters.albedo = readVec4(materialNode["Albedo"], parameters.albedo);
+        parameters.metallic = materialNode["Metallic"].as<float>(parameters.metallic);
+        parameters.roughness = materialNode["Roughness"].as<float>(parameters.roughness);
+        parameters.emission = readVec3(materialNode["Emission"], parameters.emission);
+        parameters.emission_strength = materialNode["EmissionStrength"].as<float>(parameters.emission_strength);
 
         if (const auto textures = materialNode["Textures"]) {
-            material->albedo_texture = AssetHandle{textures["Albedo"].as<uint64_t>(0)};
-            material->normal_texture = AssetHandle{textures["Normal"].as<uint64_t>(0)};
-            material->metallic_roughness_texture = AssetHandle{textures["MetallicRoughness"].as<uint64_t>(0)};
+            parameters.albedo_texture = AssetHandle{textures["Albedo"].as<uint64_t>(0)};
+            parameters.normal_texture = AssetHandle{textures["Normal"].as<uint64_t>(0)};
+            parameters.metallic_roughness_texture = AssetHandle{textures["MetallicRoughness"].as<uint64_t>(0)};
         }
 
         return material;

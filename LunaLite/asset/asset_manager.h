@@ -40,6 +40,7 @@ private:
     ~AssetManager() = default;
 
     void registerDefaultImporters();
+    bool registerBuiltinAssets();
     Importer* findImporter(const std::filesystem::path& assetPath) const;
 
     bool scanAssetsDirectory(const std::filesystem::path& assetsRoot);

@@ -1,5 +1,5 @@
 #pragma once
-#include "asset_importer.h"
+#include "../asset_importer.h"
 
 #include <tiny_obj_loader.h>
 

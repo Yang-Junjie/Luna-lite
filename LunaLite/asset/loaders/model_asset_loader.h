@@ -1,6 +1,6 @@
 #pragma once
-#include "../renderer/interface/model.h"
-#include "asset_metadata.h"
+#include "../../renderer/interface/model.h"
+#include "../asset_metadata.h"
 
 #include <memory>
 

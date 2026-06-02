@@ -125,7 +125,6 @@ private:
     GBuffer m_gbuffer{};
     FrameUniforms m_frameUniforms;
     ObjectUniforms m_objectUniforms;
-    interface::Material m_default_material;
     interface::FrameImage m_frame_image;
     bool m_frame_uniforms_dirty{true};
     std::unordered_map<uint64_t, MeshGpuData> m_mesh_gpu_cache;

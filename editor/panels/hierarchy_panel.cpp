@@ -1,4 +1,5 @@
 #include "../../LunaLite/asset/asset_manager.h"
+#include "../../LunaLite/asset/builtin/builtin_assets.h"
 #include "../../LunaLite/scene/components.h"
 #include "content_browser_panel.h"
 #include "hierarchy_panel.h"
@@ -26,6 +27,19 @@ void addScriptToEntity(scene::Scene& scene, scene::Entity entity, asset::AssetHa
 
     auto& script = scene.getComponent<scene::ScriptComponent>(entity);
     script.scripts.push_back({handle, true});
+}
+
+void createEntityWithModel(scene::Scene& scene,
+                           scene::Entity& selectedEntity,
+                           asset::AssetHandle modelHandle,
+                           const std::string& tag)
+{
+    auto entity = scene.createEntity();
+    auto& model = scene.addComponent<scene::ModelComponent>(entity);
+    model.model = modelHandle;
+    auto& tagComponent = scene.getComponent<scene::TagComponent>(entity);
+    tagComponent.tag = tag;
+    selectedEntity = entity;
 }
 
 void createEntityFromAsset(scene::Scene& scene,
@@ -113,6 +127,15 @@ void HierarchyPanel::onImGuiRender()
         if (ImGui::BeginPopupContextItem("HierarchyEmptyContext")) {
             if (ImGui::MenuItem("Create Entity")) {
                 m_selected_entity = m_scene.createEntity();
+            }
+            if (ImGui::BeginMenu("Create Builtin Mesh")) {
+                if (ImGui::MenuItem("Cube")) {
+                    createEntityWithModel(m_scene, m_selected_entity, asset::builtin::cubeModelHandle(), "Cube");
+                }
+                if (ImGui::MenuItem("Plane")) {
+                    createEntityWithModel(m_scene, m_selected_entity, asset::builtin::planeModelHandle(), "Plane");
+                }
+                ImGui::EndMenu();
             }
             ImGui::EndPopup();
         }

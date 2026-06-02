@@ -1,4 +1,5 @@
 #include "../LunaLite/asset/asset_manager.h"
+#include "../LunaLite/asset/builtin/builtin_assets.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/mesh.h"
@@ -91,8 +92,20 @@ int main()
 
     const auto materialHandle = asset::AssetManager::get().getHandleByRelativePath("Assets/cube_Default.lunamat");
     const auto* material = asset::AssetManager::get().getAsset<renderer::interface::Material>(materialHandle);
-    if (material == nullptr || material->albedo.r < 0.7f) {
+    if (material == nullptr || material->parameters->albedo.r < 0.7f) {
         std::cerr << "Failed to load generated material through AssetManager.\n";
+        return 1;
+    }
+
+    const auto* defaultMaterial =
+        asset::AssetManager::get().getAsset<renderer::interface::Material>(asset::builtin::defaultMaterialHandle());
+    const auto* cubeMesh =
+        asset::AssetManager::get().getAsset<renderer::interface::Mesh>(asset::builtin::cubeMeshHandle());
+    const auto* cubeModel =
+        asset::AssetManager::get().getAsset<renderer::interface::Model>(asset::builtin::cubeModelHandle());
+    if (defaultMaterial == nullptr || defaultMaterial->parameters == nullptr || cubeMesh == nullptr ||
+        cubeMesh->getSubMeshes().empty() || cubeModel == nullptr || cubeModel->getMeshes().empty()) {
+        std::cerr << "Failed to load built-in mesh, material, and model assets.\n";
         return 1;
     }
 

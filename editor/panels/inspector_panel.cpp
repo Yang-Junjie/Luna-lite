@@ -1,3 +1,6 @@
+#include "../../LunaLite/asset/asset_manager.h"
+#include "../../LunaLite/asset/builtin/builtin_assets.h"
+#include "../../LunaLite/renderer/interface/model.h"
 #include "../../LunaLite/scene/components.h"
 #include "content_browser_panel.h"
 #include "inspector_panel.h"
@@ -7,9 +10,31 @@
 
 #include <array>
 #include <imgui.h>
+#include <span>
+#include <string>
+#include <utility>
 
 namespace lunalite::editor {
 namespace {
+struct BuiltinAssetOption {
+    const char* label{nullptr};
+    asset::AssetHandle handle{0};
+};
+
+std::string getAssetDisplayName(asset::AssetHandle handle)
+{
+    if (!handle.isValid()) {
+        return "None";
+    }
+
+    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
+        const auto name = metadata->Name.empty() ? metadata->FilePath.filename().string() : metadata->Name;
+        return name + " (" + asset::assetTypeToString(metadata->Type) + ")";
+    }
+
+    return "Missing asset " + handle.toString();
+}
+
 bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
 {
     bool accepted = false;
@@ -26,6 +51,47 @@ bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
         ImGui::EndDragDropTarget();
     }
     return accepted;
+}
+
+bool drawAssetHandleControl(const char* label,
+                            asset::AssetType type,
+                            asset::AssetHandle& handle,
+                            std::span<const BuiltinAssetOption> builtinOptions)
+{
+    bool changed = false;
+    ImGui::PushID(label);
+
+    uint64_t rawHandle = static_cast<uint64_t>(handle);
+    if (ImGui::InputScalar(label, ImGuiDataType_U64, &rawHandle)) {
+        handle = asset::AssetHandle{rawHandle};
+        changed = true;
+    }
+
+    if (acceptAssetHandleDrop(type, handle)) {
+        changed = true;
+    }
+
+    if (!builtinOptions.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Builtin")) {
+            ImGui::OpenPopup("BuiltinAssets");
+        }
+
+        if (ImGui::BeginPopup("BuiltinAssets")) {
+            for (const auto& option : builtinOptions) {
+                if (ImGui::MenuItem(option.label)) {
+                    handle = option.handle;
+                    changed = true;
+                }
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    const auto displayName = getAssetDisplayName(handle);
+    ImGui::TextDisabled("%s", displayName.c_str());
+    ImGui::PopID();
+    return changed;
 }
 } // namespace
 
@@ -110,11 +176,78 @@ void InspectorPanel::onImGuiRender()
         }
         if (open && m_scene.hasComponent<scene::ModelComponent>(m_selected_entity)) {
             auto& model = m_scene.getComponent<scene::ModelComponent>(m_selected_entity);
-            uint64_t modelHandle = static_cast<uint64_t>(model.model);
-            if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &modelHandle)) {
-                model.model = asset::AssetHandle{modelHandle};
+            const BuiltinAssetOption builtinModels[] = {
+                {"Cube", asset::builtin::cubeModelHandle()},
+                {"Plane", asset::builtin::planeModelHandle()},
+            };
+            const BuiltinAssetOption builtinMeshes[] = {
+                {"Cube", asset::builtin::cubeMeshHandle()},
+                {"Plane", asset::builtin::planeMeshHandle()},
+            };
+            const BuiltinAssetOption builtinMaterials[] = {
+                {"Default", asset::builtin::defaultMaterialHandle()},
+                {"Error", asset::builtin::errorMaterialHandle()},
+            };
+
+            drawAssetHandleControl("Model", asset::AssetType::Model, model.model, builtinModels);
+
+            auto* modelAsset = model.model.isValid()
+                                   ? asset::AssetManager::get().getAsset<renderer::interface::Model>(model.model)
+                                   : nullptr;
+            if (modelAsset == nullptr) {
+                ImGui::TextDisabled("No model asset loaded");
+            } else {
+                auto& meshes = modelAsset->editMeshes();
+                if (ImGui::Button("Add Mesh")) {
+                    renderer::interface::ModelMesh modelMesh;
+                    modelMesh.mesh = asset::builtin::cubeMeshHandle();
+                    modelMesh.materials.push_back(asset::builtin::defaultMaterialHandle());
+                    meshes.push_back(std::move(modelMesh));
+                }
+
+                int meshToDelete = -1;
+                for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex) {
+                    ImGui::PushID(static_cast<int>(meshIndex));
+                    ImGui::Separator();
+                    ImGui::Text("Mesh %zu", meshIndex);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Delete Mesh")) {
+                        meshToDelete = static_cast<int>(meshIndex);
+                    }
+
+                    auto& modelMesh = meshes[meshIndex];
+                    drawAssetHandleControl("Mesh", asset::AssetType::Mesh, modelMesh.mesh, builtinMeshes);
+
+                    if (ImGui::SmallButton("Add Material")) {
+                        modelMesh.materials.push_back(asset::builtin::defaultMaterialHandle());
+                    }
+
+                    int materialToDelete = -1;
+                    for (size_t materialIndex = 0; materialIndex < modelMesh.materials.size(); ++materialIndex) {
+                        ImGui::PushID(static_cast<int>(materialIndex));
+                        ImGui::Text("Material %zu", materialIndex);
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Delete Material")) {
+                            materialToDelete = static_cast<int>(materialIndex);
+                        }
+                        drawAssetHandleControl("Material",
+                                               asset::AssetType::Material,
+                                               modelMesh.materials[materialIndex],
+                                               builtinMaterials);
+                        ImGui::PopID();
+                    }
+
+                    if (materialToDelete >= 0) {
+                        modelMesh.materials.erase(modelMesh.materials.begin() + materialToDelete);
+                    }
+
+                    ImGui::PopID();
+                }
+
+                if (meshToDelete >= 0) {
+                    meshes.erase(meshes.begin() + meshToDelete);
+                }
             }
-            acceptAssetHandleDrop(asset::AssetType::Model, model.model);
         }
     }
 

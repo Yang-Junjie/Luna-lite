@@ -1,4 +1,5 @@
 #include "../../asset/asset_database.h"
+#include "../../asset/builtin/builtin_assets.h"
 #include "../../core/log.h"
 #include "renderer.h"
 
@@ -648,6 +649,17 @@ void Renderer::setSceneLighting(const interface::SceneLighting& lighting)
 
 void Renderer::renderModel(const interface::Model& model, const glm::mat4& transform)
 {
+    const interface::Material* fallbackMaterial = nullptr;
+    bool fallbackMaterialResolved = false;
+    const auto getFallbackMaterial = [&]() {
+        if (!fallbackMaterialResolved) {
+            fallbackMaterial =
+                asset::AssetDatabase::get().get<interface::Material>(asset::builtin::errorMaterialHandle());
+            fallbackMaterialResolved = true;
+        }
+        return fallbackMaterial;
+    };
+
     for (const auto& modelMesh : model.getMeshes()) {
         if (!modelMesh.mesh.isValid()) {
             continue;
@@ -662,7 +674,7 @@ void Renderer::renderModel(const interface::Model& model, const glm::mat4& trans
         const auto& submeshes = mesh->getSubMeshes();
         for (size_t submeshIndex = 0; submeshIndex < submeshes.size(); ++submeshIndex) {
             const auto& submesh = submeshes[submeshIndex];
-            const interface::Material* material = &m_default_material;
+            const interface::Material* material = nullptr;
             if (submesh.material_slot < modelMesh.materials.size()) {
                 const auto materialHandle = modelMesh.materials[submesh.material_slot];
                 if (materialHandle.isValid()) {
@@ -673,7 +685,13 @@ void Renderer::renderModel(const interface::Model& model, const glm::mat4& trans
                 }
             }
 
-            drawSubMesh(*mesh, submeshIndex, submesh, *material, transform);
+            if (material == nullptr) {
+                material = getFallbackMaterial();
+            }
+
+            if (material != nullptr) {
+                drawSubMesh(*mesh, submeshIndex, submesh, *material, transform);
+            }
         }
     }
 }
@@ -691,15 +709,16 @@ void Renderer::drawSubMesh(const interface::Mesh& mesh,
 
     flushFrameUniforms();
 
+    const interface::MaterialParameters defaultParameters;
+    const auto& parameters = material.parameters != nullptr ? *material.parameters : defaultParameters;
     m_objectUniforms.model = transform;
     m_objectUniforms.normalMatrix = glm::transpose(glm::inverse(transform));
-    m_objectUniforms.materialAlbedo = material.albedo;
-    m_objectUniforms.materialEmission = material.emission;
-    m_objectUniforms.materialEmissionStrength = material.emission_strength;
-    m_objectUniforms.materialMetallic = material.metallic;
-    m_objectUniforms.materialRoughness = material.roughness;
-    m_objectUniforms.materialShadingModel =
-        material.shading_model == interface::Material::ShadingModel::Unlit ? 1u : 0u;
+    m_objectUniforms.materialAlbedo = parameters.albedo;
+    m_objectUniforms.materialEmission = parameters.emission;
+    m_objectUniforms.materialEmissionStrength = parameters.emission_strength;
+    m_objectUniforms.materialMetallic = parameters.metallic;
+    m_objectUniforms.materialRoughness = parameters.roughness;
+    m_objectUniforms.materialShadingModel = parameters.shading_model == interface::ShadingModel::Unlit ? 1u : 0u;
     m_device->updateBuffer(m_objectUniformBuffer, 0, &m_objectUniforms, sizeof(ObjectUniforms));
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);

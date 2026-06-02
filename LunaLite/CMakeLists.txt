@@ -69,13 +69,16 @@ add_library(LunaLite STATIC
     core/uuid.cpp
     asset/asset_importer.cpp
     asset/asset_manager.cpp
-    asset/material_asset_importer.cpp
-    asset/material_asset_loader.cpp
-    asset/mesh_asset_importer.cpp
-    asset/mesh_asset_loader.cpp
-    asset/model_asset_importer.cpp
-    asset/model_asset_loader.cpp
-    asset/script_asset_importer.cpp
+    asset/builtin/material_factory.cpp
+    asset/builtin/mesh_factory.cpp
+    asset/builtin/model_factory.cpp
+    asset/importers/material_asset_importer.cpp
+    asset/importers/mesh_asset_importer.cpp
+    asset/importers/model_asset_importer.cpp
+    asset/importers/script_asset_importer.cpp
+    asset/loaders/material_asset_loader.cpp
+    asset/loaders/mesh_asset_loader.cpp
+    asset/loaders/model_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
     scene/scene.cpp

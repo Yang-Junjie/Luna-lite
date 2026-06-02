@@ -1,5 +1,5 @@
-#include "../core/log.h"
-#include "../project/project_manager.h"
+#include "../../core/log.h"
+#include "../../project/project_manager.h"
 #include "mesh_asset_loader.h"
 
 #include <cstdint>
