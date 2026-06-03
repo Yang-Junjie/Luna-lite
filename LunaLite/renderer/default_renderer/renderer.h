@@ -172,6 +172,7 @@ private:
 
     rhi::Device* m_device{nullptr};
     rhi::Swapchain* m_swapchain{nullptr};
+    rhi::CommandListHandle m_command_list{};
     rhi::CommandList* m_cmd{nullptr};
 
     rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};

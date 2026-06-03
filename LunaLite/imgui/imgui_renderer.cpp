@@ -63,6 +63,8 @@ struct ViewportRenderData {
     SurfaceHandle surface{};
     SwapchainHandle swapchain_handle{};
     Swapchain* swapchain{nullptr};
+    SwapchainFrame frame{};
+    bool frame_pending{false};
 };
 
 uint32_t viewportDimension(float value)
@@ -116,14 +118,24 @@ ImGuiRenderer::~ImGuiRenderer()
     shutdown();
 }
 
-bool ImGuiRenderer::init(Device& device, Swapchain& swapchain)
+bool ImGuiRenderer::init(Device& device, SwapchainHandle swapchain_handle, Swapchain& swapchain)
 {
     if (m_device != nullptr) {
         return false;
     }
 
     m_device = &device;
+    m_swapchain_handle = swapchain_handle;
     m_swapchain = &swapchain;
+    m_command_list = m_device->createCommandList();
+    if (!m_command_list || m_device->getCommandList(m_command_list) == nullptr) {
+        m_device = nullptr;
+        m_swapchain_handle = {};
+        m_swapchain = nullptr;
+        m_command_list = {};
+        return false;
+    }
+
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "LunaLite TinyRHI";
     io.BackendRendererUserData = this;
@@ -158,9 +170,9 @@ void ImGuiRenderer::beginFrame()
     ImGui::NewFrame();
 }
 
-void ImGuiRenderer::endFrame(ImGuiRenderMode mode)
+void ImGuiRenderer::endFrame(ImGuiRenderMode mode, const SwapchainFrame& frame)
 {
-    if (m_device == nullptr || m_swapchain == nullptr) {
+    if (m_device == nullptr || m_swapchain == nullptr || !m_command_list) {
         return;
     }
 
@@ -168,27 +180,32 @@ void ImGuiRenderer::endFrame(ImGuiRenderMode mode)
 
     RenderPassBeginInfo pass;
     pass.color_attachments.push_back(ColorAttachmentDesc{
-        .view = m_swapchain->getCurrentColorTextureView(),
+        .view = frame.color_view,
         .load_op = mode == ImGuiRenderMode::ClearSwapchain ? LoadOp::Clear : LoadOp::Load,
         .store_op = StoreOp::Store,
         .clear_color = ClearColor{0.08f, 0.09f, 0.11f, 1.0f},
     });
-    pass.width = m_swapchain->getWidth();
-    pass.height = m_swapchain->getHeight();
+    pass.width = frame.width;
+    pass.height = frame.height;
 
-    auto& commands = m_device->getCommandList();
+    auto* commandList = m_device->getCommandList(m_command_list);
+    if (commandList == nullptr) {
+        return;
+    }
+    auto& commands = *commandList;
     commands.begin();
     commands.beginRenderPass(pass);
     render(ImGui::GetDrawData(), commands);
     commands.endRenderPass();
     commands.end();
+    m_device->submit(m_command_list, &frame);
 
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault(nullptr, this);
     }
 
-    m_swapchain->present();
+    m_device->present(frame);
 }
 
 void ImGuiRenderer::shutdown()
@@ -236,8 +253,13 @@ void ImGuiRenderer::shutdown()
         m_device->destroyShader(m_vertex_shader);
         m_vertex_shader = {};
     }
+    if (m_command_list) {
+        m_device->destroyCommandList(m_command_list);
+        m_command_list = {};
+    }
 
     m_device = nullptr;
+    m_swapchain_handle = {};
     m_swapchain = nullptr;
     m_instance = nullptr;
     m_platform = nullptr;
@@ -690,6 +712,8 @@ void ImGuiRenderer::destroyViewportWindow(ImGuiViewport* viewport)
         data->swapchain = nullptr;
         data->swapchain_handle = {};
         data->surface = {};
+        data->frame = {};
+        data->frame_pending = false;
         IM_DELETE(data);
     }
 
@@ -718,9 +742,11 @@ void ImGuiRenderer::setViewportWindowSize(ImGuiViewport* viewport, ImVec2 size)
 void ImGuiRenderer::renderViewportWindow(ImGuiViewport* viewport)
 {
     auto* data = viewportRenderData(viewport);
-    if (data == nullptr || data->swapchain == nullptr || viewport == nullptr || viewport->DrawData == nullptr) {
+    if (m_device == nullptr || !m_command_list || data == nullptr || data->swapchain == nullptr ||
+        viewport == nullptr || viewport->DrawData == nullptr) {
         return;
     }
+    data->frame_pending = false;
 
     const uint32_t width = viewportDimension(viewport->Size.x);
     const uint32_t height = viewportDimension(viewport->Size.y);
@@ -731,29 +757,42 @@ void ImGuiRenderer::renderViewportWindow(ImGuiViewport* viewport)
     }
     data->swapchain->resize(width, height);
 
+    SwapchainFrame frame{};
+    if (!m_device->beginFrame(data->swapchain_handle, frame)) {
+        return;
+    }
+
     RenderPassBeginInfo pass{};
     pass.color_attachments.push_back(ColorAttachmentDesc{
-        .view = data->swapchain->getCurrentColorTextureView(),
+        .view = frame.color_view,
         .load_op = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) ? LoadOp::Load : LoadOp::Clear,
         .store_op = StoreOp::Store,
         .clear_color = ClearColor{0.0f, 0.0f, 0.0f, 1.0f},
     });
-    pass.width = data->swapchain->getWidth();
-    pass.height = data->swapchain->getHeight();
+    pass.width = frame.width;
+    pass.height = frame.height;
 
-    auto& commands = m_device->getCommandList();
+    auto* commandList = m_device->getCommandList(m_command_list);
+    if (commandList == nullptr) {
+        return;
+    }
+    auto& commands = *commandList;
     commands.begin();
     commands.beginRenderPass(pass);
     render(viewport->DrawData, commands);
     commands.endRenderPass();
     commands.end();
+    m_device->submit(m_command_list, &frame);
+    data->frame = frame;
+    data->frame_pending = true;
 }
 
 void ImGuiRenderer::swapViewportBuffers(ImGuiViewport* viewport)
 {
     auto* data = viewportRenderData(viewport);
-    if (data != nullptr && data->swapchain != nullptr) {
-        data->swapchain->present();
+    if (m_device != nullptr && data != nullptr && data->swapchain != nullptr && data->frame_pending) {
+        m_device->present(data->frame);
+        data->frame_pending = false;
     }
 }
 

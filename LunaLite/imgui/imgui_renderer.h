@@ -29,11 +29,11 @@ public:
     ImGuiRenderer(const ImGuiRenderer&) = delete;
     ImGuiRenderer& operator=(const ImGuiRenderer&) = delete;
 
-    bool init(rhi::Device& device, rhi::Swapchain& swapchain);
+    bool init(rhi::Device& device, rhi::SwapchainHandle swapchain_handle, rhi::Swapchain& swapchain);
     void setSurfaceOwner(rhi::Instance& instance);
     void setPlatform(ImGuiPlatform& platform);
     void beginFrame();
-    void endFrame(ImGuiRenderMode mode);
+    void endFrame(ImGuiRenderMode mode, const rhi::SwapchainFrame& frame);
     void shutdown();
     void render(ImDrawData* draw_data, rhi::CommandList& commands);
     ImTextureID textureId(const renderer::interface::FrameImage& image);
@@ -68,7 +68,9 @@ private:
     static void swapViewportBuffersCallback(ImGuiViewport* viewport, void* render_arg);
 
     rhi::Device* m_device{nullptr};
+    rhi::SwapchainHandle m_swapchain_handle{};
     rhi::Swapchain* m_swapchain{nullptr};
+    rhi::CommandListHandle m_command_list{};
     rhi::Instance* m_instance{nullptr};
     ImGuiPlatform* m_platform{nullptr};
     rhi::BufferHandle m_vertex_buffer{};

@@ -94,8 +94,13 @@ void Application::run()
         m_renderer_controller->getRenderer().endFrame();
 
         if (m_imgui_renderer) {
+            rhi::SwapchainFrame frame{};
+            if (!m_device->beginFrame(m_swapchain_handle, frame)) {
+                break;
+            }
+
             if (m_present_scene_to_swapchain) {
-                m_frame_presenter->renderToSwapchain(m_renderer_controller->getFrameImage());
+                m_frame_presenter->renderToSwapchain(m_renderer_controller->getFrameImage(), frame);
             }
 
             m_imgui_renderer->beginFrame();
@@ -105,7 +110,8 @@ void Application::run()
             }
 
             m_imgui_renderer->endFrame(m_present_scene_to_swapchain ? imgui::ImGuiRenderMode::OverlaySwapchain
-                                                                    : imgui::ImGuiRenderMode::ClearSwapchain);
+                                                                    : imgui::ImGuiRenderMode::ClearSwapchain,
+                                       frame);
         } else {
             m_frame_presenter->present(m_renderer_controller->getFrameImage());
         }
@@ -218,7 +224,7 @@ void Application::initialize(const ApplicationCreateInfo& info)
 
     m_renderer_controller = std::make_unique<renderer::RendererController>(
         *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
-    m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, *m_swapchain);
+    m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, m_swapchain_handle);
     m_debug_renderer = std::make_unique<renderer::DebugRenderer>(m_renderer_controller->getRenderer());
     m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
     m_scene_renderer->setViewportSize(info.width, info.height);
@@ -256,7 +262,7 @@ void Application::initializeImGui(const ApplicationCreateInfo& info)
     m_imgui_renderer = std::make_unique<imgui::ImGuiRenderer>();
     m_imgui_renderer->setSurfaceOwner(*m_instance);
     m_imgui_renderer->setPlatform(*m_imgui_platform);
-    if (!m_imgui_renderer->init(*m_device, *m_swapchain)) {
+    if (!m_imgui_renderer->init(*m_device, m_swapchain_handle, *m_swapchain)) {
         LUNA_CORE_FATAL("Failed to initialize ImGui renderer backend.");
     }
 
@@ -347,6 +353,9 @@ bool Application::onWindowResize(WindowResizeEvent& event)
     }
 
     LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
+    if (m_swapchain) {
+        m_swapchain->resize(event.getWidth(), event.getHeight());
+    }
     m_renderer_controller->resize(event.getWidth(), event.getHeight());
     if (m_scene_renderer) {
         m_scene_renderer->setViewportSize(event.getWidth(), event.getHeight());

@@ -10,20 +10,20 @@ namespace lunalite::renderer {
 
 class RHIFramePresenter {
 public:
-    RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapchain);
+    RHIFramePresenter(rhi::Device& device, rhi::SwapchainHandle swapchain_handle);
     ~RHIFramePresenter();
 
-    void renderToSwapchain(const interface::FrameImage& image);
-    void present();
+    void renderToSwapchain(const interface::FrameImage& image, const rhi::SwapchainFrame& frame);
     void present(const interface::FrameImage& image);
 
 private:
     void ensureUploadTexture(const interface::FrameImage& image);
     void uploadCpuImage(const interface::FrameImage& image, const interface::CpuFrameStorage& storage);
-    void drawToSwapchain(rhi::TextureViewHandle view);
+    void drawToSwapchain(rhi::TextureViewHandle view, const rhi::SwapchainFrame& frame);
 
     rhi::Device& m_device;
-    rhi::Swapchain& m_swapchain;
+    rhi::SwapchainHandle m_swapchain_handle{};
+    rhi::CommandListHandle m_command_list{};
     rhi::CommandList* m_cmd{nullptr};
 
     rhi::BindGroupLayoutHandle m_bind_group_layout{};

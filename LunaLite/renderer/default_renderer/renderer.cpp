@@ -5,7 +5,6 @@
 #include "../interface/texture.h"
 #include "renderer.h"
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -240,108 +239,101 @@ rhi::SamplerHandle createCubeSampler(rhi::Device& device, uint32_t mipCount)
     });
 }
 
-constexpr float Pi = 3.14159265359f;
 constexpr uint32_t PrefilterCubeSize = 128;
 constexpr uint32_t BrdfLutSize = 128;
-constexpr uint32_t BrdfSampleCount = 256;
+constexpr uint32_t BrdfLutComputeGroupSize = 8;
 
-void basisFromNormal(const glm::vec3& normal, glm::vec3& right, glm::vec3& up)
-{
-    up = std::abs(normal.y) < 0.999f ? glm::vec3{0.0f, 1.0f, 0.0f} : glm::vec3{1.0f, 0.0f, 0.0f};
-    right = glm::normalize(glm::cross(up, normal));
-    up = glm::normalize(glm::cross(normal, right));
-}
+constexpr const char* BrdfLutComputeShader = R"GLSL(
+#version 450 core
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(rg16f, binding = 0) writeonly uniform image2D uBRDFLut;
 
-float radicalInverseVdC(uint32_t bits)
+const float PI = 3.14159265359;
+const uint SAMPLE_COUNT = 256u;
+
+float RadicalInverseVdC(uint bits)
 {
     bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55'55'55'55u) << 1u) | ((bits & 0xAA'AA'AA'AAu) >> 1u);
-    bits = ((bits & 0x33'33'33'33u) << 2u) | ((bits & 0xCC'CC'CC'CCu) >> 2u);
-    bits = ((bits & 0x0F'0F'0F'0Fu) << 4u) | ((bits & 0xF0'F0'F0'F0u) >> 4u);
-    bits = ((bits & 0x00'FF'00'FFu) << 8u) | ((bits & 0xFF'00'FF'00u) >> 8u);
-    return static_cast<float>(bits) * 2.3283064365386963e-10f;
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;
 }
 
-glm::vec2 hammersley(uint32_t index, uint32_t count)
+vec2 Hammersley(uint i, uint n)
 {
-    return {static_cast<float>(index) / static_cast<float>(count), radicalInverseVdC(index)};
+    return vec2(float(i) / float(n), RadicalInverseVdC(i));
 }
 
-glm::vec3 importanceSampleGGX(const glm::vec2& xi, float roughness, const glm::vec3& normal)
+vec3 ImportanceSampleGGX(vec2 xi, float roughness)
 {
-    const float alpha = roughness * roughness;
-    const float phi = 2.0f * Pi * xi.x;
-    const float cosTheta = std::sqrt((1.0f - xi.y) / (1.0f + (alpha * alpha - 1.0f) * xi.y));
-    const float sinTheta = std::sqrt(std::max(1.0f - cosTheta * cosTheta, 0.0f));
+    float a = roughness * roughness;
+    float phi = 2.0 * PI * xi.x;
+    float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+    float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
 
-    const glm::vec3 tangentHalf{
-        std::cos(phi) * sinTheta,
-        std::sin(phi) * sinTheta,
-        cosTheta,
-    };
-
-    glm::vec3 right;
-    glm::vec3 up;
-    basisFromNormal(normal, right, up);
-    return glm::normalize(right * tangentHalf.x + up * tangentHalf.y + normal * tangentHalf.z);
+    return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 
-float geometrySchlickGGXIBL(float noV, float roughness)
+float GeometrySchlickGGX(float nDotV, float roughness)
 {
-    const float alpha = roughness * roughness;
-    const float k = alpha / 2.0f;
-    return noV / std::max(noV * (1.0f - k) + k, 1e-6f);
+    float a = roughness;
+    float k = (a * a) * 0.5;
+    float denom = nDotV * (1.0 - k) + k;
+    return nDotV / denom;
 }
 
-float geometrySmithIBL(float noV, float noL, float roughness)
+float GeometrySmith(float nDotV, float nDotL, float roughness)
 {
-    return geometrySchlickGGXIBL(noV, roughness) * geometrySchlickGGXIBL(noL, roughness);
+    return GeometrySchlickGGX(nDotV, roughness) * GeometrySchlickGGX(nDotL, roughness);
 }
 
-glm::vec2 integrateBRDF(float noV, float roughness)
+vec2 IntegrateBRDF(float nDotV, float roughness)
 {
-    const glm::vec3 view{std::sqrt(std::max(1.0f - noV * noV, 0.0f)), 0.0f, noV};
-    const glm::vec3 normal{0.0f, 0.0f, 1.0f};
+    vec3 view = vec3(sqrt(max(1.0 - nDotV * nDotV, 0.0)), 0.0, nDotV);
 
-    float scale = 0.0f;
-    float bias = 0.0f;
-    for (uint32_t sampleIndex = 0; sampleIndex < BrdfSampleCount; ++sampleIndex) {
-        const auto xi = hammersley(sampleIndex, BrdfSampleCount);
-        const auto halfVector = importanceSampleGGX(xi, roughness, normal);
-        const auto light = glm::normalize(2.0f * glm::dot(view, halfVector) * halfVector - view);
+    float scale = 0.0;
+    float bias = 0.0;
 
-        const float noL = std::max(light.z, 0.0f);
-        const float noH = std::max(halfVector.z, 0.0f);
-        const float voH = std::max(glm::dot(view, halfVector), 0.0f);
-        if (noL > 0.0f) {
-            const float geometry = geometrySmithIBL(noV, noL, roughness);
-            const float geometryVisibility = geometry * voH / std::max(noH * noV, 1e-6f);
-            const float fresnel = std::pow(1.0f - voH, 5.0f);
-            scale += (1.0f - fresnel) * geometryVisibility;
+    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {
+        vec2 xi = Hammersley(i, SAMPLE_COUNT);
+        vec3 halfVector = ImportanceSampleGGX(xi, roughness);
+        vec3 light = normalize(2.0 * dot(view, halfVector) * halfVector - view);
+
+        float nDotL = max(light.z, 0.0);
+        float nDotH = max(halfVector.z, 0.0);
+        float vDotH = max(dot(view, halfVector), 0.0);
+
+        if (nDotL > 0.0) {
+            float geometry = GeometrySmith(nDotV, nDotL, roughness);
+            float geometryVisibility = (geometry * vDotH) / max(nDotH * nDotV, 0.001);
+            float fresnel = pow(1.0 - vDotH, 5.0);
+
+            scale += (1.0 - fresnel) * geometryVisibility;
             bias += fresnel * geometryVisibility;
         }
     }
 
-    return {scale / static_cast<float>(BrdfSampleCount), bias / static_cast<float>(BrdfSampleCount)};
+    return vec2(scale, bias) / float(SAMPLE_COUNT);
 }
 
-std::vector<float> makeBrdfLut()
+void main()
 {
-    std::vector<float> pixels(static_cast<size_t>(BrdfLutSize) * BrdfLutSize * 4);
-    for (uint32_t y = 0; y < BrdfLutSize; ++y) {
-        const float roughness = (static_cast<float>(y) + 0.5f) / static_cast<float>(BrdfLutSize);
-        for (uint32_t x = 0; x < BrdfLutSize; ++x) {
-            const float noV = (static_cast<float>(x) + 0.5f) / static_cast<float>(BrdfLutSize);
-            const auto brdf = integrateBRDF(noV, roughness);
-            auto* destination = &pixels[(static_cast<size_t>(y) * BrdfLutSize + x) * 4];
-            destination[0] = brdf.x;
-            destination[1] = brdf.y;
-            destination[2] = 0.0f;
-            destination[3] = 1.0f;
-        }
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uBRDFLut);
+    if (pixel.x >= size.x || pixel.y >= size.y) {
+        return;
     }
-    return pixels;
+
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size);
+    float nDotV = max(uv.x, 0.001);
+    float roughness = max(uv.y, 0.001);
+    vec2 integrated = IntegrateBRDF(nDotV, roughness);
+
+    imageStore(uBRDFLut, pixel, vec4(integrated, 0.0, 1.0));
 }
+)GLSL";
 
 } // namespace
 
@@ -365,7 +357,10 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     : m_device(&device),
       m_swapchain(&swapchain)
 {
-    m_cmd = &m_device->getCommandList();
+    m_command_list = m_device->createCommandList();
+    m_cmd = m_device->getCommandList(m_command_list);
+    LUNA_ASSERT(m_command_list, "Failed to create default renderer command list.");
+    LUNA_ASSERT(m_cmd != nullptr, "Default renderer command list is null.");
 
     const auto geometryVertexShaderSource = loadDefaultRendererShader("geometry.vert");
     const auto geometryFragmentShaderSource = loadDefaultRendererShader("geometry.frag");
@@ -799,6 +794,11 @@ Renderer::~Renderer()
     destroyMaterialTextureResources();
     destroyTextureGpuResource(m_brdf_lut_resource);
     destroyEnvironmentGpuResource(m_black_environment_gpu_resource);
+    if (m_command_list) {
+        m_device->destroyCommandList(m_command_list);
+        m_command_list = {};
+        m_cmd = nullptr;
+    }
 }
 
 const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asset::AssetHandle handle,
@@ -1130,27 +1130,22 @@ void Renderer::createBlackEnvironmentGpuResource()
 
 void Renderer::createBrdfLutResource()
 {
-    const auto pixels = makeBrdfLut();
     m_brdf_lut_resource.texture = m_device->createTexture(rhi::TextureDesc{
         .width = BrdfLutSize,
         .height = BrdfLutSize,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .dimension = rhi::TextureDimension::Texture2D,
+        .format = rhi::TextureFormat::RG16F,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::Storage,
+        .mip_levels = 1,
+        .array_layers = 1,
     });
-    if (m_brdf_lut_resource.texture) {
-        m_device->updateTexture(m_brdf_lut_resource.texture,
-                                rhi::TextureUploadDesc{
-                                    .width = BrdfLutSize,
-                                    .height = BrdfLutSize,
-                                    .format = rhi::TextureFormat::RGBA32F,
-                                    .data = pixels.data(),
-                                    .row_pitch = static_cast<size_t>(BrdfLutSize) * sizeof(float) * 4,
-                                });
-    }
     m_brdf_lut_resource.view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = m_brdf_lut_resource.texture,
-        .format = rhi::TextureFormat::RGBA32F,
+        .view_dimension = rhi::TextureViewDimension::Texture2D,
+        .format = rhi::TextureFormat::RG16F,
         .aspect = rhi::TextureAspect::Color,
+        .mip_level_count = 1,
+        .array_layer_count = 1,
     });
     m_brdf_lut_resource.sampler = m_device->createSampler(rhi::SamplerDesc{
         .min_filter = rhi::FilterMode::Linear,
@@ -1160,6 +1155,81 @@ void Renderer::createBrdfLutResource()
         .address_v = rhi::AddressMode::ClampToEdge,
         .address_w = rhi::AddressMode::ClampToEdge,
     });
+
+    const auto computeShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Compute,
+        .source = BrdfLutComputeShader,
+    });
+    const auto computeBindGroupLayout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
+        .entries =
+            {
+                rhi::BindGroupLayoutEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::StorageTexture,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Compute),
+                },
+            },
+    });
+    const auto computePipelineLayout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
+        .bind_group_layouts = {computeBindGroupLayout},
+    });
+    const auto computeBindGroup = m_device->createBindGroup(rhi::BindGroupDesc{
+        .layout = computeBindGroupLayout,
+        .entries =
+            {
+                rhi::BindGroupEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::StorageTexture,
+                    .texture_view = m_brdf_lut_resource.view,
+                },
+            },
+    });
+    const auto computePipeline = m_device->createComputePipeline(rhi::ComputePipelineDesc{
+        .layout = computePipelineLayout,
+        .compute_shader = computeShader,
+    });
+
+    const auto destroyComputeResources = [&]() {
+        if (computePipeline) {
+            m_device->destroyPipeline(computePipeline);
+        }
+        if (computeBindGroup) {
+            m_device->destroyBindGroup(computeBindGroup);
+        }
+        if (computePipelineLayout) {
+            m_device->destroyPipelineLayout(computePipelineLayout);
+        }
+        if (computeBindGroupLayout) {
+            m_device->destroyBindGroupLayout(computeBindGroupLayout);
+        }
+        if (computeShader) {
+            m_device->destroyShader(computeShader);
+        }
+    };
+
+    if (!m_brdf_lut_resource.texture || !m_brdf_lut_resource.view || !m_brdf_lut_resource.sampler || !computeShader ||
+        !computeBindGroupLayout || !computePipelineLayout || !computeBindGroup || !computePipeline) {
+        LUNA_CORE_ERROR("Failed to create BRDF LUT compute resources.");
+        destroyComputeResources();
+        destroyTextureGpuResource(m_brdf_lut_resource);
+        return;
+    }
+
+    m_cmd->begin();
+    m_cmd->setPipeline(computePipeline);
+    m_cmd->setBindGroup(0, computeBindGroup);
+    m_cmd->dispatch((BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize,
+                    (BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize);
+    const rhi::TextureBarrier brdfLutBarrier{
+        .texture = m_brdf_lut_resource.texture,
+        .old_state = rhi::ResourceState::StorageWrite,
+        .new_state = rhi::ResourceState::ShaderRead,
+    };
+    m_cmd->resourceBarrier(&brdfLutBarrier, 1);
+    m_cmd->end();
+    m_device->submit(m_command_list);
+
+    destroyComputeResources();
 }
 
 void Renderer::updateEnvironmentBindGroup(const EnvironmentGpuResource& resource)
@@ -1581,6 +1651,7 @@ void Renderer::endFrame()
     m_cmd->resourceBarrier(&finalColorBarrier, 1);
 
     m_cmd->end();
+    m_device->submit(m_command_list);
 }
 
 void Renderer::resize(uint32_t width, uint32_t height)

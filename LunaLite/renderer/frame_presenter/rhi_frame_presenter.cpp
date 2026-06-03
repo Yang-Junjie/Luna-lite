@@ -72,11 +72,13 @@ std::string loadFramePresenterShader(const char* file_name)
 
 } // namespace
 
-RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::Swapchain& swapchain)
+RHIFramePresenter::RHIFramePresenter(rhi::Device& device, rhi::SwapchainHandle swapchain_handle)
     : m_device(device),
-      m_swapchain(swapchain),
-      m_cmd(&m_device.getCommandList())
+      m_swapchain_handle(swapchain_handle)
 {
+    m_command_list = m_device.createCommandList();
+    m_cmd = m_device.getCommandList(m_command_list);
+    LUNA_ASSERT(m_command_list, "Failed to create presenter command list.");
     LUNA_ASSERT(m_cmd != nullptr, "RHI command list is null.");
 
     const auto vertexShaderSource = loadFramePresenterShader("presenter.vert");
@@ -172,9 +174,14 @@ RHIFramePresenter::~RHIFramePresenter()
     if (m_vertex_shader) {
         m_device.destroyShader(m_vertex_shader);
     }
+    if (m_command_list) {
+        m_device.destroyCommandList(m_command_list);
+        m_command_list = {};
+        m_cmd = nullptr;
+    }
 }
 
-void RHIFramePresenter::renderToSwapchain(const interface::FrameImage& image)
+void RHIFramePresenter::renderToSwapchain(const interface::FrameImage& image, const rhi::SwapchainFrame& frame)
 {
     if (image.width == 0 || image.height == 0) {
         return;
@@ -182,21 +189,21 @@ void RHIFramePresenter::renderToSwapchain(const interface::FrameImage& image)
 
     if (const auto* cpu = std::get_if<interface::CpuFrameStorage>(&image.storage)) {
         uploadCpuImage(image, *cpu);
-        drawToSwapchain(m_upload_view);
+        drawToSwapchain(m_upload_view, frame);
     } else if (const auto* gpu = std::get_if<interface::GpuFrameStorage>(&image.storage)) {
-        drawToSwapchain(gpu->view);
+        drawToSwapchain(gpu->view, frame);
     }
-}
-
-void RHIFramePresenter::present()
-{
-    m_swapchain.present();
 }
 
 void RHIFramePresenter::present(const interface::FrameImage& image)
 {
-    renderToSwapchain(image);
-    present();
+    rhi::SwapchainFrame frame{};
+    if (!m_device.beginFrame(m_swapchain_handle, frame)) {
+        return;
+    }
+
+    renderToSwapchain(image, frame);
+    m_device.present(frame);
 }
 
 void RHIFramePresenter::ensureUploadTexture(const interface::FrameImage& image)
@@ -263,7 +270,7 @@ void RHIFramePresenter::uploadCpuImage(const interface::FrameImage& image, const
                            });
 }
 
-void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view)
+void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, const rhi::SwapchainFrame& frame)
 {
     if (!view || !m_pipeline || !m_sampler || !m_bind_group_layout) {
         return;
@@ -290,13 +297,13 @@ void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view)
 
     rhi::RenderPassBeginInfo pass;
     pass.color_attachments.push_back(rhi::ColorAttachmentDesc{
-        .view = m_swapchain.getCurrentColorTextureView(),
+        .view = frame.color_view,
         .load_op = rhi::LoadOp::Clear,
         .store_op = rhi::StoreOp::Store,
         .clear_color = rhi::ClearColor{0.0f, 0.0f, 0.0f, 1.0f},
     });
-    pass.width = m_swapchain.getWidth();
-    pass.height = m_swapchain.getHeight();
+    pass.width = frame.width;
+    pass.height = frame.height;
 
     m_cmd->begin();
     m_cmd->beginRenderPass(pass);
@@ -305,6 +312,7 @@ void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view)
     m_cmd->draw(3);
     m_cmd->endRenderPass();
     m_cmd->end();
+    m_device.submit(m_command_list, &frame);
 }
 
 } // namespace lunalite::renderer
