@@ -1,11 +1,12 @@
 #pragma once
 #include "asset_database.h"
-#include "asset_importer.h"
+#include "asset_importer_registry.h"
+#include "asset_loader_registry.h"
+#include "asset_metadata_store.h"
+#include "asset_scanner.h"
 
 #include <filesystem>
-#include <memory>
 #include <unordered_map>
-#include <vector>
 
 namespace lunalite::asset {
 
@@ -39,24 +40,12 @@ private:
     AssetManager() = default;
     ~AssetManager() = default;
 
-    void registerDefaultImporters();
     bool registerBuiltinAssets();
-    Importer* findImporter(const std::filesystem::path& assetPath) const;
 
-    bool discoverAssets(const std::filesystem::path& assetsRoot, std::vector<std::filesystem::path>& assetPaths) const;
-
-    bool importAssets(const std::vector<std::filesystem::path>& assetPaths,
-                      std::vector<AssetMetadata>& importedMetadata);
-
-    std::vector<AssetMetadata> importOrReuseMetadata(const std::filesystem::path& assetPath);
-    bool registerMetadata(const std::vector<AssetMetadata>& metadataList);
-    bool registerMetadata(const AssetMetadata& metadata);
-    bool loadAllAssets();
-    bool loadAsset(const AssetMetadata& metadata);
-
-    std::vector<std::unique_ptr<Importer>> m_importers;
-    std::unordered_map<AssetHandle, AssetMetadata> m_metadata_registry;
-    std::unordered_map<std::string, AssetHandle> m_path_handle_map;
+    AssetScanner m_scanner;
+    AssetImporterRegistry m_importers;
+    AssetMetadataStore m_metadata;
+    AssetLoaderRegistry m_loaders;
 };
 
 } // namespace lunalite::asset

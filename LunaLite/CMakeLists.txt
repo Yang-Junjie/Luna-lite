@@ -48,7 +48,11 @@ add_library(LunaLite STATIC
     core/uuid.cpp
     asset/asset_cache.cpp
     asset/asset_importer.cpp
+    asset/asset_importer_registry.cpp
+    asset/asset_loader_registry.cpp
     asset/asset_manager.cpp
+    asset/asset_metadata_store.cpp
+    asset/asset_scanner.cpp
     asset/environment_map_baker.cpp
     asset/lunacube.cpp
     asset/builtin/material_factory.cpp
