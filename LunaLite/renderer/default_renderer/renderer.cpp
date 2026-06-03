@@ -3,6 +3,7 @@
 #include "../../asset/lunacube.h"
 #include "../../core/log.h"
 #include "../interface/texture.h"
+#include "../rhi_upload_helpers.h"
 #include "renderer.h"
 
 #include <cstddef>
@@ -181,7 +182,8 @@ bool isUsableRgba32Cube(const asset::LunaCubeImage& cube)
     return cube.format == asset::LunaCubeFormat::RGBA32F && cube.size > 0 && cube.mip_count > 0 && !cube.pixels.empty();
 }
 
-rhi::TextureHandle createCubeTexture(rhi::Device& device, const asset::LunaCubeImage& cube)
+rhi::TextureHandle
+    createCubeTexture(rhi::Device& device, rhi::CommandListHandle command_list, const asset::LunaCubeImage& cube)
 {
     auto texture = device.createTexture(rhi::TextureDesc{
         .width = cube.size,
@@ -191,25 +193,45 @@ rhi::TextureHandle createCubeTexture(rhi::Device& device, const asset::LunaCubeI
         .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
         .mip_levels = cube.mip_count,
         .array_layers = asset::LunaCubeFaceCount,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     if (!texture) {
         return {};
     }
 
+    const uint32_t bytesPerPixel = asset::getLunaCubeBytesPerPixel(cube.format);
+    std::vector<rhi::BufferTextureCopyRegion> copyRegions;
+    copyRegions.reserve(static_cast<size_t>(cube.mip_count) * asset::LunaCubeFaceCount);
     for (uint32_t mip = 0; mip < cube.mip_count; ++mip) {
         const uint32_t mipSize = asset::getLunaCubeMipSize(cube, mip);
         for (uint32_t face = 0; face < asset::LunaCubeFaceCount; ++face) {
-            device.updateTexture(texture,
-                                 rhi::TextureUploadDesc{
-                                     .width = mipSize,
-                                     .height = mipSize,
-                                     .mip_level = mip,
-                                     .array_layer = face,
-                                     .format = rhi::TextureFormat::RGBA32F,
-                                     .data = asset::getLunaCubeFaceData(cube, mip, face),
-                                     .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
-                                 });
+            const auto offset = asset::calculateLunaCubeFaceOffsetBytes(cube, mip, face);
+            if (!offset) {
+                device.destroyTexture(texture);
+                return {};
+            }
+
+            copyRegions.push_back(rhi::BufferTextureCopyRegion{
+                .buffer_offset = *offset,
+                .buffer_row_pitch = static_cast<size_t>(mipSize) * bytesPerPixel,
+                .texture_width = mipSize,
+                .texture_height = mipSize,
+                .mip_level = mip,
+                .array_layer = face,
+            });
         }
+    }
+
+    if (!rhi_upload::uploadTextureRegions(device,
+                                          command_list,
+                                          texture,
+                                          cube.pixels.data(),
+                                          cube.pixels.size(),
+                                          copyRegions.data(),
+                                          static_cast<uint32_t>(copyRegions.size()),
+                                          false)) {
+        device.destroyTexture(texture);
+        return {};
     }
 
     return texture;
@@ -359,8 +381,10 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
 {
     m_command_list = m_device->createCommandList();
     m_cmd = m_device->getCommandList(m_command_list);
+    m_upload_command_list = m_device->createCommandList();
     LUNA_ASSERT(m_command_list, "Failed to create default renderer command list.");
     LUNA_ASSERT(m_cmd != nullptr, "Default renderer command list is null.");
+    LUNA_ASSERT(m_upload_command_list, "Failed to create default renderer upload command list.");
 
     const auto geometryVertexShaderSource = loadDefaultRendererShader("geometry.vert");
     const auto geometryFragmentShaderSource = loadDefaultRendererShader("geometry.frag");
@@ -670,29 +694,26 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             },
     });
 
-    m_frameUniformBuffer = m_device->createBuffer(
-        rhi::BufferDesc{
-            .size = sizeof(FrameUniforms),
-            .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
-            .memory = rhi::MemoryUsage::CpuToGpu,
-        },
-        nullptr);
+    m_frameUniformBuffer = m_device->createBuffer(rhi::BufferDesc{
+        .size = sizeof(FrameUniforms),
+        .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
+        .memory = rhi::MemoryUsage::CpuToGpu,
+        .initial_state = rhi::ResourceState::UniformRead,
+    });
 
-    m_objectUniformBuffer = m_device->createBuffer(
-        rhi::BufferDesc{
-            .size = sizeof(ObjectUniforms),
-            .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
-            .memory = rhi::MemoryUsage::CpuToGpu,
-        },
-        nullptr);
+    m_objectUniformBuffer = m_device->createBuffer(rhi::BufferDesc{
+        .size = sizeof(ObjectUniforms),
+        .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
+        .memory = rhi::MemoryUsage::CpuToGpu,
+        .initial_state = rhi::ResourceState::UniformRead,
+    });
 
-    m_line_vertex_buffer = m_device->createBuffer(
-        rhi::BufferDesc{
-            .size = sizeof(LineVertex) * 2,
-            .usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::CopyDst,
-            .memory = rhi::MemoryUsage::CpuToGpu,
-        },
-        nullptr);
+    m_line_vertex_buffer = m_device->createBuffer(rhi::BufferDesc{
+        .size = sizeof(LineVertex) * 2,
+        .usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::CopyDst,
+        .memory = rhi::MemoryUsage::CpuToGpu,
+        .initial_state = rhi::ResourceState::VertexBuffer,
+    });
 
     m_geometry_bind_group = m_device->createBindGroup(rhi::BindGroupDesc{
         .layout = m_geometry_bind_group_layout,
@@ -799,6 +820,10 @@ Renderer::~Renderer()
         m_command_list = {};
         m_cmd = nullptr;
     }
+    if (m_upload_command_list) {
+        m_device->destroyCommandList(m_upload_command_list);
+        m_upload_command_list = {};
+    }
 }
 
 const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asset::AssetHandle handle,
@@ -826,25 +851,30 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asse
         .width = texture->getWidth(),
         .height = texture->getHeight(),
         .format = rhiFormat,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst |
+                 (mipLevels > 1 ? rhi::TextureUsage::CopySrc : rhi::TextureUsage::None),
         .mip_levels = mipLevels,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     if (!resource.texture) {
         return getOrCreateFallbackTexture(fallback);
     }
 
-    m_device->updateTexture(
-        resource.texture,
-        rhi::TextureUploadDesc{
-            .width = texture->getWidth(),
-            .height = texture->getHeight(),
-            .format = rhiFormat,
-            .data = texture->getPixels().data(),
-            .row_pitch = static_cast<size_t>(texture->getWidth()) * textureBytesPerPixel(texture->getFormat()),
-        });
-
-    if (mipLevels > 1) {
-        m_device->generateMipmaps(resource.texture);
+    if (!rhi_upload::uploadTextureData(
+            *m_device,
+            m_upload_command_list,
+            resource.texture,
+            rhi_upload::TextureUploadData{
+                .data = texture->getPixels().data(),
+                .size = static_cast<size_t>(texture->getHeight()) * texture->getWidth() *
+                        textureBytesPerPixel(texture->getFormat()),
+                .row_pitch = static_cast<size_t>(texture->getWidth()) * textureBytesPerPixel(texture->getFormat()),
+                .width = texture->getWidth(),
+                .height = texture->getHeight(),
+            },
+            mipLevels > 1)) {
+        destroyTextureGpuResource(resource);
+        return getOrCreateFallbackTexture(fallback);
     }
 
     resource.view = m_device->createTextureView(rhi::TextureViewDesc{
@@ -885,6 +915,7 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateFallbackTexture(Fallbac
         .height = 1,
         .format = rhi::TextureFormat::RGBA8_UNorm,
         .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     resource.view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = resource.texture,
@@ -894,14 +925,16 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateFallbackTexture(Fallbac
     resource.sampler = m_device->createSampler(fallbackSamplerDesc());
 
     if (resource.texture) {
-        m_device->updateTexture(resource.texture,
-                                rhi::TextureUploadDesc{
-                                    .width = 1,
-                                    .height = 1,
-                                    .format = rhi::TextureFormat::RGBA8_UNorm,
-                                    .data = pixel.data(),
-                                    .row_pitch = pixel.size(),
-                                });
+        rhi_upload::uploadTextureData(*m_device,
+                                      m_upload_command_list,
+                                      resource.texture,
+                                      rhi_upload::TextureUploadData{
+                                          .data = pixel.data(),
+                                          .size = pixel.size(),
+                                          .row_pitch = pixel.size(),
+                                          .width = 1,
+                                          .height = 1,
+                                      });
     }
 
     return resource;
@@ -971,9 +1004,9 @@ const Renderer::EnvironmentGpuResource*
     }
 
     EnvironmentGpuResource resource;
-    resource.texture = createCubeTexture(*m_device, *environmentCube);
-    resource.irradiance_texture = createCubeTexture(*m_device, *irradianceCube);
-    resource.prefilter_texture = createCubeTexture(*m_device, *prefilterCube);
+    resource.texture = createCubeTexture(*m_device, m_upload_command_list, *environmentCube);
+    resource.irradiance_texture = createCubeTexture(*m_device, m_upload_command_list, *irradianceCube);
+    resource.prefilter_texture = createCubeTexture(*m_device, m_upload_command_list, *prefilterCube);
     if (!resource.texture || !resource.irradiance_texture || !resource.prefilter_texture) {
         destroyEnvironmentGpuResource(resource);
         return nullptr;
@@ -1008,21 +1041,24 @@ void Renderer::createBlackEnvironmentGpuResource()
         .format = rhi::TextureFormat::RGBA32F,
         .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
         .array_layers = 6,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     if (!m_black_environment_gpu_resource.texture) {
         return;
     }
 
     for (uint32_t face = 0; face < 6; ++face) {
-        m_device->updateTexture(m_black_environment_gpu_resource.texture,
-                                rhi::TextureUploadDesc{
-                                    .width = 1,
-                                    .height = 1,
-                                    .array_layer = face,
-                                    .format = rhi::TextureFormat::RGBA32F,
-                                    .data = blackPixel,
-                                    .row_pitch = sizeof(blackPixel),
-                                });
+        rhi_upload::uploadTextureData(*m_device,
+                                      m_upload_command_list,
+                                      m_black_environment_gpu_resource.texture,
+                                      rhi_upload::TextureUploadData{
+                                          .data = blackPixel,
+                                          .size = sizeof(blackPixel),
+                                          .row_pitch = sizeof(blackPixel),
+                                          .width = 1,
+                                          .height = 1,
+                                          .array_layer = face,
+                                      });
     }
 
     m_black_environment_gpu_resource.view = m_device->createTextureView(rhi::TextureViewDesc{
@@ -1048,18 +1084,21 @@ void Renderer::createBlackEnvironmentGpuResource()
         .format = rhi::TextureFormat::RGBA32F,
         .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
         .array_layers = 6,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     if (m_black_environment_gpu_resource.irradiance_texture) {
         for (uint32_t face = 0; face < 6; ++face) {
-            m_device->updateTexture(m_black_environment_gpu_resource.irradiance_texture,
-                                    rhi::TextureUploadDesc{
-                                        .width = 1,
-                                        .height = 1,
-                                        .array_layer = face,
-                                        .format = rhi::TextureFormat::RGBA32F,
-                                        .data = blackPixel,
-                                        .row_pitch = sizeof(blackPixel),
-                                    });
+            rhi_upload::uploadTextureData(*m_device,
+                                          m_upload_command_list,
+                                          m_black_environment_gpu_resource.irradiance_texture,
+                                          rhi_upload::TextureUploadData{
+                                              .data = blackPixel,
+                                              .size = sizeof(blackPixel),
+                                              .row_pitch = sizeof(blackPixel),
+                                              .width = 1,
+                                              .height = 1,
+                                              .array_layer = face,
+                                          });
         }
     }
     m_black_environment_gpu_resource.irradiance_view = m_device->createTextureView(rhi::TextureViewDesc{
@@ -1087,6 +1126,7 @@ void Renderer::createBlackEnvironmentGpuResource()
         .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
         .mip_levels = prefilterMipLevels,
         .array_layers = 6,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     if (m_black_environment_gpu_resource.prefilter_texture) {
         for (uint32_t mip = 0; mip < prefilterMipLevels; ++mip) {
@@ -1097,16 +1137,18 @@ void Renderer::createBlackEnvironmentGpuResource()
             }
 
             for (uint32_t face = 0; face < 6; ++face) {
-                m_device->updateTexture(m_black_environment_gpu_resource.prefilter_texture,
-                                        rhi::TextureUploadDesc{
-                                            .width = mipSize,
-                                            .height = mipSize,
-                                            .mip_level = mip,
-                                            .array_layer = face,
-                                            .format = rhi::TextureFormat::RGBA32F,
-                                            .data = pixels.data(),
-                                            .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
-                                        });
+                rhi_upload::uploadTextureData(*m_device,
+                                              m_upload_command_list,
+                                              m_black_environment_gpu_resource.prefilter_texture,
+                                              rhi_upload::TextureUploadData{
+                                                  .data = pixels.data(),
+                                                  .size = pixels.size() * sizeof(float),
+                                                  .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
+                                                  .width = mipSize,
+                                                  .height = mipSize,
+                                                  .mip_level = mip,
+                                                  .array_layer = face,
+                                              });
             }
         }
     }
@@ -1216,16 +1258,20 @@ void Renderer::createBrdfLutResource()
     }
 
     m_cmd->begin();
+    const rhi::TextureTransition brdfLutStorageTransition{
+        .texture = m_brdf_lut_resource.texture,
+        .state = rhi::ResourceState::StorageReadWrite,
+    };
+    m_cmd->transition(&brdfLutStorageTransition, 1);
     m_cmd->setPipeline(computePipeline);
     m_cmd->setBindGroup(0, computeBindGroup);
     m_cmd->dispatch((BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize,
                     (BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize);
-    const rhi::TextureBarrier brdfLutBarrier{
+    const rhi::TextureTransition brdfLutShaderReadTransition{
         .texture = m_brdf_lut_resource.texture,
-        .old_state = rhi::ResourceState::StorageWrite,
-        .new_state = rhi::ResourceState::ShaderRead,
+        .state = rhi::ResourceState::ShaderRead,
     };
-    m_cmd->resourceBarrier(&brdfLutBarrier, 1);
+    m_cmd->transition(&brdfLutShaderReadTransition, 1);
     m_cmd->end();
     m_device->submit(m_command_list);
 
@@ -1372,36 +1418,42 @@ void Renderer::ensureGBuffer(uint32_t width, uint32_t height)
         .height = height,
         .format = rhi::TextureFormat::RGBA8_UNorm,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+        .initial_state = rhi::ResourceState::ColorAttachment,
     });
     m_gbuffer.normal_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
         .format = rhi::TextureFormat::RGBA16F,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+        .initial_state = rhi::ResourceState::ColorAttachment,
     });
     m_gbuffer.material_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
         .format = rhi::TextureFormat::RGBA8_UNorm,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+        .initial_state = rhi::ResourceState::ColorAttachment,
     });
     m_gbuffer.emission_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
         .format = rhi::TextureFormat::RGBA16F,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+        .initial_state = rhi::ResourceState::ColorAttachment,
     });
     m_gbuffer.depth_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
         .format = rhi::TextureFormat::Depth24Stencil8,
         .usage = rhi::TextureUsage::DepthStencil | rhi::TextureUsage::Sampled,
+        .initial_state = rhi::ResourceState::DepthStencilWrite,
     });
     m_gbuffer.final_color_texture = m_device->createTexture(rhi::TextureDesc{
         .width = width,
         .height = height,
         .format = rhi::TextureFormat::RGBA8_UNorm,
         .usage = rhi::TextureUsage::RenderTarget | rhi::TextureUsage::Sampled,
+        .initial_state = rhi::ResourceState::ColorAttachment,
     });
 
     m_gbuffer.albedo_view = m_device->createTextureView(rhi::TextureViewDesc{
@@ -1566,34 +1618,29 @@ void Renderer::endFrame()
     flushFrameUniforms();
     m_cmd->endRenderPass();
 
-    const rhi::TextureBarrier barriers[] = {
-        rhi::TextureBarrier{
+    const rhi::TextureTransition barriers[] = {
+        rhi::TextureTransition{
             .texture = m_gbuffer.albedo_texture,
-            .old_state = rhi::ResourceState::RenderTarget,
-            .new_state = rhi::ResourceState::ShaderRead,
+            .state = rhi::ResourceState::ShaderRead,
         },
-        rhi::TextureBarrier{
+        rhi::TextureTransition{
             .texture = m_gbuffer.normal_texture,
-            .old_state = rhi::ResourceState::RenderTarget,
-            .new_state = rhi::ResourceState::ShaderRead,
+            .state = rhi::ResourceState::ShaderRead,
         },
-        rhi::TextureBarrier{
+        rhi::TextureTransition{
             .texture = m_gbuffer.material_texture,
-            .old_state = rhi::ResourceState::RenderTarget,
-            .new_state = rhi::ResourceState::ShaderRead,
+            .state = rhi::ResourceState::ShaderRead,
         },
-        rhi::TextureBarrier{
+        rhi::TextureTransition{
             .texture = m_gbuffer.emission_texture,
-            .old_state = rhi::ResourceState::RenderTarget,
-            .new_state = rhi::ResourceState::ShaderRead,
+            .state = rhi::ResourceState::ShaderRead,
         },
-        rhi::TextureBarrier{
+        rhi::TextureTransition{
             .texture = m_gbuffer.depth_texture,
-            .old_state = rhi::ResourceState::DepthStencilWrite,
-            .new_state = rhi::ResourceState::ShaderRead,
+            .state = rhi::ResourceState::ShaderRead,
         },
     };
-    m_cmd->resourceBarrier(barriers, 5);
+    m_cmd->transition(barriers, 5);
 
     rhi::RenderPassBeginInfo lightingPass;
     lightingPass.color_attachments.push_back(rhi::ColorAttachmentDesc{
@@ -1613,12 +1660,11 @@ void Renderer::endFrame()
     m_cmd->endRenderPass();
 
     if (m_frameUniforms.environmentIntensity > 0.0f) {
-        const rhi::TextureBarrier depthAttachmentBarrier{
+        const rhi::TextureTransition depthAttachmentBarrier{
             .texture = m_gbuffer.depth_texture,
-            .old_state = rhi::ResourceState::ShaderRead,
-            .new_state = rhi::ResourceState::DepthStencilWrite,
+            .state = rhi::ResourceState::DepthStencilWrite,
         };
-        m_cmd->resourceBarrier(&depthAttachmentBarrier, 1);
+        m_cmd->transition(&depthAttachmentBarrier, 1);
 
         rhi::RenderPassBeginInfo skyboxPass;
         skyboxPass.color_attachments.push_back(rhi::ColorAttachmentDesc{
@@ -1643,12 +1689,11 @@ void Renderer::endFrame()
         m_cmd->endRenderPass();
     }
 
-    const rhi::TextureBarrier finalColorBarrier{
+    const rhi::TextureTransition finalColorBarrier{
         .texture = m_gbuffer.final_color_texture,
-        .old_state = rhi::ResourceState::RenderTarget,
-        .new_state = rhi::ResourceState::ShaderRead,
+        .state = rhi::ResourceState::ShaderRead,
     };
-    m_cmd->resourceBarrier(&finalColorBarrier, 1);
+    m_cmd->transition(&finalColorBarrier, 1);
 
     m_cmd->end();
     m_device->submit(m_command_list);
@@ -1857,13 +1902,12 @@ Renderer::MeshGpuData* Renderer::getOrCreateSubMeshGpuData(const interface::Mesh
             gpu_mesh.vertex_buffer_dynamic = true;
         }
 
-        gpu_mesh.vertex_buffer = m_device->createBuffer(
-            rhi::BufferDesc{
-                .size = gpu_mesh.vertex_buffer_capacity,
-                .usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::CopyDst,
-                .memory = gpu_mesh.vertex_buffer_dynamic ? rhi::MemoryUsage::CpuToGpu : rhi::MemoryUsage::GpuOnly,
-            },
-            nullptr);
+        gpu_mesh.vertex_buffer = m_device->createBuffer(rhi::BufferDesc{
+            .size = gpu_mesh.vertex_buffer_capacity,
+            .usage = rhi::BufferUsage::Vertex | rhi::BufferUsage::CopyDst,
+            .memory = rhi::MemoryUsage::CpuToGpu,
+            .initial_state = rhi::ResourceState::VertexBuffer,
+        });
         LUNA_ASSERT(gpu_mesh.vertex_buffer, "Failed to create mesh vertex buffer.");
         gpu_mesh.uploaded_vertex_version = 0;
     }
@@ -1884,13 +1928,12 @@ Renderer::MeshGpuData* Renderer::getOrCreateSubMeshGpuData(const interface::Mesh
             gpu_mesh.index_buffer_dynamic = true;
         }
 
-        gpu_mesh.index_buffer = m_device->createBuffer(
-            rhi::BufferDesc{
-                .size = gpu_mesh.index_buffer_capacity,
-                .usage = rhi::BufferUsage::Index | rhi::BufferUsage::CopyDst,
-                .memory = gpu_mesh.index_buffer_dynamic ? rhi::MemoryUsage::CpuToGpu : rhi::MemoryUsage::GpuOnly,
-            },
-            nullptr);
+        gpu_mesh.index_buffer = m_device->createBuffer(rhi::BufferDesc{
+            .size = gpu_mesh.index_buffer_capacity,
+            .usage = rhi::BufferUsage::Index | rhi::BufferUsage::CopyDst,
+            .memory = rhi::MemoryUsage::CpuToGpu,
+            .initial_state = rhi::ResourceState::IndexBuffer,
+        });
         LUNA_ASSERT(gpu_mesh.index_buffer, "Failed to create mesh index buffer.");
         gpu_mesh.uploaded_index_version = 0;
     }

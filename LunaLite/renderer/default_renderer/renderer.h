@@ -174,6 +174,7 @@ private:
     rhi::Swapchain* m_swapchain{nullptr};
     rhi::CommandListHandle m_command_list{};
     rhi::CommandList* m_cmd{nullptr};
+    rhi::CommandListHandle m_upload_command_list{};
 
     rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_material_texture_bind_group_layout{};

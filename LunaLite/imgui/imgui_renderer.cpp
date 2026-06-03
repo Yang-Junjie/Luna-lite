@@ -1,3 +1,4 @@
+#include "../renderer/rhi_upload_helpers.h"
 #include "imgui_platform.h"
 #include "imgui_renderer.h"
 #include "TinyRHI/interface/command_list.h"
@@ -486,6 +487,7 @@ bool ImGuiRenderer::createFontTexture()
         .height = static_cast<uint32_t>(height),
         .format = TextureFormat::RGBA8_UNorm,
         .usage = TextureUsage::Sampled | TextureUsage::CopyDst,
+        .initial_state = ResourceState::CopyDst,
     });
     m_font_texture_view = m_device->createTextureView(TextureViewDesc{
         .texture = m_font_texture,
@@ -507,13 +509,19 @@ bool ImGuiRenderer::createFontTexture()
         return false;
     }
 
-    TextureUploadDesc upload{};
-    upload.width = static_cast<uint32_t>(width);
-    upload.height = static_cast<uint32_t>(height);
-    upload.format = TextureFormat::RGBA8_UNorm;
-    upload.data = pixels;
-    upload.row_pitch = static_cast<size_t>(width) * static_cast<size_t>(bytesPerPixel);
-    m_device->updateTexture(m_font_texture, upload);
+    const size_t rowPitch = static_cast<size_t>(width) * static_cast<size_t>(bytesPerPixel);
+    if (!renderer::rhi_upload::uploadTextureData(*m_device,
+                                                 m_command_list,
+                                                 m_font_texture,
+                                                 renderer::rhi_upload::TextureUploadData{
+                                                     .data = pixels,
+                                                     .size = rowPitch * static_cast<size_t>(height),
+                                                     .row_pitch = rowPitch,
+                                                     .width = static_cast<uint32_t>(width),
+                                                     .height = static_cast<uint32_t>(height),
+                                                 })) {
+        return false;
+    }
 
     ImGui::GetIO().Fonts->SetTexID(textureIdFromBindGroup(m_font_bind_group));
     return true;
@@ -529,13 +537,12 @@ bool ImGuiRenderer::ensureBuffers(int vertex_count, int index_count)
             m_device->destroyBuffer(m_vertex_buffer);
         }
         m_vertex_buffer_size = std::max(requiredVertexBytes, kInitialVertexBufferSize);
-        m_vertex_buffer = m_device->createBuffer(
-            BufferDesc{
-                .size = m_vertex_buffer_size,
-                .usage = BufferUsage::Vertex | BufferUsage::CopyDst,
-                .memory = MemoryUsage::CpuToGpu,
-            },
-            nullptr);
+        m_vertex_buffer = m_device->createBuffer(BufferDesc{
+            .size = m_vertex_buffer_size,
+            .usage = BufferUsage::Vertex | BufferUsage::CopyDst,
+            .memory = MemoryUsage::CpuToGpu,
+            .initial_state = ResourceState::VertexBuffer,
+        });
     }
 
     if (!m_index_buffer || m_index_buffer_size < requiredIndexBytes) {
@@ -543,13 +550,12 @@ bool ImGuiRenderer::ensureBuffers(int vertex_count, int index_count)
             m_device->destroyBuffer(m_index_buffer);
         }
         m_index_buffer_size = std::max(requiredIndexBytes, kInitialIndexBufferSize);
-        m_index_buffer = m_device->createBuffer(
-            BufferDesc{
-                .size = m_index_buffer_size,
-                .usage = BufferUsage::Index | BufferUsage::CopyDst,
-                .memory = MemoryUsage::CpuToGpu,
-            },
-            nullptr);
+        m_index_buffer = m_device->createBuffer(BufferDesc{
+            .size = m_index_buffer_size,
+            .usage = BufferUsage::Index | BufferUsage::CopyDst,
+            .memory = MemoryUsage::CpuToGpu,
+            .initial_state = ResourceState::IndexBuffer,
+        });
     }
 
     return m_vertex_buffer && m_index_buffer;
@@ -570,6 +576,7 @@ void ImGuiRenderer::ensureUploadTexture(const renderer::interface::FrameImage& i
         .height = image.height,
         .format = rhiFormat,
         .usage = TextureUsage::Sampled | TextureUsage::CopyDst,
+        .initial_state = ResourceState::CopyDst,
     });
     m_upload_view = m_device->createTextureView(TextureViewDesc{
         .texture = m_upload_texture,
@@ -608,16 +615,19 @@ void ImGuiRenderer::uploadCpuImage(const renderer::interface::FrameImage& image,
         return;
     }
 
-    m_device->updateTexture(m_upload_texture,
-                            TextureUploadDesc{
-                                .width = image.width,
-                                .height = image.height,
-                                .format = toRHITextureFormat(image.format),
-                                .data = storage.pixels,
-                                .row_pitch = storage.row_pitch == 0 ? static_cast<size_t>(image.width) *
-                                                                          frameImageBytesPerPixel(image.format)
-                                                                    : storage.row_pitch,
-                            });
+    const size_t rowPitch = storage.row_pitch == 0
+                                ? static_cast<size_t>(image.width) * frameImageBytesPerPixel(image.format)
+                                : storage.row_pitch;
+    renderer::rhi_upload::uploadTextureData(*m_device,
+                                            m_command_list,
+                                            m_upload_texture,
+                                            renderer::rhi_upload::TextureUploadData{
+                                                .data = storage.pixels,
+                                                .size = rowPitch * image.height,
+                                                .row_pitch = rowPitch,
+                                                .width = image.width,
+                                                .height = image.height,
+                                            });
 }
 
 BindGroupHandle ImGuiRenderer::bindGroupForTextureView(TextureViewHandle view)

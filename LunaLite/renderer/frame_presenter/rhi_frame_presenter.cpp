@@ -1,4 +1,5 @@
 #include "../../core/log.h"
+#include "../rhi_upload_helpers.h"
 #include "rhi_frame_presenter.h"
 
 #include <filesystem>
@@ -232,6 +233,7 @@ void RHIFramePresenter::ensureUploadTexture(const interface::FrameImage& image)
         .height = image.height,
         .format = rhiFormat,
         .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
+        .initial_state = rhi::ResourceState::CopyDst,
     });
     m_upload_view = m_device.createTextureView(rhi::TextureViewDesc{
         .texture = m_upload_texture,
@@ -258,16 +260,19 @@ void RHIFramePresenter::uploadCpuImage(const interface::FrameImage& image, const
         return;
     }
 
-    m_device.updateTexture(m_upload_texture,
-                           rhi::TextureUploadDesc{
-                               .width = image.width,
-                               .height = image.height,
-                               .format = toRHITextureFormat(image.format),
-                               .data = storage.pixels,
-                               .row_pitch = storage.row_pitch == 0 ? static_cast<size_t>(image.width) *
-                                                                         frameImageBytesPerPixel(image.format)
-                                                                   : storage.row_pitch,
-                           });
+    const size_t rowPitch = storage.row_pitch == 0
+                                ? static_cast<size_t>(image.width) * frameImageBytesPerPixel(image.format)
+                                : storage.row_pitch;
+    rhi_upload::uploadTextureData(m_device,
+                                  m_command_list,
+                                  m_upload_texture,
+                                  rhi_upload::TextureUploadData{
+                                      .data = storage.pixels,
+                                      .size = rowPitch * image.height,
+                                      .row_pitch = rowPitch,
+                                      .width = image.width,
+                                      .height = image.height,
+                                  });
 }
 
 void RHIFramePresenter::drawToSwapchain(rhi::TextureViewHandle view, const rhi::SwapchainFrame& frame)
