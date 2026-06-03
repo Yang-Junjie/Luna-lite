@@ -1,7 +1,7 @@
 #include "../core/log.h"
 #include "asset_importer_registry.h"
-#include "asset_metadata_store.h"
 #include "asset_scanner.h"
+#include "metadata/asset_metadata_store.h"
 
 #include <system_error>
 
@@ -20,7 +20,7 @@ std::optional<std::vector<std::filesystem::path>>
             return std::nullopt;
         }
 
-        if (!entry.is_regular_file() || AssetMetadataStore::isMetadataSidecar(entry.path())) {
+        if (!entry.is_regular_file() || AssetMetadataStore::isMetadataFile(entry.path())) {
             continue;
         }
 

@@ -1,6 +1,7 @@
-#include "../core/log.h"
+#include "../../core/log.h"
 #include "asset_metadata_store.h"
 
+#include <filesystem>
 #include <optional>
 
 namespace lunalite::asset {
@@ -47,6 +48,55 @@ bool AssetMetadataStore::registerMetadata(const AssetMetadata& metadata)
     return true;
 }
 
+AssetMetadata AssetMetadataStore::createOrLoadMetadata(const std::filesystem::path& assetPath, AssetType type) const
+{
+    return createOrLoadMetadata(assetPath, type, AssetHandle{0});
+}
+
+AssetMetadata AssetMetadataStore::createOrLoadMetadata(const std::filesystem::path& assetPath,
+                                                       AssetType type,
+                                                       const YAML::Node& defaultConfig) const
+{
+    return createOrLoadMetadata(assetPath, type, AssetHandle{0}, defaultConfig);
+}
+
+AssetMetadata AssetMetadataStore::createOrLoadMetadata(const std::filesystem::path& assetPath,
+                                                       AssetType type,
+                                                       AssetHandle suggestedHandle,
+                                                       const YAML::Node& defaultConfig) const
+{
+    auto metadata = createMetadata(assetPath, type);
+    const auto metadataPath = m_paths.metadataFilePath(metadata);
+
+    if (std::filesystem::exists(metadataPath)) {
+        if (const auto existingMetadata = m_serializer.read(metadataPath)) {
+            if (existingMetadata->Handle.isValid()) {
+                metadata.Handle = existingMetadata->Handle;
+            }
+            metadata.MemoryOnly = existingMetadata->MemoryOnly;
+            metadata.SpecializedConfig = existingMetadata->SpecializedConfig;
+        }
+    } else if (suggestedHandle.isValid()) {
+        metadata.Handle = suggestedHandle;
+    }
+
+    if (!hasSpecializedConfig(metadata.SpecializedConfig) && hasSpecializedConfig(defaultConfig)) {
+        metadata.SpecializedConfig = defaultConfig;
+    }
+
+    return metadata;
+}
+
+bool AssetMetadataStore::writeMetadataFile(const AssetMetadata& metadata) const
+{
+    return m_serializer.write(metadata);
+}
+
+std::optional<AssetMetadata> AssetMetadataStore::readMetadataFile(const std::filesystem::path& metadataPath) const
+{
+    return m_serializer.read(metadataPath);
+}
+
 AssetHandle AssetMetadataStore::handleByRelativePath(const std::filesystem::path& assetPath) const
 {
     if (assetPath.is_absolute()) {
@@ -90,16 +140,32 @@ const std::unordered_map<AssetHandle, AssetMetadata>& AssetMetadataStore::all() 
     return m_metadata_registry;
 }
 
-bool AssetMetadataStore::isMetadataSidecar(const std::filesystem::path& path)
+bool AssetMetadataStore::isMetadataFile(const std::filesystem::path& path)
 {
     return path.extension() == ".lunameta";
 }
 
-std::filesystem::path AssetMetadataStore::sidecarPathFor(const std::filesystem::path& assetPath)
+std::filesystem::path AssetMetadataStore::metadataFilePathForAsset(const std::filesystem::path& assetPath)
 {
     auto metadataPath = assetPath;
     metadataPath += ".lunameta";
     return metadataPath;
+}
+
+bool AssetMetadataStore::hasSpecializedConfig(const YAML::Node& config)
+{
+    return config.IsDefined() && !config.IsNull();
+}
+
+AssetMetadata AssetMetadataStore::createMetadata(const std::filesystem::path& assetPath, AssetType type) const
+{
+    AssetMetadata metadata;
+    metadata.Handle = AssetHandle{};
+    metadata.Type = type;
+    metadata.Name = assetPath.stem().string();
+    metadata.FilePath = m_paths.makeProjectRelative(assetPath);
+    metadata.MemoryOnly = false;
+    return metadata;
 }
 
 std::string AssetMetadataStore::normalizedProjectPath(const std::filesystem::path& path)

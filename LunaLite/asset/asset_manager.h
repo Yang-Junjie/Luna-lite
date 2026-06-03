@@ -2,8 +2,8 @@
 #include "asset_database.h"
 #include "asset_importer_registry.h"
 #include "asset_loader_registry.h"
-#include "asset_metadata_store.h"
 #include "asset_scanner.h"
+#include "metadata/asset_metadata_store.h"
 
 #include <filesystem>
 #include <unordered_map>

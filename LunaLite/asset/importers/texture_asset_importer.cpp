@@ -2,6 +2,7 @@
 #include "../asset_cache.h"
 #include "../environment_map_baker.h"
 #include "../lunacube.h"
+#include "../metadata/asset_metadata_store.h"
 #include "texture_asset_importer.h"
 
 #include <cctype>
@@ -251,32 +252,16 @@ YAML::Node defaultTextureConfig(const std::filesystem::path& assetPath)
 }
 } // namespace
 
-std::vector<AssetMetadata> TextureAssetImporter::import(const std::filesystem::path& assetPath)
+std::vector<AssetMetadata> TextureAssetImporter::import(const std::filesystem::path& assetPath,
+                                                        AssetMetadataStore& metadataStore)
 {
-    auto metadata = createMetadata(assetPath, AssetType::Texture);
-    const auto metaPath = getMetaFilePath(metadata);
-
-    if (std::filesystem::exists(metaPath)) {
-        const auto oldMetadata = deserializeMetadata(metaPath);
-        if (oldMetadata.Handle.isValid()) {
-            metadata.Handle = oldMetadata.Handle;
-        }
-        metadata.MemoryOnly = oldMetadata.MemoryOnly;
-        metadata.SpecializedConfig = oldMetadata.SpecializedConfig;
-    }
-
-    metadata.Type = AssetType::Texture;
-    metadata.Name = assetPath.stem().string();
-    metadata.FilePath = makeProjectRelative(assetPath);
-    if (!hasSpecializedConfig(metadata.SpecializedConfig)) {
-        metadata.SpecializedConfig = defaultTextureConfig(assetPath);
-    }
+    auto metadata = metadataStore.createOrLoadMetadata(assetPath, AssetType::Texture, defaultTextureConfig(assetPath));
 
     if (!generateEnvironmentArtifact(assetPath, metadata)) {
         return {};
     }
 
-    if (!serializeMetadata(metadata)) {
+    if (!metadataStore.writeMetadataFile(metadata)) {
         return {};
     }
 

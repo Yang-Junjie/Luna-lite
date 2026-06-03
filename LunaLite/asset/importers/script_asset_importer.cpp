@@ -1,28 +1,15 @@
+#include "../metadata/asset_metadata_store.h"
 #include "script_asset_importer.h"
 
 #include <filesystem>
 
 namespace lunalite::asset {
 
-std::vector<AssetMetadata> ScriptAssetImporter::import(const std::filesystem::path& assetPath)
+std::vector<AssetMetadata> ScriptAssetImporter::import(const std::filesystem::path& assetPath,
+                                                       AssetMetadataStore& metadataStore)
 {
-    auto metadata = createMetadata(assetPath, AssetType::Script);
-    const auto metaPath = getMetaFilePath(metadata);
-
-    if (std::filesystem::exists(metaPath)) {
-        const auto oldMetadata = deserializeMetadata(metaPath);
-        if (oldMetadata.Handle.isValid()) {
-            metadata.Handle = oldMetadata.Handle;
-        }
-        metadata.MemoryOnly = oldMetadata.MemoryOnly;
-        metadata.SpecializedConfig = oldMetadata.SpecializedConfig;
-    }
-
-    metadata.Type = AssetType::Script;
-    metadata.Name = assetPath.stem().string();
-    metadata.FilePath = makeProjectRelative(assetPath);
-
-    if (!serializeMetadata(metadata)) {
+    const auto metadata = metadataStore.createOrLoadMetadata(assetPath, AssetType::Script);
+    if (!metadataStore.writeMetadataFile(metadata)) {
         return {};
     }
 

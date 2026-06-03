@@ -51,7 +51,9 @@ add_library(LunaLite STATIC
     asset/asset_importer_registry.cpp
     asset/asset_loader_registry.cpp
     asset/asset_manager.cpp
-    asset/asset_metadata_store.cpp
+    asset/metadata/asset_metadata_serializer.cpp
+    asset/metadata/asset_metadata_store.cpp
+    asset/metadata/asset_path_resolver.cpp
     asset/asset_scanner.cpp
     asset/environment_map_baker.cpp
     asset/lunacube.cpp
@@ -59,7 +61,11 @@ add_library(LunaLite STATIC
     asset/builtin/mesh_factory.cpp
     asset/builtin/model_factory.cpp
     asset/importers/material_asset_importer.cpp
-    asset/importers/mesh_asset_importer.cpp
+    asset/importers/mesh/material_asset_definition_writer.cpp
+    asset/importers/mesh/model_asset_definition_writer.cpp
+    asset/importers/mesh/mesh_asset_importer.cpp
+    asset/importers/mesh/obj_mesh_derived_asset_generator.cpp
+    asset/importers/mesh/gltf_mesh_derived_asset_generator.cpp
     asset/importers/model_asset_importer.cpp
     asset/importers/script_asset_importer.cpp
     asset/importers/texture_asset_importer.cpp

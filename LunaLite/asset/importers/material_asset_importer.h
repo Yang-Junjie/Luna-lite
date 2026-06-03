@@ -4,7 +4,8 @@
 namespace lunalite::asset {
 class MaterialAssetImporter final : public Importer {
 public:
-    std::vector<AssetMetadata> import(const std::filesystem::path& assetPath) override;
+    std::vector<AssetMetadata> import(const std::filesystem::path& assetPath,
+                                      AssetMetadataStore& metadataStore) override;
     std::vector<std::string> getSupportedExtensions() const override;
 };
 } // namespace lunalite::asset

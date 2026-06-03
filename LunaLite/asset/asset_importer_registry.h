@@ -8,15 +8,19 @@
 
 namespace lunalite::asset {
 
+class AssetMetadataStore;
+
 class AssetImporterRegistry final {
 public:
     void registerDefaults();
 
     Importer* findImporter(const std::filesystem::path& assetPath) const;
-    std::optional<std::vector<AssetMetadata>> importAll(const std::vector<std::filesystem::path>& assetPaths) const;
+    std::optional<std::vector<AssetMetadata>> importAll(const std::vector<std::filesystem::path>& assetPaths,
+                                                        AssetMetadataStore& metadataStore) const;
 
 private:
-    std::vector<AssetMetadata> importOrReuseMetadata(const std::filesystem::path& assetPath) const;
+    std::vector<AssetMetadata> importOrReuseMetadata(const std::filesystem::path& assetPath,
+                                                     AssetMetadataStore& metadataStore) const;
 
     std::vector<std::unique_ptr<Importer>> m_importers;
 };

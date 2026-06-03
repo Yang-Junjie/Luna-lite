@@ -59,7 +59,7 @@ bool AssetManager::loadProjectAssets()
         return false;
     }
 
-    const auto importedMetadata = m_importers.importAll(*assetPaths);
+    const auto importedMetadata = m_importers.importAll(*assetPaths, m_metadata);
     if (!importedMetadata) {
         return false;
     }

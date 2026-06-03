@@ -1,10 +1,10 @@
 #include "asset_importer_registry.h"
-#include "asset_metadata_store.h"
 #include "importers/material_asset_importer.h"
-#include "importers/mesh_asset_importer.h"
+#include "importers/mesh/mesh_asset_importer.h"
 #include "importers/model_asset_importer.h"
 #include "importers/script_asset_importer.h"
 #include "importers/texture_asset_importer.h"
+#include "metadata/asset_metadata_store.h"
 
 #include <filesystem>
 
@@ -35,11 +35,12 @@ Importer* AssetImporterRegistry::findImporter(const std::filesystem::path& asset
 }
 
 std::optional<std::vector<AssetMetadata>>
-    AssetImporterRegistry::importAll(const std::vector<std::filesystem::path>& assetPaths) const
+    AssetImporterRegistry::importAll(const std::vector<std::filesystem::path>& assetPaths,
+                                     AssetMetadataStore& metadataStore) const
 {
     std::vector<AssetMetadata> importedMetadata;
     for (const auto& assetPath : assetPaths) {
-        auto metadataList = importOrReuseMetadata(assetPath);
+        auto metadataList = importOrReuseMetadata(assetPath, metadataStore);
         if (metadataList.empty()) {
             return std::nullopt;
         }
@@ -50,28 +51,29 @@ std::optional<std::vector<AssetMetadata>>
     return importedMetadata;
 }
 
-std::vector<AssetMetadata> AssetImporterRegistry::importOrReuseMetadata(const std::filesystem::path& assetPath) const
+std::vector<AssetMetadata> AssetImporterRegistry::importOrReuseMetadata(const std::filesystem::path& assetPath,
+                                                                        AssetMetadataStore& metadataStore) const
 {
     auto* importer = findImporter(assetPath);
     if (importer == nullptr) {
         return {};
     }
 
-    const auto metadataPath = AssetMetadataStore::sidecarPathFor(assetPath);
+    const auto metadataPath = AssetMetadataStore::metadataFilePathForAsset(assetPath);
     if (std::filesystem::exists(metadataPath)) {
-        const auto metadata = Importer::deserializeMetadata(metadataPath);
-        if (!metadata.Handle.isValid()) {
+        const auto metadata = metadataStore.readMetadataFile(metadataPath);
+        if (!metadata || !metadata->Handle.isValid()) {
             return {};
         }
 
-        if (importer->shouldRefreshExistingMetadata(metadata, assetPath)) {
-            return importer->import(assetPath);
+        if (importer->shouldRefreshExistingMetadata(*metadata, assetPath)) {
+            return importer->import(assetPath, metadataStore);
         }
 
-        return {metadata};
+        return {*metadata};
     }
 
-    return importer->import(assetPath);
+    return importer->import(assetPath, metadataStore);
 }
 
 } // namespace lunalite::asset
