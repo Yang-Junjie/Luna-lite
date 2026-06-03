@@ -10,12 +10,16 @@ public:
     explicit DemoLayer(std::filesystem::path project_search_path);
 
     void onAttach() override;
+    void onDetach() override;
     void onUpdate(core::Timestep dt) override;
     void onRender() override;
-    void onImGuiRender() override;
 
 private:
+    void stopRuntime();
+
     std::filesystem::path m_project_search_path;
     scene::Scene m_scene;
+    bool m_scene_loaded{false};
+    bool m_runtime_started{false};
 };
 } // namespace lunalite::runtime

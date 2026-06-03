@@ -7,14 +7,9 @@
 #include "demo_layer.h"
 
 #include <filesystem>
-#include <imgui.h>
 #include <optional>
 #include <system_error>
 #include <utility>
-
-namespace lunalite::core {
-class Application;
-}
 
 namespace lunalite::runtime {
 namespace {
@@ -52,6 +47,10 @@ DemoLayer::DemoLayer(std::filesystem::path project_search_path)
 
 void DemoLayer::onAttach()
 {
+    stopRuntime();
+    m_scene.clear();
+    m_scene_loaded = false;
+
     const auto project_file = findProjectFile(m_project_search_path);
     if (!project_file) {
         LUNA_CORE_ERROR("Runtime failed to find a .lunaproj file next to '{}'", m_project_search_path.string());
@@ -64,7 +63,10 @@ void DemoLayer::onAttach()
         return;
     }
 
-    asset::AssetManager::get().loadProjectAssets();
+    if (!asset::AssetManager::get().loadProjectAssets()) {
+        LUNA_CORE_ERROR("Runtime failed to load project assets for '{}'", project_file->string());
+        return;
+    }
 
     const auto& project_info = projectManager.getProjectInfo();
     const auto project_root_path = projectManager.getProjectRootPath();
@@ -84,25 +86,43 @@ void DemoLayer::onAttach()
         return;
     }
 
+    m_scene_loaded = true;
     LUNA_CORE_INFO("Runtime loaded project '{}' and scene '{}'", project_info->name, scene_path.string());
     core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
+    m_scene.onRuntimeStart();
+    m_runtime_started = true;
+    LUNA_CORE_INFO("Runtime started scene '{}'", scene_path.string());
+}
+
+void DemoLayer::onDetach()
+{
+    stopRuntime();
+    m_scene.clear();
+    m_scene_loaded = false;
 }
 
 void DemoLayer::onUpdate(core::Timestep dt)
 {
-    (void) dt;
+    if (m_runtime_started) {
+        m_scene.onUpdateRuntime(dt);
+    }
 }
-
+ 
 void DemoLayer::onRender()
 {
-    core::Application::get().getSceneRenderer().onRenderRuntime(m_scene);
+    if (m_scene_loaded) {
+        core::Application::get().getSceneRenderer().onRenderRuntime(m_scene);
+    }
 }
 
-void DemoLayer::onImGuiRender()
+void DemoLayer::stopRuntime()
 {
-    ImGui::Begin("Demo Layer");
-    ImGui::Text("Hello World");
-    ImGui::End();
+    if (!m_runtime_started) {
+        return;
+    }
+
+    m_scene.onRuntimeStop();
+    m_runtime_started = false;
 }
 
 } // namespace lunalite::runtime
