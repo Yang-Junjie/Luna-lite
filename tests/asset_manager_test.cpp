@@ -40,26 +40,32 @@ std::filesystem::path findTestMesh()
     return candidates[0];
 }
 
-std::filesystem::path findTestTexture()
-{
-    const std::filesystem::path candidates[] = {
-        "sample_project/Assets/Models/texture.png",
-        "../sample_project/Assets/Models/texture.png",
-        "../../sample_project/Assets/Models/texture.png",
-    };
-
-    for (const auto& candidate : candidates) {
-        if (std::filesystem::exists(candidate)) {
-            return candidate;
-        }
-    }
-
-    return candidates[0];
-}
-
 template <typename T, std::size_t Size> void writeArray(std::ofstream& out, const std::array<T, Size>& values)
 {
     out.write(reinterpret_cast<const char*>(values.data()), static_cast<std::streamsize>(values.size() * sizeof(T)));
+}
+
+bool writeTestPngTexture(const std::filesystem::path& path)
+{
+    constexpr std::array<unsigned char, 16> pixels{
+        255,
+        0,
+        0,
+        255,
+        0,
+        255,
+        0,
+        255,
+        0,
+        0,
+        255,
+        255,
+        255,
+        255,
+        255,
+        255,
+    };
+    return stbi_write_png(path.string().c_str(), 2, 2, 4, pixels.data(), 2 * 4) != 0;
 }
 
 bool nearlyEqual(float lhs, float rhs)
@@ -220,12 +226,6 @@ int main()
         std::cerr << "Failed to find test mesh.\n";
         return 1;
     }
-    const auto sourceTexture = findTestTexture();
-    if (!std::filesystem::exists(sourceTexture)) {
-        std::cerr << "Failed to find test texture.\n";
-        return 1;
-    }
-
     const auto projectRoot = std::filesystem::current_path() / "build" / "asset_manager_test_project";
     std::error_code error;
     std::filesystem::remove_all(projectRoot, error);
@@ -247,9 +247,8 @@ int main()
 
     const auto textureHandle = asset::AssetHandle{123'456'789ull};
     const auto targetTexture = projectRoot / info.assets_path / "texture.png";
-    std::filesystem::copy_file(sourceTexture, targetTexture, std::filesystem::copy_options::overwrite_existing, error);
-    if (error) {
-        std::cerr << "Failed to copy test texture: " << error.message() << "\n";
+    if (!writeTestPngTexture(targetTexture)) {
+        std::cerr << "Failed to write test texture.\n";
         return 1;
     }
     {
@@ -328,18 +327,14 @@ int main()
     }
 
     const auto gltfTexturePath = projectRoot / info.assets_path / "gltf_texture.png.asset";
-    std::filesystem::copy_file(
-        sourceTexture, gltfTexturePath, std::filesystem::copy_options::overwrite_existing, error);
-    if (error) {
-        std::cerr << "Failed to copy glTF test texture: " << error.message() << "\n";
+    if (!writeTestPngTexture(gltfTexturePath)) {
+        std::cerr << "Failed to write glTF test texture.\n";
         return 1;
     }
 
     const auto gltfOcclusionTexturePath = projectRoot / info.assets_path / "gltf_occlusion.png.asset";
-    std::filesystem::copy_file(
-        sourceTexture, gltfOcclusionTexturePath, std::filesystem::copy_options::overwrite_existing, error);
-    if (error) {
-        std::cerr << "Failed to copy glTF occlusion test texture: " << error.message() << "\n";
+    if (!writeTestPngTexture(gltfOcclusionTexturePath)) {
+        std::cerr << "Failed to write glTF occlusion test texture.\n";
         return 1;
     }
 

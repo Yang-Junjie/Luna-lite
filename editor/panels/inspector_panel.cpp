@@ -5,10 +5,12 @@
 #include "content_browser_panel.h"
 #include "inspector_panel.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
 #include <array>
+#include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 #include <span>
 #include <string>
@@ -93,6 +95,27 @@ bool drawAssetHandleControl(const char* label,
     ImGui::PopID();
     return changed;
 }
+
+float quatLengthSquared(const glm::quat& rotation)
+{
+    return rotation.w * rotation.w + rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z;
+}
+
+glm::quat safeNormalize(glm::quat rotation)
+{
+    if (quatLengthSquared(rotation) <= 0.000001f) {
+        return glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    return glm::normalize(rotation);
+}
+
+bool sameOrientation(const glm::quat& lhs, const glm::quat& rhs)
+{
+    const auto a = safeNormalize(lhs);
+    const auto b = safeNormalize(rhs);
+    return std::abs(glm::dot(a, b)) > 0.99999f;
+}
 } // namespace
 
 InspectorPanel::InspectorPanel(scene::Scene& scene, scene::Entity& selected_entity)
@@ -158,9 +181,13 @@ void InspectorPanel::onImGuiRender()
         if (open && m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
             auto& transform = m_scene.getComponent<scene::TransformComponent>(m_selected_entity);
             ImGui::DragFloat3("Translation", &transform.translation.x, 0.1f);
-            auto rotation = glm::degrees(glm::eulerAngles(transform.rotation));
+            syncRotationEditor(m_selected_entity, transform.rotation);
+            auto rotation = m_rotation_edit_degrees;
             if (ImGui::DragFloat3("Rotation", &rotation.x, 1.0f)) {
-                transform.rotation = glm::normalize(glm::quat{glm::radians(rotation)});
+                const auto delta = rotation - m_rotation_edit_degrees;
+                transform.rotation = safeNormalize(transform.rotation * glm::quat{glm::radians(delta)});
+                m_rotation_edit_degrees = rotation;
+                m_rotation_edit_source = transform.rotation;
             }
             ImGui::DragFloat3("Scale", &transform.scale.x, 0.1f);
         }
@@ -336,6 +363,19 @@ void InspectorPanel::onImGuiRender()
     }
 
     ImGui::End();
+}
+
+void InspectorPanel::syncRotationEditor(scene::Entity entity, const glm::quat& rotation)
+{
+    const auto normalizedRotation = safeNormalize(rotation);
+    if (m_rotation_edit_entity.getHandle() == entity.getHandle() &&
+        sameOrientation(m_rotation_edit_source, normalizedRotation)) {
+        return;
+    }
+
+    m_rotation_edit_entity = entity;
+    m_rotation_edit_source = normalizedRotation;
+    m_rotation_edit_degrees = glm::degrees(glm::eulerAngles(normalizedRotation));
 }
 
 } // namespace lunalite::editor
