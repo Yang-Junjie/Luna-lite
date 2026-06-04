@@ -1,0 +1,102 @@
+#version 450 core
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0) uniform samplerCube uEnvironmentMap;
+layout(rgba16f, binding = 1) writeonly uniform image2D uOutput;
+uniform vec4 uPushConstants[1];
+
+const float PI = 3.14159265359;
+
+float RadicalInverseVdC(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;
+}
+
+vec2 Hammersley(uint i, uint n)
+{
+    return vec2(float(i) / float(n), RadicalInverseVdC(i));
+}
+
+vec3 directionFromFace(uint face, vec2 uv)
+{
+    switch (face) {
+        case 0u:
+            return normalize(vec3(1.0, -uv.y, -uv.x));
+        case 1u:
+            return normalize(vec3(-1.0, -uv.y, uv.x));
+        case 2u:
+            return normalize(vec3(uv.x, 1.0, uv.y));
+        case 3u:
+            return normalize(vec3(uv.x, -1.0, -uv.y));
+        case 4u:
+            return normalize(vec3(uv.x, -uv.y, 1.0));
+        case 5u:
+        default:
+            return normalize(vec3(-uv.x, -uv.y, -1.0));
+    }
+}
+
+vec3 ImportanceSampleGGX(vec2 xi, vec3 n, float roughness)
+{
+    float a = roughness * roughness;
+    float phi = 2.0 * PI * xi.x;
+    float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+    float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+    vec3 h = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+    vec3 up = abs(n.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(up, n));
+    vec3 bitangent = cross(n, tangent);
+    return normalize(tangent * h.x + bitangent * h.y + n * h.z);
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uOutput);
+    if (pixel.x >= size.x || pixel.y >= size.y) {
+        return;
+    }
+
+    uint face = uint(uPushConstants[0].x + 0.5);
+    float roughness = clamp(uPushConstants[0].y, 0.0, 1.0);
+    uint sampleCount = max(uint(uPushConstants[0].z + 0.5), 1u);
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size) * 2.0 - 1.0;
+    vec3 n = directionFromFace(face, uv);
+    vec3 v = n;
+
+    float totalWeight = 0.0;
+    vec3 prefiltered = vec3(0.0);
+    float envResolution = float(textureSize(uEnvironmentMap, 0).x);
+    float maxEnvMip = max(floor(log2(envResolution)), 0.0);
+
+    for (uint i = 0u; i < sampleCount; ++i) {
+        vec2 xi = Hammersley(i, sampleCount);
+        vec3 h = ImportanceSampleGGX(xi, n, roughness);
+        vec3 l = normalize(2.0 * dot(v, h) * h - v);
+        float nDotL = max(dot(n, l), 0.0);
+        if (nDotL > 0.0) {
+            float nDotH = max(dot(n, h), 0.0);
+            float hDotV = max(dot(h, v), 0.0);
+            float a = roughness * roughness;
+            float a2 = a * a;
+            float denom = nDotH * nDotH * (a2 - 1.0) + 1.0;
+            float d = a2 / max(PI * denom * denom, 0.000001);
+            float pdf = d * nDotH / max(4.0 * hDotV, 0.0001) + 0.0001;
+            float saTexel = 4.0 * PI / (6.0 * envResolution * envResolution);
+            float saSample = 1.0 / (float(sampleCount) * pdf + 0.0001);
+            float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
+            mipLevel = clamp(mipLevel, 0.0, maxEnvMip);
+            prefiltered += textureLod(uEnvironmentMap, l, mipLevel).rgb * nDotL;
+            totalWeight += nDotL;
+        }
+    }
+
+    prefiltered = prefiltered / max(totalWeight, 0.0001);
+    imageStore(uOutput, pixel, vec4(prefiltered, 1.0));
+}

@@ -1,6 +1,10 @@
 #pragma once
 #include "../../asset/asset.h"
 
+#include <cstdint>
+
+#include <glm/mat4x4.hpp>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -8,6 +12,9 @@ namespace lunalite::renderer::interface {
 struct ModelMesh {
     asset::AssetHandle mesh{0};
     std::vector<asset::AssetHandle> materials;
+    glm::mat4 transform{1.0f};
+    uint32_t submesh_start{0};
+    uint32_t submesh_count{std::numeric_limits<uint32_t>::max()};
 };
 
 class Model : public asset::Asset {

@@ -1,6 +1,6 @@
 #include "../../asset/asset_database.h"
+#include "../../asset/asset_manager.h"
 #include "../../asset/builtin/builtin_assets.h"
-#include "../../asset/lunacube.h"
 #include "../../core/log.h"
 #include "../interface/texture.h"
 #include "../rhi_upload_helpers.h"
@@ -18,6 +18,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace lunalite::renderer {
@@ -177,75 +178,78 @@ rhi::BindGroupEntry combinedTextureEntry(uint32_t binding, rhi::TextureViewHandl
     };
 }
 
-bool isUsableRgba32Cube(const asset::LunaCubeImage& cube)
+struct EnvironmentSettings {
+    uint32_t irradiance_size{32};
+    uint32_t prefilter_size{128};
+};
+
+std::optional<EnvironmentSettings> readEnvironmentSettings(asset::AssetHandle handle)
 {
-    return cube.format == asset::LunaCubeFormat::RGBA32F && cube.size > 0 && cube.mip_count > 0 && !cube.pixels.empty();
+    if (!handle.isValid()) {
+        return std::nullopt;
+    }
+
+    const auto* metadata = asset::AssetManager::get().getMetadata(handle);
+    if (metadata == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto environment = metadata->SpecializedConfig["Environment"];
+    if (!environment || environment["Type"].as<std::string>("") != "EquirectangularHDR") {
+        return std::nullopt;
+    }
+
+    EnvironmentSettings settings;
+    settings.irradiance_size = std::max(environment["IrradianceSize"].as<uint32_t>(settings.irradiance_size), 1u);
+    settings.prefilter_size = std::max(environment["PrefilterSize"].as<uint32_t>(settings.prefilter_size), 1u);
+    return settings;
 }
 
-rhi::TextureHandle
-    createCubeTexture(rhi::Device& device, rhi::CommandListHandle command_list, const asset::LunaCubeImage& cube)
+rhi::TextureHandle createCubeTexture(rhi::Device& device,
+                                     uint32_t size,
+                                     uint32_t mipCount,
+                                     rhi::TextureFormat format,
+                                     rhi::TextureUsage usage,
+                                     rhi::ResourceState initialState = rhi::ResourceState::CopyDst)
 {
     auto texture = device.createTexture(rhi::TextureDesc{
-        .width = cube.size,
-        .height = cube.size,
+        .width = size,
+        .height = size,
         .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .mip_levels = cube.mip_count,
-        .array_layers = asset::LunaCubeFaceCount,
-        .initial_state = rhi::ResourceState::CopyDst,
+        .format = format,
+        .usage = usage,
+        .mip_levels = mipCount,
+        .array_layers = 6,
+        .initial_state = initialState,
     });
-    if (!texture) {
-        return {};
-    }
-
-    const uint32_t bytesPerPixel = asset::getLunaCubeBytesPerPixel(cube.format);
-    std::vector<rhi::BufferTextureCopyRegion> copyRegions;
-    copyRegions.reserve(static_cast<size_t>(cube.mip_count) * asset::LunaCubeFaceCount);
-    for (uint32_t mip = 0; mip < cube.mip_count; ++mip) {
-        const uint32_t mipSize = asset::getLunaCubeMipSize(cube, mip);
-        for (uint32_t face = 0; face < asset::LunaCubeFaceCount; ++face) {
-            const auto offset = asset::calculateLunaCubeFaceOffsetBytes(cube, mip, face);
-            if (!offset) {
-                device.destroyTexture(texture);
-                return {};
-            }
-
-            copyRegions.push_back(rhi::BufferTextureCopyRegion{
-                .buffer_offset = *offset,
-                .buffer_row_pitch = static_cast<size_t>(mipSize) * bytesPerPixel,
-                .texture_width = mipSize,
-                .texture_height = mipSize,
-                .mip_level = mip,
-                .array_layer = face,
-            });
-        }
-    }
-
-    if (!rhi_upload::uploadTextureRegions(device,
-                                          command_list,
-                                          texture,
-                                          cube.pixels.data(),
-                                          cube.pixels.size(),
-                                          copyRegions.data(),
-                                          static_cast<uint32_t>(copyRegions.size()),
-                                          false)) {
-        device.destroyTexture(texture);
-        return {};
-    }
-
     return texture;
 }
 
-rhi::TextureViewHandle createCubeTextureView(rhi::Device& device, rhi::TextureHandle texture, uint32_t mipCount)
+rhi::TextureViewHandle
+    createCubeTextureView(rhi::Device& device, rhi::TextureHandle texture, rhi::TextureFormat format, uint32_t mipCount)
 {
     return device.createTextureView(rhi::TextureViewDesc{
         .texture = texture,
         .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
+        .format = format,
         .aspect = rhi::TextureAspect::Color,
         .mip_level_count = mipCount,
-        .array_layer_count = asset::LunaCubeFaceCount,
+        .array_layer_count = 6,
+    });
+}
+
+rhi::TextureViewHandle createCubeFaceView(
+    rhi::Device& device, rhi::TextureHandle texture, rhi::TextureFormat format, uint32_t mipLevel, uint32_t face)
+{
+    return device.createTextureView(rhi::TextureViewDesc{
+        .texture = texture,
+        .view_dimension = rhi::TextureViewDimension::Texture2D,
+        .format = format,
+        .aspect = rhi::TextureAspect::Color,
+        .base_mip_level = mipLevel,
+        .mip_level_count = 1,
+        .base_array_layer = face,
+        .array_layer_count = 1,
     });
 }
 
@@ -261,9 +265,48 @@ rhi::SamplerHandle createCubeSampler(rhi::Device& device, uint32_t mipCount)
     });
 }
 
-constexpr uint32_t PrefilterCubeSize = 128;
-constexpr uint32_t BrdfLutSize = 128;
+uint32_t mipDimension(uint32_t base, uint32_t mip)
+{
+    uint32_t value = base;
+    for (uint32_t i = 0; i < mip && value > 1; ++i) {
+        value /= 2;
+    }
+
+    return std::max(1u, value);
+}
+
+uint32_t lastMipLevel(uint32_t mipLevels)
+{
+    return mipLevels > 0 ? mipLevels - 1 : 0;
+}
+
+uint32_t prefilterSampleCount(uint32_t mip, uint32_t maxMip)
+{
+    if (maxMip == 0) {
+        return 1'024;
+    }
+
+    const float roughness = static_cast<float>(mip) / static_cast<float>(maxMip);
+    if (roughness >= 0.75f) {
+        return 8'192;
+    }
+    if (roughness >= 0.5f) {
+        return 4'096;
+    }
+    if (roughness >= 0.25f) {
+        return 2'048;
+    }
+    return 1'024;
+}
+
+constexpr uint32_t DefaultEnvironmentCubeSize = 512;
+constexpr uint32_t DefaultIrradianceCubeSize = 32;
+constexpr uint32_t DefaultPrefilterCubeSize = 128;
+constexpr uint32_t EnvironmentComputeGroupSize = 8;
+constexpr uint32_t BrdfLutSize = 512;
 constexpr uint32_t BrdfLutComputeGroupSize = 8;
+constexpr rhi::TextureFormat EnvironmentCubeFormat = rhi::TextureFormat::RGBA32F;
+constexpr rhi::TextureFormat FilteredEnvironmentCubeFormat = rhi::TextureFormat::RGBA16F;
 
 constexpr const char* BrdfLutComputeShader = R"GLSL(
 #version 450 core
@@ -271,7 +314,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(rg16f, binding = 0) writeonly uniform image2D uBRDFLut;
 
 const float PI = 3.14159265359;
-const uint SAMPLE_COUNT = 256u;
+const uint SAMPLE_COUNT = 1024u;
 
 float RadicalInverseVdC(uint bits)
 {
@@ -382,9 +425,13 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     m_command_list = m_device->createCommandList();
     m_cmd = m_device->getCommandList(m_command_list);
     m_upload_command_list = m_device->createCommandList();
+    m_compute_command_list = m_device->createCommandList();
+    m_compute_cmd = m_device->getCommandList(m_compute_command_list);
     LUNA_ASSERT(m_command_list, "Failed to create default renderer command list.");
     LUNA_ASSERT(m_cmd != nullptr, "Default renderer command list is null.");
     LUNA_ASSERT(m_upload_command_list, "Failed to create default renderer upload command list.");
+    LUNA_ASSERT(m_compute_command_list, "Failed to create default renderer compute command list.");
+    LUNA_ASSERT(m_compute_cmd != nullptr, "Default renderer compute command list is null.");
 
     const auto geometryVertexShaderSource = loadDefaultRendererShader("geometry.vert");
     const auto geometryFragmentShaderSource = loadDefaultRendererShader("geometry.frag");
@@ -394,6 +441,9 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     const auto lightingFragmentShaderSource = loadDefaultRendererShader("lighting.frag");
     const auto skyboxVertexShaderSource = loadDefaultRendererShader("skybox.vert");
     const auto skyboxFragmentShaderSource = loadDefaultRendererShader("skybox.frag");
+    const auto environmentCubemapComputeShaderSource = loadDefaultRendererShader("environment_cubemap.comp");
+    const auto environmentIrradianceComputeShaderSource = loadDefaultRendererShader("environment_irradiance.comp");
+    const auto environmentPrefilterComputeShaderSource = loadDefaultRendererShader("environment_prefilter.comp");
 
     const auto geometryVertexShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
@@ -433,6 +483,21 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     const auto skyboxFragmentShader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Fragment,
         .source = skyboxFragmentShaderSource.c_str(),
+    });
+
+    const auto environmentCubemapComputeShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Compute,
+        .source = environmentCubemapComputeShaderSource.c_str(),
+    });
+
+    const auto environmentIrradianceComputeShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Compute,
+        .source = environmentIrradianceComputeShaderSource.c_str(),
+    });
+
+    const auto environmentPrefilterComputeShader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Compute,
+        .source = environmentPrefilterComputeShaderSource.c_str(),
     });
 
     m_geometry_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
@@ -546,6 +611,22 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             },
     });
 
+    m_environment_compute_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
+        .entries =
+            {
+                rhi::BindGroupLayoutEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Compute),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 1,
+                    .type = rhi::BindingType::StorageTexture,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Compute),
+                },
+            },
+    });
+
     m_geometry_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
         .bind_group_layouts = {m_geometry_bind_group_layout, m_material_texture_bind_group_layout},
     });
@@ -556,6 +637,18 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
 
     m_skybox_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
         .bind_group_layouts = {m_geometry_bind_group_layout, m_environment_bind_group_layout},
+    });
+
+    m_environment_compute_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
+        .bind_group_layouts = {m_environment_compute_bind_group_layout},
+        .push_constants =
+            {
+                rhi::PushConstantRange{
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Compute),
+                    .offset = 0,
+                    .size = sizeof(glm::vec4),
+                },
+            },
     });
 
     m_geometry_pipeline = m_device
@@ -585,6 +678,16 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                                                       .location = 2,
                                                                       .format = rhi::VertexFormat::Float2,
                                                                       .offset = offsetof(interface::Vertex, uv),
+                                                                  },
+                                                                  rhi::VertexAttributeDesc{
+                                                                      .location = 3,
+                                                                      .format = rhi::VertexFormat::Float3,
+                                                                      .offset = offsetof(interface::Vertex, tangent),
+                                                                  },
+                                                                  rhi::VertexAttributeDesc{
+                                                                      .location = 4,
+                                                                      .format = rhi::VertexFormat::Float3,
+                                                                      .offset = offsetof(interface::Vertex, bitangent),
                                                                   },
                                                               },
                                                       },
@@ -694,6 +797,21 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
             },
     });
 
+    m_environment_cubemap_pipeline = m_device->createComputePipeline(rhi::ComputePipelineDesc{
+        .layout = m_environment_compute_pipeline_layout,
+        .compute_shader = environmentCubemapComputeShader,
+    });
+
+    m_environment_irradiance_pipeline = m_device->createComputePipeline(rhi::ComputePipelineDesc{
+        .layout = m_environment_compute_pipeline_layout,
+        .compute_shader = environmentIrradianceComputeShader,
+    });
+
+    m_environment_prefilter_pipeline = m_device->createComputePipeline(rhi::ComputePipelineDesc{
+        .layout = m_environment_compute_pipeline_layout,
+        .compute_shader = environmentPrefilterComputeShader,
+    });
+
     m_frameUniformBuffer = m_device->createBuffer(rhi::BufferDesc{
         .size = sizeof(FrameUniforms),
         .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
@@ -754,14 +872,15 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
         .layout = m_environment_bind_group_layout,
         .entries =
             {
-                combinedTextureEntry(
-                    0, m_black_environment_gpu_resource.view, m_black_environment_gpu_resource.sampler),
+                combinedTextureEntry(0,
+                                     m_black_environment_gpu_resource.environment.view,
+                                     m_black_environment_gpu_resource.environment.sampler),
                 combinedTextureEntry(1,
-                                     m_black_environment_gpu_resource.irradiance_view,
-                                     m_black_environment_gpu_resource.irradiance_sampler),
+                                     m_black_environment_gpu_resource.irradiance.view,
+                                     m_black_environment_gpu_resource.irradiance.sampler),
                 combinedTextureEntry(2,
-                                     m_black_environment_gpu_resource.prefilter_view,
-                                     m_black_environment_gpu_resource.prefilter_sampler),
+                                     m_black_environment_gpu_resource.prefilter.view,
+                                     m_black_environment_gpu_resource.prefilter.sampler),
                 combinedTextureEntry(3, m_brdf_lut_resource.view, m_brdf_lut_resource.sampler),
             },
     });
@@ -774,30 +893,38 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     LUNA_ASSERT(lightingFragmentShader, "Failed to create lighting fragment shader.");
     LUNA_ASSERT(skyboxVertexShader, "Failed to create skybox vertex shader.");
     LUNA_ASSERT(skyboxFragmentShader, "Failed to create skybox fragment shader.");
+    LUNA_ASSERT(environmentCubemapComputeShader, "Failed to create environment cubemap compute shader.");
+    LUNA_ASSERT(environmentIrradianceComputeShader, "Failed to create environment irradiance compute shader.");
+    LUNA_ASSERT(environmentPrefilterComputeShader, "Failed to create environment prefilter compute shader.");
     LUNA_ASSERT(m_geometry_bind_group_layout, "Failed to create geometry bind group layout.");
     LUNA_ASSERT(m_material_texture_bind_group_layout, "Failed to create material texture bind group layout.");
     LUNA_ASSERT(m_lighting_bind_group_layout, "Failed to create lighting bind group layout.");
     LUNA_ASSERT(m_environment_bind_group_layout, "Failed to create environment bind group layout.");
+    LUNA_ASSERT(m_environment_compute_bind_group_layout, "Failed to create environment compute bind group layout.");
     LUNA_ASSERT(m_geometry_pipeline_layout, "Failed to create geometry pipeline layout.");
     LUNA_ASSERT(m_lighting_pipeline_layout, "Failed to create lighting pipeline layout.");
     LUNA_ASSERT(m_skybox_pipeline_layout, "Failed to create skybox pipeline layout.");
+    LUNA_ASSERT(m_environment_compute_pipeline_layout, "Failed to create environment compute pipeline layout.");
     LUNA_ASSERT(m_geometry_pipeline, "Failed to create geometry pipeline.");
     LUNA_ASSERT(m_lighting_pipeline, "Failed to create lighting pipeline.");
     LUNA_ASSERT(m_skybox_pipeline, "Failed to create skybox pipeline.");
     LUNA_ASSERT(m_line_pipeline, "Failed to create line pipeline.");
+    LUNA_ASSERT(m_environment_cubemap_pipeline, "Failed to create environment cubemap pipeline.");
+    LUNA_ASSERT(m_environment_irradiance_pipeline, "Failed to create environment irradiance pipeline.");
+    LUNA_ASSERT(m_environment_prefilter_pipeline, "Failed to create environment prefilter pipeline.");
     LUNA_ASSERT(m_frameUniformBuffer, "Failed to create frame uniform buffer.");
     LUNA_ASSERT(m_objectUniformBuffer, "Failed to create object uniform buffer.");
     LUNA_ASSERT(m_line_vertex_buffer, "Failed to create line vertex buffer.");
     LUNA_ASSERT(m_geometry_bind_group, "Failed to create geometry bind group.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.texture, "Failed to create black environment texture.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.view, "Failed to create black environment view.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.sampler, "Failed to create black environment sampler.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance_texture, "Failed to create black irradiance texture.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance_view, "Failed to create black irradiance view.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance_sampler, "Failed to create black irradiance sampler.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter_texture, "Failed to create black prefilter texture.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter_view, "Failed to create black prefilter view.");
-    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter_sampler, "Failed to create black prefilter sampler.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.environment.texture, "Failed to create black environment texture.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.environment.view, "Failed to create black environment view.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.environment.sampler, "Failed to create black environment sampler.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance.texture, "Failed to create black irradiance texture.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance.view, "Failed to create black irradiance view.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.irradiance.sampler, "Failed to create black irradiance sampler.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter.texture, "Failed to create black prefilter texture.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter.view, "Failed to create black prefilter view.");
+    LUNA_ASSERT(m_black_environment_gpu_resource.prefilter.sampler, "Failed to create black prefilter sampler.");
     LUNA_ASSERT(m_brdf_lut_resource.texture, "Failed to create BRDF LUT texture.");
     LUNA_ASSERT(m_brdf_lut_resource.view, "Failed to create BRDF LUT view.");
     LUNA_ASSERT(m_brdf_lut_resource.sampler, "Failed to create BRDF LUT sampler.");
@@ -819,6 +946,11 @@ Renderer::~Renderer()
         m_device->destroyCommandList(m_command_list);
         m_command_list = {};
         m_cmd = nullptr;
+    }
+    if (m_compute_command_list) {
+        m_device->destroyCommandList(m_compute_command_list);
+        m_compute_command_list = {};
+        m_compute_cmd = nullptr;
     }
     if (m_upload_command_list) {
         m_device->destroyCommandList(m_upload_command_list);
@@ -976,121 +1108,285 @@ const Renderer::MaterialGpuResource&
     return m_material_gpu_cache.emplace(key, MaterialGpuResource{.bind_group = bindGroup}).first->second;
 }
 
-const Renderer::EnvironmentGpuResource*
-    Renderer::getOrCreateEnvironmentGpuResource(asset::AssetHandle handle,
-                                                const std::filesystem::path& environment_cube_path,
-                                                const std::filesystem::path& irradiance_cube_path,
-                                                const std::filesystem::path& prefilter_cube_path)
+const Renderer::EnvironmentGpuResource* Renderer::getOrCreateEnvironmentGpuResource(asset::AssetHandle handle)
 {
-    if (!handle.isValid() || environment_cube_path.empty() || irradiance_cube_path.empty() ||
-        prefilter_cube_path.empty()) {
+    if (!handle.isValid()) {
         return nullptr;
     }
 
+    const auto settings = readEnvironmentSettings(handle);
+    if (!settings) {
+        return nullptr;
+    }
+
+    const uint32_t environmentMipCount = fullMipLevelCount(DefaultEnvironmentCubeSize, DefaultEnvironmentCubeSize);
+    const uint32_t prefilterMipCount = fullMipLevelCount(settings->prefilter_size, settings->prefilter_size);
     if (const auto it = m_environment_gpu_cache.find(handle); it != m_environment_gpu_cache.end()) {
-        return &it->second;
+        if (it->second.environment_size == DefaultEnvironmentCubeSize &&
+            it->second.environment_mip_count == environmentMipCount &&
+            it->second.irradiance_size == settings->irradiance_size &&
+            it->second.prefilter_size == settings->prefilter_size &&
+            it->second.prefilter_mip_count == prefilterMipCount) {
+            return &it->second;
+        }
+
+        destroyEnvironmentGpuResource(it->second);
+        m_environment_gpu_cache.erase(it);
     }
 
-    const auto environmentCube = asset::readLunaCube(environment_cube_path);
-    const auto irradianceCube = asset::readLunaCube(irradiance_cube_path);
-    const auto prefilterCube = asset::readLunaCube(prefilter_cube_path);
-    if (!environmentCube || !isUsableRgba32Cube(*environmentCube) || !irradianceCube ||
-        !isUsableRgba32Cube(*irradianceCube) || !prefilterCube || !isUsableRgba32Cube(*prefilterCube)) {
-        LUNA_CORE_ERROR("Failed to load environment IBL artifacts: '{}', '{}', '{}'",
-                        environment_cube_path.string(),
-                        irradiance_cube_path.string(),
-                        prefilter_cube_path.string());
+    const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
+    if (texture == nullptr || texture->getWidth() == 0 || texture->getHeight() == 0 || texture->getPixels().empty()) {
         return nullptr;
     }
+
+    getOrCreateTextureGpuResource(handle, FallbackTexture::White);
+    const auto sourceIt = m_texture_gpu_cache.find(handle);
+    if (sourceIt == m_texture_gpu_cache.end() || !sourceIt->second.view || !sourceIt->second.sampler) {
+        return nullptr;
+    }
+    const auto& sourceResource = sourceIt->second;
 
     EnvironmentGpuResource resource;
-    resource.texture = createCubeTexture(*m_device, m_upload_command_list, *environmentCube);
-    resource.irradiance_texture = createCubeTexture(*m_device, m_upload_command_list, *irradianceCube);
-    resource.prefilter_texture = createCubeTexture(*m_device, m_upload_command_list, *prefilterCube);
-    if (!resource.texture || !resource.irradiance_texture || !resource.prefilter_texture) {
+    resource.environment_size = DefaultEnvironmentCubeSize;
+    resource.environment_mip_count = environmentMipCount;
+    resource.irradiance_size = settings->irradiance_size;
+    resource.prefilter_size = settings->prefilter_size;
+    resource.prefilter_mip_count = prefilterMipCount;
+
+    resource.environment.texture = createCubeTexture(*m_device,
+                                                     resource.environment_size,
+                                                     resource.environment_mip_count,
+                                                     EnvironmentCubeFormat,
+                                                     rhi::TextureUsage::Sampled | rhi::TextureUsage::Storage |
+                                                         rhi::TextureUsage::CopySrc | rhi::TextureUsage::CopyDst,
+                                                     rhi::ResourceState::StorageReadWrite);
+    resource.environment.view = createCubeTextureView(
+        *m_device, resource.environment.texture, EnvironmentCubeFormat, resource.environment_mip_count);
+    resource.environment.sampler = createCubeSampler(*m_device, resource.environment_mip_count);
+    if (!resource.environment.texture || !resource.environment.view || !resource.environment.sampler) {
         destroyEnvironmentGpuResource(resource);
         return nullptr;
     }
 
-    resource.view = createCubeTextureView(*m_device, resource.texture, environmentCube->mip_count);
-    resource.sampler = createCubeSampler(*m_device, environmentCube->mip_count);
+    for (uint32_t face = 0; face < 6; ++face) {
+        resource.environment_face_views[face] =
+            createCubeFaceView(*m_device, resource.environment.texture, EnvironmentCubeFormat, 0, face);
+        if (!resource.environment_face_views[face]) {
+            destroyEnvironmentGpuResource(resource);
+            return nullptr;
+        }
+    }
 
-    resource.irradiance_view = createCubeTextureView(*m_device, resource.irradiance_texture, irradianceCube->mip_count);
-    resource.irradiance_sampler = createCubeSampler(*m_device, irradianceCube->mip_count);
-
-    resource.prefilter_view = createCubeTextureView(*m_device, resource.prefilter_texture, prefilterCube->mip_count);
-    resource.prefilter_sampler = createCubeSampler(*m_device, prefilterCube->mip_count);
-
-    if (!resource.view || !resource.sampler || !resource.irradiance_view || !resource.irradiance_sampler ||
-        !resource.prefilter_view || !resource.prefilter_sampler) {
+    resource.irradiance.texture =
+        createCubeTexture(*m_device,
+                          resource.irradiance_size,
+                          1,
+                          FilteredEnvironmentCubeFormat,
+                          rhi::TextureUsage::Sampled | rhi::TextureUsage::Storage | rhi::TextureUsage::CopyDst,
+                          rhi::ResourceState::StorageReadWrite);
+    resource.prefilter.texture =
+        createCubeTexture(*m_device,
+                          resource.prefilter_size,
+                          resource.prefilter_mip_count,
+                          FilteredEnvironmentCubeFormat,
+                          rhi::TextureUsage::Sampled | rhi::TextureUsage::Storage | rhi::TextureUsage::CopyDst,
+                          rhi::ResourceState::StorageReadWrite);
+    if (!resource.irradiance.texture || !resource.prefilter.texture) {
         destroyEnvironmentGpuResource(resource);
         return nullptr;
     }
 
-    return &m_environment_gpu_cache.emplace(handle, resource).first->second;
+    resource.irradiance.view =
+        createCubeTextureView(*m_device, resource.irradiance.texture, FilteredEnvironmentCubeFormat, 1);
+    resource.irradiance.sampler = createCubeSampler(*m_device, 1);
+    resource.prefilter.view = createCubeTextureView(
+        *m_device, resource.prefilter.texture, FilteredEnvironmentCubeFormat, resource.prefilter_mip_count);
+    resource.prefilter.sampler = createCubeSampler(*m_device, resource.prefilter_mip_count);
+    if (!resource.irradiance.view || !resource.irradiance.sampler || !resource.prefilter.view ||
+        !resource.prefilter.sampler) {
+        destroyEnvironmentGpuResource(resource);
+        return nullptr;
+    }
+
+    for (uint32_t face = 0; face < 6; ++face) {
+        resource.irradiance_face_views[face] =
+            createCubeFaceView(*m_device, resource.irradiance.texture, FilteredEnvironmentCubeFormat, 0, face);
+        if (!resource.irradiance_face_views[face]) {
+            destroyEnvironmentGpuResource(resource);
+            return nullptr;
+        }
+    }
+
+    resource.prefilter_face_views.resize(static_cast<size_t>(resource.prefilter_mip_count) * 6);
+    for (uint32_t mip = 0; mip < resource.prefilter_mip_count; ++mip) {
+        for (uint32_t face = 0; face < 6; ++face) {
+            const size_t index = static_cast<size_t>(mip) * 6 + face;
+            resource.prefilter_face_views[index] =
+                createCubeFaceView(*m_device, resource.prefilter.texture, FilteredEnvironmentCubeFormat, mip, face);
+            if (!resource.prefilter_face_views[index]) {
+                destroyEnvironmentGpuResource(resource);
+                return nullptr;
+            }
+        }
+    }
+
+    const auto makeComputeBindGroupDesc =
+        [&](rhi::TextureViewHandle sourceView, rhi::SamplerHandle sourceSampler, rhi::TextureViewHandle outputView) {
+            return rhi::BindGroupDesc{
+                .layout = m_environment_compute_bind_group_layout,
+                .entries =
+                    {
+                        combinedTextureEntry(0, sourceView, sourceSampler),
+                        rhi::BindGroupEntry{
+                            .binding = 1,
+                            .type = rhi::BindingType::StorageTexture,
+                            .texture_view = outputView,
+                        },
+                    },
+            };
+        };
+
+    const auto computeBindGroup = m_device->createBindGroup(
+        makeComputeBindGroupDesc(sourceResource.view, sourceResource.sampler, resource.environment_face_views[0]));
+    if (!computeBindGroup) {
+        destroyEnvironmentGpuResource(resource);
+        return nullptr;
+    }
+
+    const uint32_t environmentGroupCount =
+        (resource.environment_size + EnvironmentComputeGroupSize - 1) / EnvironmentComputeGroupSize;
+    m_compute_cmd->begin();
+
+    const rhi::TextureTransition sourceRead{
+        .texture = sourceResource.texture,
+        .state = rhi::ResourceState::ShaderRead,
+    };
+    const rhi::TextureTransition environmentStorage{
+        .texture = resource.environment.texture,
+        .state = rhi::ResourceState::StorageReadWrite,
+    };
+    m_compute_cmd->transition(&sourceRead, 1);
+    m_compute_cmd->transition(&environmentStorage, 1);
+    m_compute_cmd->setPipeline(m_environment_cubemap_pipeline);
+
+    for (uint32_t face = 0; face < 6; ++face) {
+        m_device->updateBindGroup(computeBindGroup,
+                                  makeComputeBindGroupDesc(sourceResource.view,
+                                                           sourceResource.sampler,
+                                                           resource.environment_face_views[face]));
+
+        const glm::vec4 constants{static_cast<float>(face), 0.0f, 0.0f, 0.0f};
+        m_compute_cmd->setBindGroup(0, computeBindGroup);
+        m_compute_cmd->pushConstants(rhi::shaderStageFlag(rhi::ShaderStage::Compute), 0, sizeof(constants), &constants);
+        m_compute_cmd->dispatch(environmentGroupCount, environmentGroupCount);
+    }
+
+    const rhi::TextureTransition environmentCopyDst{
+        .texture = resource.environment.texture,
+        .state = rhi::ResourceState::CopyDst,
+    };
+    m_compute_cmd->transition(&environmentCopyDst, 1);
+    m_compute_cmd->generateMipmaps(resource.environment.texture);
+    const rhi::TextureTransition environmentRead{
+        .texture = resource.environment.texture,
+        .state = rhi::ResourceState::ShaderRead,
+    };
+    m_compute_cmd->transition(&environmentRead, 1);
+
+    const uint32_t irradianceGroupCount =
+        (resource.irradiance_size + EnvironmentComputeGroupSize - 1) / EnvironmentComputeGroupSize;
+    m_compute_cmd->setPipeline(m_environment_irradiance_pipeline);
+
+    const rhi::TextureTransition irradianceStorage{
+        .texture = resource.irradiance.texture,
+        .state = rhi::ResourceState::StorageReadWrite,
+    };
+    m_compute_cmd->transition(&irradianceStorage, 1);
+
+    for (uint32_t face = 0; face < 6; ++face) {
+        m_device->updateBindGroup(computeBindGroup,
+                                  makeComputeBindGroupDesc(resource.environment.view,
+                                                           resource.environment.sampler,
+                                                           resource.irradiance_face_views[face]));
+
+        const glm::vec4 constants{static_cast<float>(face), 0.0f, 0.0f, 0.0f};
+        m_compute_cmd->setBindGroup(0, computeBindGroup);
+        m_compute_cmd->pushConstants(rhi::shaderStageFlag(rhi::ShaderStage::Compute), 0, sizeof(constants), &constants);
+        m_compute_cmd->dispatch(irradianceGroupCount, irradianceGroupCount);
+    }
+
+    const rhi::TextureTransition irradianceRead{
+        .texture = resource.irradiance.texture,
+        .state = rhi::ResourceState::ShaderRead,
+    };
+    m_compute_cmd->transition(&irradianceRead, 1);
+
+    m_compute_cmd->setPipeline(m_environment_prefilter_pipeline);
+    const rhi::TextureTransition prefilterStorage{
+        .texture = resource.prefilter.texture,
+        .state = rhi::ResourceState::StorageReadWrite,
+    };
+    m_compute_cmd->transition(&prefilterStorage, 1);
+
+    const uint32_t maxPrefilterMip = lastMipLevel(resource.prefilter_mip_count);
+    for (uint32_t mip = 0; mip < resource.prefilter_mip_count; ++mip) {
+        const uint32_t mipSize = mipDimension(resource.prefilter_size, mip);
+        const uint32_t groupCount = (mipSize + EnvironmentComputeGroupSize - 1) / EnvironmentComputeGroupSize;
+        const float roughness =
+            maxPrefilterMip > 0 ? std::min(static_cast<float>(mip) / static_cast<float>(maxPrefilterMip), 1.0f) : 0.0f;
+        const uint32_t sampleCount = prefilterSampleCount(mip, maxPrefilterMip);
+
+        for (uint32_t face = 0; face < 6; ++face) {
+            const size_t index = static_cast<size_t>(mip) * 6 + face;
+            m_device->updateBindGroup(computeBindGroup,
+                                      makeComputeBindGroupDesc(resource.environment.view,
+                                                               resource.environment.sampler,
+                                                               resource.prefilter_face_views[index]));
+
+            const glm::vec4 constants{static_cast<float>(face), roughness, static_cast<float>(sampleCount), 0.0f};
+            m_compute_cmd->setBindGroup(0, computeBindGroup);
+            m_compute_cmd->pushConstants(
+                rhi::shaderStageFlag(rhi::ShaderStage::Compute), 0, sizeof(constants), &constants);
+            m_compute_cmd->dispatch(groupCount, groupCount);
+        }
+    }
+
+    const rhi::TextureTransition prefilterRead{
+        .texture = resource.prefilter.texture,
+        .state = rhi::ResourceState::ShaderRead,
+    };
+    m_compute_cmd->transition(&prefilterRead, 1);
+    m_compute_cmd->end();
+    m_device->submit(m_compute_command_list);
+    m_device->destroyBindGroup(computeBindGroup);
+
+    return &m_environment_gpu_cache.emplace(handle, std::move(resource)).first->second;
 }
 
 void Renderer::createBlackEnvironmentGpuResource()
 {
     constexpr float blackPixel[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    const auto makeBlackHalfPixels = [](uint32_t size) {
+        constexpr uint16_t halfFloatOne = 0x3c'00u;
+        std::vector<uint16_t> pixels(static_cast<size_t>(size) * size * 4, 0u);
+        for (size_t texel = 0; texel < static_cast<size_t>(size) * size; ++texel) {
+            pixels[texel * 4 + 3] = halfFloatOne;
+        }
+        return pixels;
+    };
 
-    m_black_environment_gpu_resource.texture = m_device->createTexture(rhi::TextureDesc{
-        .width = 1,
-        .height = 1,
-        .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .array_layers = 6,
-        .initial_state = rhi::ResourceState::CopyDst,
-    });
-    if (!m_black_environment_gpu_resource.texture) {
-        return;
-    }
-
-    for (uint32_t face = 0; face < 6; ++face) {
-        rhi_upload::uploadTextureData(*m_device,
-                                      m_upload_command_list,
-                                      m_black_environment_gpu_resource.texture,
-                                      rhi_upload::TextureUploadData{
-                                          .data = blackPixel,
-                                          .size = sizeof(blackPixel),
-                                          .row_pitch = sizeof(blackPixel),
-                                          .width = 1,
-                                          .height = 1,
-                                          .array_layer = face,
-                                      });
-    }
-
-    m_black_environment_gpu_resource.view = m_device->createTextureView(rhi::TextureViewDesc{
-        .texture = m_black_environment_gpu_resource.texture,
-        .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .aspect = rhi::TextureAspect::Color,
-        .array_layer_count = 6,
-    });
-    m_black_environment_gpu_resource.sampler = m_device->createSampler(rhi::SamplerDesc{
-        .min_filter = rhi::FilterMode::Linear,
-        .mag_filter = rhi::FilterMode::Linear,
-        .mip_filter = rhi::MipFilter::None,
-        .address_u = rhi::AddressMode::ClampToEdge,
-        .address_v = rhi::AddressMode::ClampToEdge,
-        .address_w = rhi::AddressMode::ClampToEdge,
-    });
-
-    m_black_environment_gpu_resource.irradiance_texture = m_device->createTexture(rhi::TextureDesc{
-        .width = 1,
-        .height = 1,
-        .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .array_layers = 6,
-        .initial_state = rhi::ResourceState::CopyDst,
-    });
-    if (m_black_environment_gpu_resource.irradiance_texture) {
+    m_black_environment_gpu_resource.environment_size = 1;
+    m_black_environment_gpu_resource.environment_mip_count = 1;
+    m_black_environment_gpu_resource.environment.texture = createCubeTexture(
+        *m_device, 1, 1, EnvironmentCubeFormat, rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst);
+    m_black_environment_gpu_resource.environment.view = createCubeTextureView(
+        *m_device, m_black_environment_gpu_resource.environment.texture, EnvironmentCubeFormat, 1);
+    m_black_environment_gpu_resource.environment.sampler = createCubeSampler(*m_device, 1);
+    if (m_black_environment_gpu_resource.environment.texture) {
         for (uint32_t face = 0; face < 6; ++face) {
             rhi_upload::uploadTextureData(*m_device,
                                           m_upload_command_list,
-                                          m_black_environment_gpu_resource.irradiance_texture,
+                                          m_black_environment_gpu_resource.environment.texture,
                                           rhi_upload::TextureUploadData{
                                               .data = blackPixel,
                                               .size = sizeof(blackPixel),
@@ -1101,49 +1397,66 @@ void Renderer::createBlackEnvironmentGpuResource()
                                           });
         }
     }
-    m_black_environment_gpu_resource.irradiance_view = m_device->createTextureView(rhi::TextureViewDesc{
-        .texture = m_black_environment_gpu_resource.irradiance_texture,
-        .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .aspect = rhi::TextureAspect::Color,
-        .array_layer_count = 6,
-    });
-    m_black_environment_gpu_resource.irradiance_sampler = m_device->createSampler(rhi::SamplerDesc{
-        .min_filter = rhi::FilterMode::Linear,
-        .mag_filter = rhi::FilterMode::Linear,
-        .mip_filter = rhi::MipFilter::None,
-        .address_u = rhi::AddressMode::ClampToEdge,
-        .address_v = rhi::AddressMode::ClampToEdge,
-        .address_w = rhi::AddressMode::ClampToEdge,
-    });
 
-    const uint32_t prefilterMipLevels = fullMipLevelCount(PrefilterCubeSize, PrefilterCubeSize);
-    m_black_environment_gpu_resource.prefilter_texture = m_device->createTexture(rhi::TextureDesc{
-        .width = PrefilterCubeSize,
-        .height = PrefilterCubeSize,
-        .dimension = rhi::TextureDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .usage = rhi::TextureUsage::Sampled | rhi::TextureUsage::CopyDst,
-        .mip_levels = prefilterMipLevels,
-        .array_layers = 6,
-        .initial_state = rhi::ResourceState::CopyDst,
-    });
-    if (m_black_environment_gpu_resource.prefilter_texture) {
+    m_black_environment_gpu_resource.irradiance.texture =
+        createCubeTexture(*m_device,
+                          DefaultIrradianceCubeSize,
+                          1,
+                          FilteredEnvironmentCubeFormat,
+                          rhi::TextureUsage::Sampled | rhi::TextureUsage::Storage | rhi::TextureUsage::CopyDst);
+    m_black_environment_gpu_resource.irradiance.view = createCubeTextureView(
+        *m_device, m_black_environment_gpu_resource.irradiance.texture, FilteredEnvironmentCubeFormat, 1);
+    m_black_environment_gpu_resource.irradiance.sampler = createCubeSampler(*m_device, 1);
+    if (m_black_environment_gpu_resource.irradiance.texture) {
+        for (uint32_t face = 0; face < 6; ++face) {
+            const uint32_t size = DefaultIrradianceCubeSize;
+            const auto pixels = makeBlackHalfPixels(size);
+            rhi_upload::uploadTextureData(*m_device,
+                                          m_upload_command_list,
+                                          m_black_environment_gpu_resource.irradiance.texture,
+                                          rhi_upload::TextureUploadData{
+                                              .data = pixels.data(),
+                                              .size = pixels.size() * sizeof(uint16_t),
+                                              .row_pitch = static_cast<size_t>(size) * sizeof(uint16_t) * 4,
+                                              .width = size,
+                                              .height = size,
+                                              .array_layer = face,
+                                          });
+        }
+    }
+
+    const uint32_t prefilterMipLevels = fullMipLevelCount(DefaultPrefilterCubeSize, DefaultPrefilterCubeSize);
+    m_black_environment_gpu_resource.prefilter.texture =
+        createCubeTexture(*m_device,
+                          DefaultPrefilterCubeSize,
+                          prefilterMipLevels,
+                          FilteredEnvironmentCubeFormat,
+                          rhi::TextureUsage::Sampled | rhi::TextureUsage::Storage | rhi::TextureUsage::CopyDst);
+    m_black_environment_gpu_resource.prefilter.view =
+        createCubeTextureView(*m_device,
+                              m_black_environment_gpu_resource.prefilter.texture,
+                              FilteredEnvironmentCubeFormat,
+                              prefilterMipLevels);
+    m_black_environment_gpu_resource.prefilter.sampler = createCubeSampler(*m_device, prefilterMipLevels);
+    for (uint32_t face = 0; face < 6; ++face) {
+        m_black_environment_gpu_resource.environment_face_views[face] = createCubeFaceView(
+            *m_device, m_black_environment_gpu_resource.environment.texture, EnvironmentCubeFormat, 0, face);
+    }
+    m_black_environment_gpu_resource.irradiance_size = DefaultIrradianceCubeSize;
+    m_black_environment_gpu_resource.prefilter_size = DefaultPrefilterCubeSize;
+    m_black_environment_gpu_resource.prefilter_mip_count = prefilterMipLevels;
+    if (m_black_environment_gpu_resource.prefilter.texture) {
         for (uint32_t mip = 0; mip < prefilterMipLevels; ++mip) {
-            const uint32_t mipSize = std::max(PrefilterCubeSize >> mip, 1u);
-            std::vector<float> pixels(static_cast<size_t>(mipSize) * mipSize * 4);
-            for (size_t i = 0; i < pixels.size(); i += 4) {
-                pixels[i + 3] = 1.0f;
-            }
-
+            const uint32_t mipSize = std::max(DefaultPrefilterCubeSize >> mip, 1u);
+            const auto pixels = makeBlackHalfPixels(mipSize);
             for (uint32_t face = 0; face < 6; ++face) {
                 rhi_upload::uploadTextureData(*m_device,
                                               m_upload_command_list,
-                                              m_black_environment_gpu_resource.prefilter_texture,
+                                              m_black_environment_gpu_resource.prefilter.texture,
                                               rhi_upload::TextureUploadData{
                                                   .data = pixels.data(),
-                                                  .size = pixels.size() * sizeof(float),
-                                                  .row_pitch = static_cast<size_t>(mipSize) * sizeof(float) * 4,
+                                                  .size = pixels.size() * sizeof(uint16_t),
+                                                  .row_pitch = static_cast<size_t>(mipSize) * sizeof(uint16_t) * 4,
                                                   .width = mipSize,
                                                   .height = mipSize,
                                                   .mip_level = mip,
@@ -1152,22 +1465,6 @@ void Renderer::createBlackEnvironmentGpuResource()
             }
         }
     }
-    m_black_environment_gpu_resource.prefilter_view = m_device->createTextureView(rhi::TextureViewDesc{
-        .texture = m_black_environment_gpu_resource.prefilter_texture,
-        .view_dimension = rhi::TextureViewDimension::TextureCube,
-        .format = rhi::TextureFormat::RGBA32F,
-        .aspect = rhi::TextureAspect::Color,
-        .mip_level_count = prefilterMipLevels,
-        .array_layer_count = 6,
-    });
-    m_black_environment_gpu_resource.prefilter_sampler = m_device->createSampler(rhi::SamplerDesc{
-        .min_filter = rhi::FilterMode::Linear,
-        .mag_filter = rhi::FilterMode::Linear,
-        .mip_filter = rhi::MipFilter::Linear,
-        .address_u = rhi::AddressMode::ClampToEdge,
-        .address_v = rhi::AddressMode::ClampToEdge,
-        .address_w = rhi::AddressMode::ClampToEdge,
-    });
 }
 
 void Renderer::createBrdfLutResource()
@@ -1257,32 +1554,32 @@ void Renderer::createBrdfLutResource()
         return;
     }
 
-    m_cmd->begin();
+    m_compute_cmd->begin();
     const rhi::TextureTransition brdfLutStorageTransition{
         .texture = m_brdf_lut_resource.texture,
         .state = rhi::ResourceState::StorageReadWrite,
     };
-    m_cmd->transition(&brdfLutStorageTransition, 1);
-    m_cmd->setPipeline(computePipeline);
-    m_cmd->setBindGroup(0, computeBindGroup);
-    m_cmd->dispatch((BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize,
-                    (BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize);
+    m_compute_cmd->transition(&brdfLutStorageTransition, 1);
+    m_compute_cmd->setPipeline(computePipeline);
+    m_compute_cmd->setBindGroup(0, computeBindGroup);
+    m_compute_cmd->dispatch((BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize,
+                            (BrdfLutSize + BrdfLutComputeGroupSize - 1) / BrdfLutComputeGroupSize);
     const rhi::TextureTransition brdfLutShaderReadTransition{
         .texture = m_brdf_lut_resource.texture,
         .state = rhi::ResourceState::ShaderRead,
     };
-    m_cmd->transition(&brdfLutShaderReadTransition, 1);
-    m_cmd->end();
-    m_device->submit(m_command_list);
+    m_compute_cmd->transition(&brdfLutShaderReadTransition, 1);
+    m_compute_cmd->end();
+    m_device->submit(m_compute_command_list);
 
     destroyComputeResources();
 }
 
 void Renderer::updateEnvironmentBindGroup(const EnvironmentGpuResource& resource)
 {
-    if (!m_environment_bind_group || !resource.view || !resource.sampler || !resource.irradiance_view ||
-        !resource.irradiance_sampler || !resource.prefilter_view || !resource.prefilter_sampler ||
-        !m_brdf_lut_resource.view || !m_brdf_lut_resource.sampler) {
+    if (!m_environment_bind_group || !resource.environment.view || !resource.environment.sampler ||
+        !resource.irradiance.view || !resource.irradiance.sampler || !resource.prefilter.view ||
+        !resource.prefilter.sampler || !m_brdf_lut_resource.view || !m_brdf_lut_resource.sampler) {
         return;
     }
 
@@ -1292,9 +1589,9 @@ void Renderer::updateEnvironmentBindGroup(const EnvironmentGpuResource& resource
             .layout = m_environment_bind_group_layout,
             .entries =
                 {
-                    combinedTextureEntry(0, resource.view, resource.sampler),
-                    combinedTextureEntry(1, resource.irradiance_view, resource.irradiance_sampler),
-                    combinedTextureEntry(2, resource.prefilter_view, resource.prefilter_sampler),
+                    combinedTextureEntry(0, resource.environment.view, resource.environment.sampler),
+                    combinedTextureEntry(1, resource.irradiance.view, resource.irradiance.sampler),
+                    combinedTextureEntry(2, resource.prefilter.view, resource.prefilter.sampler),
                     combinedTextureEntry(3, m_brdf_lut_resource.view, m_brdf_lut_resource.sampler),
                 },
         });
@@ -1316,33 +1613,25 @@ void Renderer::destroyTextureGpuResource(TextureGpuResource& resource)
 
 void Renderer::destroyEnvironmentGpuResource(EnvironmentGpuResource& resource)
 {
-    if (resource.sampler) {
-        m_device->destroySampler(resource.sampler);
+    for (const auto faceView : resource.environment_face_views) {
+        if (faceView) {
+            m_device->destroyTextureView(faceView);
+        }
     }
-    if (resource.view) {
-        m_device->destroyTextureView(resource.view);
+    for (const auto faceView : resource.irradiance_face_views) {
+        if (faceView) {
+            m_device->destroyTextureView(faceView);
+        }
     }
-    if (resource.texture) {
-        m_device->destroyTexture(resource.texture);
+    for (const auto faceView : resource.prefilter_face_views) {
+        if (faceView) {
+            m_device->destroyTextureView(faceView);
+        }
     }
-    if (resource.irradiance_sampler) {
-        m_device->destroySampler(resource.irradiance_sampler);
-    }
-    if (resource.irradiance_view) {
-        m_device->destroyTextureView(resource.irradiance_view);
-    }
-    if (resource.irradiance_texture) {
-        m_device->destroyTexture(resource.irradiance_texture);
-    }
-    if (resource.prefilter_sampler) {
-        m_device->destroySampler(resource.prefilter_sampler);
-    }
-    if (resource.prefilter_view) {
-        m_device->destroyTextureView(resource.prefilter_view);
-    }
-    if (resource.prefilter_texture) {
-        m_device->destroyTexture(resource.prefilter_texture);
-    }
+
+    destroyTextureGpuResource(resource.environment);
+    destroyTextureGpuResource(resource.irradiance);
+    destroyTextureGpuResource(resource.prefilter);
     resource = {};
 }
 
@@ -1720,13 +2009,15 @@ void Renderer::setViewProjection(const glm::mat4& view,
 void Renderer::setLighting(const interface::RenderLighting& lighting)
 {
     m_frameUniforms.directionalLightCount = lighting.directional_light_count > 0 ? 1u : 0u;
-    const auto* environment = getOrCreateEnvironmentGpuResource(lighting.environment_map,
-                                                                lighting.environment_cube,
-                                                                lighting.environment_irradiance_cube,
-                                                                lighting.environment_prefilter_cube);
+    const auto* environment = getOrCreateEnvironmentGpuResource(lighting.environment_map);
+    const auto& activeEnvironment = environment != nullptr ? *environment : m_black_environment_gpu_resource;
+
     m_frameUniforms.environmentIntensity =
         environment != nullptr ? std::max(lighting.environment_intensity, 0.0f) : 0.0f;
-    updateEnvironmentBindGroup(environment != nullptr ? *environment : m_black_environment_gpu_resource);
+    m_frameUniforms.maxPrefilterMip = static_cast<float>(lastMipLevel(activeEnvironment.prefilter_mip_count));
+    updateEnvironmentBindGroup(activeEnvironment);
+    m_cmd->setPipeline(m_geometry_pipeline);
+    m_cmd->setBindGroup(0, m_geometry_bind_group);
 
     if (m_frameUniforms.directionalLightCount > 0) {
         m_frameUniforms.lightDir = lighting.directional_light.direction;
@@ -1764,7 +2055,19 @@ void Renderer::renderModel(const interface::Model& model, const glm::mat4& trans
         }
 
         const auto& submeshes = mesh->getSubMeshes();
-        for (size_t submeshIndex = 0; submeshIndex < submeshes.size(); ++submeshIndex) {
+        if (modelMesh.submesh_start >= submeshes.size()) {
+            continue;
+        }
+
+        const auto submeshStart = static_cast<size_t>(modelMesh.submesh_start);
+        const auto availableSubmeshes = submeshes.size() - submeshStart;
+        const auto requestedSubmeshes = modelMesh.submesh_count == std::numeric_limits<uint32_t>::max()
+                                            ? availableSubmeshes
+                                            : static_cast<size_t>(modelMesh.submesh_count);
+        const auto submeshEnd = submeshStart + std::min(availableSubmeshes, requestedSubmeshes);
+        const auto modelMeshTransform = transform * modelMesh.transform;
+
+        for (size_t submeshIndex = submeshStart; submeshIndex < submeshEnd; ++submeshIndex) {
             const auto& submesh = submeshes[submeshIndex];
             const interface::Material* material = nullptr;
             if (submesh.material_slot < modelMesh.materials.size()) {
@@ -1782,7 +2085,7 @@ void Renderer::renderModel(const interface::Model& model, const glm::mat4& trans
             }
 
             if (material != nullptr) {
-                drawSubMesh(*mesh, submeshIndex, submesh, *material, transform);
+                drawSubMesh(*mesh, submeshIndex, submesh, *material, modelMeshTransform);
             }
         }
     }
@@ -1812,8 +2115,9 @@ void Renderer::drawSubMesh(const interface::Mesh& mesh,
     m_objectUniforms.materialMetallic = parameters.metallic;
     m_objectUniforms.materialRoughness = parameters.roughness;
     m_objectUniforms.materialShadingModel = parameters.shading_model == interface::ShadingModel::Unlit ? 1u : 0u;
-    m_objectUniforms.materialNormalScale = parameters.normal_scale;
+    m_objectUniforms.materialNormalScale = std::max(parameters.normal_scale, 0.0f);
     m_objectUniforms.materialOcclusionStrength = parameters.occlusion_strength;
+    m_objectUniforms.materialHasNormalMap = parameters.normal_texture.isValid() ? 1u : 0u;
     m_device->updateBuffer(m_objectUniformBuffer, 0, &m_objectUniforms, sizeof(ObjectUniforms));
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);

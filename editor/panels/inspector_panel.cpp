@@ -330,7 +330,6 @@ void InspectorPanel::onImGuiRender()
         }
         if (open && m_scene.hasComponent<scene::DirectionalLightComponent>(m_selected_entity)) {
             auto& light = m_scene.getComponent<scene::DirectionalLightComponent>(m_selected_entity);
-            ImGui::DragFloat3("Direction", &light.direction.x, 0.1f);
             ImGui::ColorEdit3("Color", &light.color.x);
             ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f, "%.3f");
         }

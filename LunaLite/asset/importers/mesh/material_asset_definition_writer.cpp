@@ -99,9 +99,10 @@ void MaterialAssetDefinitionWriter::writeObjMaterialDefinition(const std::filesy
 void MaterialAssetDefinitionWriter::writeGltfMaterialDefinition(
     const std::filesystem::path& materialPath,
     const fastgltf::Material& material,
-    const std::unordered_map<size_t, AssetHandle>& textureHandles) const
+    const std::unordered_map<size_t, AssetHandle>& textureHandles,
+    bool overwriteExisting) const
 {
-    if (std::filesystem::exists(materialPath)) {
+    if (!overwriteExisting && std::filesystem::exists(materialPath)) {
         return;
     }
 

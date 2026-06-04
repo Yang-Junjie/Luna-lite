@@ -1,8 +1,8 @@
 Asset:
-  Handle: 3009192999781803060
+  Handle: 13222649401403143103
   Type: Texture
-  Name: WaterBottle_occlusionRoughnessMetallic
-  FilePath: Assets/Models/WaterBottle/WaterBottle_occlusionRoughnessMetallic.png
+  Name: roughness_metallic_1
+  FilePath: Assets/Models/EnvironmentTest/EnvironmentTest_images/roughness_metallic_1.png
   MemoryOnly: false
   Config:
     GenerateMipmaps: true

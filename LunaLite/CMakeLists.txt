@@ -14,6 +14,7 @@ target_link_libraries(LunaLiteRenderer
         glm::glm
         TinyRHI::TinyRHI
     PRIVATE
+        yaml-cpp::yaml-cpp
         spdlog::spdlog
 )
 
@@ -55,8 +56,6 @@ add_library(LunaLite STATIC
     asset/metadata/asset_metadata_store.cpp
     asset/metadata/asset_path_resolver.cpp
     asset/asset_scanner.cpp
-    asset/environment_map_baker.cpp
-    asset/lunacube.cpp
     asset/builtin/material_factory.cpp
     asset/builtin/mesh_factory.cpp
     asset/builtin/model_factory.cpp

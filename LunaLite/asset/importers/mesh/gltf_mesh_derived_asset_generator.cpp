@@ -8,11 +8,17 @@
 
 #include <algorithm>
 #include <fastgltf/core.hpp>
+#include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 #include <filesystem>
+#include <glm/mat4x4.hpp>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -32,6 +38,30 @@ std::string sanitizeAssetName(std::string value)
     }
 
     return value;
+}
+
+std::string indexedAssetName(const std::string& prefix, size_t index, const std::string& name)
+{
+    std::ostringstream stream;
+    stream << prefix << "_Material_" << std::setw(3) << std::setfill('0') << index << "_" << name;
+    return stream.str();
+}
+
+bool isRenderablePrimitive(const fastgltf::Primitive& primitive)
+{
+    return primitive.type == fastgltf::PrimitiveType::Triangles &&
+           primitive.findAttribute("POSITION") != primitive.attributes.cend();
+}
+
+glm::mat4 toGlmMatrix(const fastgltf::math::fmat4x4& matrix)
+{
+    glm::mat4 result{1.0f};
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            result[column][row] = matrix[static_cast<size_t>(column)][static_cast<size_t>(row)];
+        }
+    }
+    return result;
 }
 
 fastgltf::Expected<fastgltf::Asset> loadGltfAsset(const std::filesystem::path& path)
@@ -159,6 +189,106 @@ AssetMetadata createDerivedMetadataFile(AssetMetadataStore& metadataStore,
 
     return metadata;
 }
+
+std::vector<std::pair<uint32_t, uint32_t>> calculateMeshSubmeshRanges(const fastgltf::Asset& asset)
+{
+    std::vector<std::pair<uint32_t, uint32_t>> ranges;
+    ranges.reserve(asset.meshes.size());
+
+    uint32_t nextSubmesh = 0;
+    for (const auto& mesh : asset.meshes) {
+        const auto submeshStart = nextSubmesh;
+        uint32_t submeshCount = 0;
+        for (const auto& primitive : mesh.primitives) {
+            if (!isRenderablePrimitive(primitive)) {
+                continue;
+            }
+            ++submeshCount;
+            ++nextSubmesh;
+        }
+        ranges.emplace_back(submeshStart, submeshCount);
+    }
+
+    return ranges;
+}
+
+std::vector<ModelMeshDefinition> buildSceneModelDefinitions(fastgltf::Asset& asset,
+                                                            AssetHandle meshHandle,
+                                                            const std::vector<AssetHandle>& materialHandles)
+{
+    std::vector<ModelMeshDefinition> definitions;
+    const auto meshRanges = calculateMeshSubmeshRanges(asset);
+
+    const auto appendMeshNode = [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4& matrix) {
+        if (!node.meshIndex || *node.meshIndex >= meshRanges.size()) {
+            return;
+        }
+
+        const auto [submeshStart, submeshCount] = meshRanges[*node.meshIndex];
+        if (submeshCount == 0) {
+            return;
+        }
+
+        ModelMeshDefinition definition;
+        definition.mesh = meshHandle;
+        definition.materials = materialHandles;
+        definition.transform = toGlmMatrix(matrix);
+        definition.submesh_start = submeshStart;
+        definition.submesh_count = submeshCount;
+        definitions.push_back(std::move(definition));
+    };
+
+    const auto traverseNode =
+        [&](const auto& self, size_t nodeIndex, const fastgltf::math::fmat4x4& parentTransform) -> void {
+        if (nodeIndex >= asset.nodes.size()) {
+            return;
+        }
+
+        const auto& node = asset.nodes[nodeIndex];
+        const auto transform = fastgltf::getTransformMatrix(node, parentTransform);
+        appendMeshNode(node, transform);
+
+        for (const auto child : node.children) {
+            self(self, child, transform);
+        }
+    };
+
+    if (!asset.scenes.empty()) {
+        const auto sceneIndex = asset.defaultScene.value_or(0);
+        if (sceneIndex < asset.scenes.size()) {
+            fastgltf::iterateSceneNodes(asset,
+                                        sceneIndex,
+                                        fastgltf::math::fmat4x4{},
+                                        [&](fastgltf::Node& node, const fastgltf::math::fmat4x4& matrix) {
+                                            appendMeshNode(node, matrix);
+                                        });
+        }
+    } else {
+        std::vector<bool> referencedByParent(asset.nodes.size(), false);
+        for (const auto& node : asset.nodes) {
+            for (const auto child : node.children) {
+                if (child < referencedByParent.size()) {
+                    referencedByParent[child] = true;
+                }
+            }
+        }
+
+        for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex) {
+            if (!referencedByParent[nodeIndex]) {
+                traverseNode(traverseNode, nodeIndex, fastgltf::math::fmat4x4{});
+            }
+        }
+    }
+
+    if (definitions.empty()) {
+        ModelMeshDefinition definition;
+        definition.mesh = meshHandle;
+        definition.materials = materialHandles;
+        definitions.push_back(std::move(definition));
+    }
+
+    return definitions;
+}
 } // namespace
 
 std::vector<AssetMetadata>
@@ -215,6 +345,7 @@ std::vector<AssetMetadata>
 
     std::vector<AssetHandle> materialHandles;
     if (!asset.materials.empty()) {
+        materialHandles.resize(asset.materials.size());
         for (size_t materialIndex = 0; materialIndex < asset.materials.size(); ++materialIndex) {
             const auto& material = asset.materials[materialIndex];
             if (material.pbrData.baseColorTexture) {
@@ -236,8 +367,9 @@ std::vector<AssetMetadata>
             const auto materialName = sanitizeAssetName(
                 material.name.empty() ? "Material" + std::to_string(materialIndex) : std::string{material.name});
             const auto materialPath =
-                sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + "_" + materialName + ".lunamat");
-            materialDefinitions.writeGltfMaterialDefinition(materialPath, material, textureHandles);
+                sourceMeshPath.parent_path() /
+                (indexedAssetName(sourceMeshPath.stem().string(), materialIndex, materialName) + ".lunamat");
+            materialDefinitions.writeGltfMaterialDefinition(materialPath, material, textureHandles, true);
 
             const auto materialMetadata = createDerivedMetadataFile(
                 metadataStore,
@@ -248,12 +380,16 @@ std::vector<AssetMetadata>
                 continue;
             }
 
-            materialHandles.push_back(materialMetadata.Handle);
+            materialHandles[materialIndex] = materialMetadata.Handle;
             derivedMetadata.push_back(materialMetadata);
         }
     }
 
-    if (materialHandles.empty()) {
+    const auto hasValidMaterialHandle = std::ranges::any_of(materialHandles, [](AssetHandle handle) {
+        return handle.isValid();
+    });
+
+    if (!hasValidMaterialHandle) {
         const auto materialPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + "_Default.lunamat");
         materialDefinitions.writeDefaultDefinition(materialPath);
 
@@ -263,13 +399,15 @@ std::vector<AssetMetadata>
                                       AssetType::Material,
                                       AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 2});
         if (materialMetadata.Handle.isValid()) {
+            materialHandles.clear();
             materialHandles.push_back(materialMetadata.Handle);
             derivedMetadata.push_back(materialMetadata);
         }
     }
 
     const auto modelPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunamodel");
-    modelDefinitions.writeSingleMeshDefinition(modelPath, meshMetadata.Handle, materialHandles);
+    modelDefinitions.writeDefinition(
+        modelPath, buildSceneModelDefinitions(asset, meshMetadata.Handle, materialHandles), true);
 
     const auto modelMetadata = createDerivedMetadataFile(
         metadataStore, modelPath, AssetType::Model, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});

@@ -1,7 +1,5 @@
-#include "../LunaLite/asset/asset_cache.h"
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
-#include "../LunaLite/asset/lunacube.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/mesh.h"
@@ -15,6 +13,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <glm/geometric.hpp>
 #include <iostream>
 
 namespace {
@@ -68,15 +67,13 @@ bool nearlyEqual(float lhs, float rhs)
     return std::abs(lhs - rhs) <= 0.001f;
 }
 
-uint32_t fullMipLevelCount(uint32_t size)
+bool hasValidTangentBasis(const lunalite::renderer::interface::Vertex& vertex)
 {
-    uint32_t levels = 1;
-    while (size > 1) {
-        size >>= 1;
-        ++levels;
-    }
-
-    return levels;
+    return nearlyEqual(glm::length(vertex.normal), 1.0f) && nearlyEqual(glm::length(vertex.tangent), 1.0f) &&
+           nearlyEqual(glm::length(vertex.bitangent), 1.0f) &&
+           std::abs(glm::dot(vertex.normal, vertex.tangent)) <= 0.001f &&
+           std::abs(glm::dot(vertex.normal, vertex.bitangent)) <= 0.001f &&
+           std::abs(glm::dot(vertex.tangent, vertex.bitangent)) <= 0.001f;
 }
 
 bool writeGltfTriangle(const std::filesystem::path& gltfPath,
@@ -175,6 +172,14 @@ bool writeGltfTriangle(const std::filesystem::path& gltfPath,
         "KHR_materials_emissive_strength": { "emissiveStrength": 2.5 },
         "KHR_materials_unlit": {}
       }
+    },
+    {
+      "name": "GltfMaterial",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [0.0, 0.0, 0.0, 1.0],
+        "metallicFactor": 0.0,
+        "roughnessFactor": 1.0
+      }
     }
   ],
   "meshes": [
@@ -183,10 +188,18 @@ bool writeGltfTriangle(const std::filesystem::path& gltfPath,
       "primitives": [
         { "attributes": { "POSITION": 0, "TEXCOORD_0": 1 }, "indices": 2, "material": 0 }
       ]
+    },
+    {
+      "name": "GltfMeshBlack",
+      "primitives": [
+        { "attributes": { "POSITION": 0, "TEXCOORD_0": 1 }, "indices": 2, "material": 1 }
+      ]
     }
   ],
   "nodes": [
-    { "mesh": 0 }
+    { "children": [1, 2], "translation": [1.0, 2.0, 3.0] },
+    { "mesh": 0 },
+    { "mesh": 1, "translation": [0.0, -2.0, 0.0] }
   ],
   "scenes": [
     { "nodes": [0] }
@@ -292,9 +305,9 @@ int main()
         hdrMetadata << "      AddressV: ClampToEdge\n";
         hdrMetadata << "      AddressW: ClampToEdge\n";
         hdrMetadata << "    Environment:\n";
-        hdrMetadata << "      CubemapSize: 4\n";
-        hdrMetadata << "      IrradianceSize: 4\n";
-        hdrMetadata << "      PrefilterSize: 4\n";
+        hdrMetadata << "      Type: EquirectangularHDR\n";
+        hdrMetadata << "      IrradianceSize: 32\n";
+        hdrMetadata << "      PrefilterSize: 128\n";
     }
 
     const auto texturedMaterialPath = projectRoot / info.assets_path / "Textured.lunamat";
@@ -382,6 +395,10 @@ int main()
         std::cerr << "Failed to load submesh geometry through AssetManager.\n";
         return 1;
     }
+    if (!hasValidTangentBasis(submesh.getVertices().front())) {
+        std::cerr << "Failed to generate OBJ tangent basis through AssetManager.\n";
+        return 1;
+    }
 
     const auto materialHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube_Default.lunamat");
     const auto* material = asset::AssetManager::get().getAsset<renderer::interface::Material>(materialHandle);
@@ -423,45 +440,9 @@ int main()
     }
     const auto* hdrMetadata = asset::AssetManager::get().getMetadata(hdrTextureHandle);
     const auto environment = hdrMetadata != nullptr ? hdrMetadata->SpecializedConfig["Environment"] : YAML::Node{};
-    const auto artifacts = environment ? environment["Artifacts"] : YAML::Node{};
-    const auto environmentArtifact =
-        environment && environment["Artifacts"] ? environment["Artifacts"]["EnvironmentCube"].as<std::string>("") : "";
-    const auto irradianceArtifact = artifacts ? artifacts["IrradianceCube"].as<std::string>("") : "";
-    const auto prefilterArtifact = artifacts ? artifacts["PrefilterCube"].as<std::string>("") : "";
     if (!environment || environment["Type"].as<std::string>("") != "EquirectangularHDR" ||
-        environment["SourceHash"].as<std::string>("").empty() || environment["CubemapSize"].as<uint32_t>(0) != 4 ||
-        environment["IrradianceSize"].as<uint32_t>(0) != 4 || environment["PrefilterSize"].as<uint32_t>(0) != 4 ||
-        environmentArtifact.empty() || irradianceArtifact.empty() || prefilterArtifact.empty()) {
-        std::cerr << "Failed to write HDR environment artifact metadata.\n";
-        return 1;
-    }
-    const auto environmentCube = asset::readLunaCube(asset::cache::resolveProjectPath(environmentArtifact));
-    const auto irradianceCube = asset::readLunaCube(asset::cache::resolveProjectPath(irradianceArtifact));
-    const auto prefilterCube = asset::readLunaCube(asset::cache::resolveProjectPath(prefilterArtifact));
-    const auto expectedEnvironmentCubePayloadSize =
-        asset::calculateLunaCubePayloadSize(asset::LunaCubeFormat::RGBA32F, 4, 1);
-    const auto expectedIrradianceCubePayloadSize =
-        asset::calculateLunaCubePayloadSize(asset::LunaCubeFormat::RGBA32F, 4, 1);
-    const auto expectedPrefilterMipCount = fullMipLevelCount(4);
-    const auto expectedPrefilterCubePayloadSize =
-        asset::calculateLunaCubePayloadSize(asset::LunaCubeFormat::RGBA32F, 4, expectedPrefilterMipCount);
-    if (!environmentCube || !expectedEnvironmentCubePayloadSize ||
-        environmentCube->format != asset::LunaCubeFormat::RGBA32F || environmentCube->size != 4 ||
-        environmentCube->mip_count != 1 || environmentCube->pixels.size() != *expectedEnvironmentCubePayloadSize) {
-        std::cerr << "Failed to write HDR environment .lunacube artifact.\n";
-        return 1;
-    }
-    if (!irradianceCube || !expectedIrradianceCubePayloadSize ||
-        irradianceCube->format != asset::LunaCubeFormat::RGBA32F || irradianceCube->size != 4 ||
-        irradianceCube->mip_count != 1 || irradianceCube->pixels.size() != *expectedIrradianceCubePayloadSize) {
-        std::cerr << "Failed to write HDR irradiance .lunacube artifact.\n";
-        return 1;
-    }
-    if (!prefilterCube || !expectedPrefilterCubePayloadSize ||
-        prefilterCube->format != asset::LunaCubeFormat::RGBA32F || prefilterCube->size != 4 ||
-        prefilterCube->mip_count != expectedPrefilterMipCount ||
-        prefilterCube->pixels.size() != *expectedPrefilterCubePayloadSize) {
-        std::cerr << "Failed to write HDR prefilter .lunacube artifact.\n";
+        environment["IrradianceSize"].as<uint32_t>(0) != 32 || environment["PrefilterSize"].as<uint32_t>(0) != 128) {
+        std::cerr << "Failed to preserve HDR environment metadata.\n";
         return 1;
     }
 
@@ -484,7 +465,7 @@ int main()
     }
 
     const auto* gltfMesh = asset::AssetManager::get().getAsset<renderer::interface::Mesh>(gltfHandle);
-    if (gltfMesh == nullptr || gltfMesh->getSubMeshes().size() != 1) {
+    if (gltfMesh == nullptr || gltfMesh->getSubMeshes().size() != 2) {
         std::cerr << "Failed to load glTF mesh through AssetManager.\n";
         return 1;
     }
@@ -494,9 +475,17 @@ int main()
         std::cerr << "Failed to load glTF primitive geometry through AssetManager.\n";
         return 1;
     }
+    if (!hasValidTangentBasis(gltfSubmesh.getVertices().front())) {
+        std::cerr << "Failed to generate glTF tangent basis through AssetManager.\n";
+        return 1;
+    }
+    if (gltfMesh->getSubMeshes()[1].material_slot != 1) {
+        std::cerr << "Failed to preserve glTF primitive material slots through AssetManager.\n";
+        return 1;
+    }
 
     const auto gltfMaterialHandle =
-        asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle_GltfMaterial.lunamat");
+        asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle_Material_000_GltfMaterial.lunamat");
     const auto* gltfMaterial = asset::AssetManager::get().getAsset<renderer::interface::Material>(gltfMaterialHandle);
     if (gltfMaterial == nullptr || gltfMaterial->parameters == nullptr ||
         gltfMaterial->parameters->shading_model != renderer::interface::ShadingModel::Unlit ||
@@ -506,6 +495,18 @@ int main()
         !nearlyEqual(gltfMaterial->parameters->normal_scale, 0.6f) ||
         !nearlyEqual(gltfMaterial->parameters->occlusion_strength, 0.35f)) {
         std::cerr << "Failed to load glTF material factors through AssetManager.\n";
+        return 1;
+    }
+
+    const auto blackGltfMaterialHandle =
+        asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle_Material_001_GltfMaterial.lunamat");
+    const auto* blackGltfMaterial =
+        asset::AssetManager::get().getAsset<renderer::interface::Material>(blackGltfMaterialHandle);
+    if (blackGltfMaterial == nullptr || blackGltfMaterial->parameters == nullptr ||
+        !nearlyEqual(blackGltfMaterial->parameters->albedo.r, 0.0f) ||
+        !nearlyEqual(blackGltfMaterial->parameters->albedo.g, 0.0f) ||
+        !nearlyEqual(blackGltfMaterial->parameters->albedo.b, 0.0f)) {
+        std::cerr << "Failed to keep duplicate-name glTF materials distinct through AssetManager.\n";
         return 1;
     }
 
@@ -554,10 +555,24 @@ int main()
 
     const auto gltfModelHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle.lunamodel");
     const auto* gltfModel = asset::AssetManager::get().getAsset<renderer::interface::Model>(gltfModelHandle);
-    if (gltfModel == nullptr || gltfModel->getMeshes().empty() || gltfModel->getMeshes().front().mesh != gltfHandle ||
-        gltfModel->getMeshes().front().materials.empty() ||
-        gltfModel->getMeshes().front().materials.front() != gltfMaterialHandle) {
+    if (gltfModel == nullptr || gltfModel->getMeshes().size() != 2 ||
+        gltfModel->getMeshes().front().mesh != gltfHandle || gltfModel->getMeshes().front().materials.size() != 2 ||
+        gltfModel->getMeshes().front().materials.front() != gltfMaterialHandle ||
+        gltfModel->getMeshes().front().materials[1] != blackGltfMaterialHandle) {
         std::cerr << "Failed to load generated glTF model through AssetManager.\n";
+        return 1;
+    }
+    const auto& firstGltfInstance = gltfModel->getMeshes()[0];
+    const auto& secondGltfInstance = gltfModel->getMeshes()[1];
+    if (firstGltfInstance.submesh_start != 0 || firstGltfInstance.submesh_count != 1 ||
+        secondGltfInstance.submesh_start != 1 || secondGltfInstance.submesh_count != 1 ||
+        !nearlyEqual(firstGltfInstance.transform[3][0], 1.0f) ||
+        !nearlyEqual(firstGltfInstance.transform[3][1], 2.0f) ||
+        !nearlyEqual(firstGltfInstance.transform[3][2], 3.0f) ||
+        !nearlyEqual(secondGltfInstance.transform[3][0], 1.0f) ||
+        !nearlyEqual(secondGltfInstance.transform[3][1], 0.0f) ||
+        !nearlyEqual(secondGltfInstance.transform[3][2], 3.0f)) {
+        std::cerr << "Failed to preserve glTF scene node transforms through AssetManager.\n";
         return 1;
     }
 

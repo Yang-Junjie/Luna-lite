@@ -8,9 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <filesystem>
+#include <array>
 #include <glm/glm.hpp>
 #include <unordered_map>
+#include <vector>
 
 namespace lunalite::renderer {
 class Renderer : public interface::Renderer {
@@ -40,7 +41,7 @@ public:
         float _pad2{0.0f};
         uint32_t directionalLightCount{0};
         float environmentIntensity{1.0f};
-        float _pad3{0.0f};
+        float maxPrefilterMip{0.0f};
         float _pad4{0.0f};
         glm::mat4 inverseViewProjection{1.0f};
         float exposure{1.0f};
@@ -60,7 +61,7 @@ public:
         uint32_t materialShadingModel{0};
         float materialNormalScale{1.0f};
         float materialOcclusionStrength{1.0f};
-        float _pad0{0.0f};
+        uint32_t materialHasNormalMap{0};
         float _pad1{0.0f};
     };
 
@@ -113,15 +114,17 @@ private:
     };
 
     struct EnvironmentGpuResource {
-        rhi::TextureHandle texture{};
-        rhi::TextureViewHandle view{};
-        rhi::SamplerHandle sampler{};
-        rhi::TextureHandle irradiance_texture{};
-        rhi::TextureViewHandle irradiance_view{};
-        rhi::SamplerHandle irradiance_sampler{};
-        rhi::TextureHandle prefilter_texture{};
-        rhi::TextureViewHandle prefilter_view{};
-        rhi::SamplerHandle prefilter_sampler{};
+        TextureGpuResource environment{};
+        TextureGpuResource irradiance{};
+        TextureGpuResource prefilter{};
+        uint32_t environment_size{0};
+        uint32_t environment_mip_count{0};
+        uint32_t irradiance_size{0};
+        uint32_t prefilter_size{0};
+        uint32_t prefilter_mip_count{0};
+        std::array<rhi::TextureViewHandle, 6> environment_face_views{};
+        std::array<rhi::TextureViewHandle, 6> irradiance_face_views{};
+        std::vector<rhi::TextureViewHandle> prefilter_face_views;
     };
 
     struct MaterialTextureKey {
@@ -159,10 +162,7 @@ private:
     const TextureGpuResource& getOrCreateTextureGpuResource(asset::AssetHandle handle, FallbackTexture fallback);
     const TextureGpuResource& getOrCreateFallbackTexture(FallbackTexture fallback);
     const MaterialGpuResource& getOrCreateMaterialGpuResource(const interface::MaterialParameters& parameters);
-    const EnvironmentGpuResource* getOrCreateEnvironmentGpuResource(asset::AssetHandle handle,
-                                                                    const std::filesystem::path& environment_cube_path,
-                                                                    const std::filesystem::path& irradiance_cube_path,
-                                                                    const std::filesystem::path& prefilter_cube_path);
+    const EnvironmentGpuResource* getOrCreateEnvironmentGpuResource(asset::AssetHandle handle);
     void createBlackEnvironmentGpuResource();
     void createBrdfLutResource();
     void updateEnvironmentBindGroup(const EnvironmentGpuResource& resource);
@@ -175,19 +175,26 @@ private:
     rhi::CommandListHandle m_command_list{};
     rhi::CommandList* m_cmd{nullptr};
     rhi::CommandListHandle m_upload_command_list{};
+    rhi::CommandListHandle m_compute_command_list{};
+    rhi::CommandList* m_compute_cmd{nullptr};
 
     rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_material_texture_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_environment_bind_group_layout{};
+    rhi::BindGroupLayoutHandle m_environment_compute_bind_group_layout{};
 
     rhi::PipelineLayoutHandle m_geometry_pipeline_layout{};
     rhi::PipelineLayoutHandle m_lighting_pipeline_layout{};
     rhi::PipelineLayoutHandle m_skybox_pipeline_layout{};
+    rhi::PipelineLayoutHandle m_environment_compute_pipeline_layout{};
     rhi::PipelineHandle m_geometry_pipeline{};
     rhi::PipelineHandle m_lighting_pipeline{};
     rhi::PipelineHandle m_skybox_pipeline{};
     rhi::PipelineHandle m_line_pipeline{};
+    rhi::PipelineHandle m_environment_cubemap_pipeline{};
+    rhi::PipelineHandle m_environment_irradiance_pipeline{};
+    rhi::PipelineHandle m_environment_prefilter_pipeline{};
 
     rhi::BufferHandle m_frameUniformBuffer{};
     rhi::BufferHandle m_objectUniformBuffer{};

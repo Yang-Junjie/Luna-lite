@@ -51,6 +51,7 @@ vec3 skyDirection(vec2 uv)
 
 void main()
 {
-    vec3 color = texture(uEnvironmentMap, skyDirection(vUV)).rgb * environmentIntensity;
+    vec3 direction = skyDirection(vUV);
+    vec3 color = textureLod(uEnvironmentMap, direction, 0.0).rgb * environmentIntensity;
     outColor = vec4(toDisplayColor(color), 1.0);
 }

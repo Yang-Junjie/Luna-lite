@@ -1,55 +1,25 @@
-#include "../asset/asset_cache.h"
 #include "../asset/asset_database.h"
-#include "../asset/asset_manager.h"
 #include "../core/log.h"
 #include "../renderer/interface/model.h"
 #include "../renderer/interface/renderer.h"
 #include "components.h"
 #include "scene_renderer.h"
 
-#include <filesystem>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/matrix.hpp>
-#include <string>
-#include <yaml-cpp/yaml.h>
 
 namespace lunalite::scene {
 namespace {
-struct EnvironmentArtifactPaths {
-    std::filesystem::path environment_cube;
-    std::filesystem::path irradiance_cube;
-    std::filesystem::path prefilter_cube;
-};
-
-std::filesystem::path resolveArtifactPath(const YAML::Node& artifacts, const char* key)
+glm::vec3 directionalLightDirection(const TransformComponent& transform)
 {
-    const auto path = artifacts ? artifacts[key].as<std::string>("") : "";
-    return path.empty() ? std::filesystem::path{} : asset::cache::resolveProjectPath(path);
-}
-
-EnvironmentArtifactPaths resolveEnvironmentArtifacts(asset::AssetHandle handle)
-{
-    if (!handle.isValid()) {
-        return {};
+    const auto direction = transform.rotation * glm::vec3{0.0f, -1.0f, 0.0f};
+    const auto length = glm::length(direction);
+    if (length <= 0.0001f) {
+        return glm::vec3{0.0f, -1.0f, 0.0f};
     }
 
-    const auto* metadata = asset::AssetManager::get().getMetadata(handle);
-    if (metadata == nullptr) {
-        return {};
-    }
-
-    const auto environment = metadata->SpecializedConfig["Environment"];
-    if (!environment || environment["Type"].as<std::string>("") != "EquirectangularHDR") {
-        return {};
-    }
-
-    const auto artifacts = environment["Artifacts"];
-    return EnvironmentArtifactPaths{
-        .environment_cube = resolveArtifactPath(artifacts, "EnvironmentCube"),
-        .irradiance_cube = resolveArtifactPath(artifacts, "IrradianceCube"),
-        .prefilter_cube = resolveArtifactPath(artifacts, "PrefilterCube"),
-    };
+    return direction / length;
 }
 } // namespace
 
@@ -131,18 +101,16 @@ void SceneRenderer::renderScene(const Scene& scene,
 {
     renderer::interface::RenderLighting lighting{};
     lighting.environment_map = scene.getSettings().environment_map;
-    const auto environmentArtifacts = resolveEnvironmentArtifacts(scene.getSettings().environment_map);
-    lighting.environment_cube = environmentArtifacts.environment_cube;
-    lighting.environment_irradiance_cube = environmentArtifacts.irradiance_cube;
-    lighting.environment_prefilter_cube = environmentArtifacts.prefilter_cube;
     lighting.environment_intensity = scene.getSettings().environment_intensity;
     {
-        const auto lightView = scene.getRegistry().view<const DirectionalLightComponent>();
-        if (!lightView.empty()) {
-            const auto& light = lightView.get<const DirectionalLightComponent>(*lightView.begin());
+        const auto lightView = scene.getRegistry().view<const TransformComponent, const DirectionalLightComponent>();
+        for (const auto entity : lightView) {
+            const auto& transform = lightView.get<const TransformComponent>(entity);
+            const auto& light = lightView.get<const DirectionalLightComponent>(entity);
             lighting.directional_light_count = 1;
-            lighting.directional_light.direction = light.direction;
+            lighting.directional_light.direction = directionalLightDirection(transform);
             lighting.directional_light.radiance = light.color * light.intensity;
+            break;
         }
     }
 

@@ -1,0 +1,99 @@
+Scene: test
+Settings:
+  EnvironmentMap: 12342259277423478970
+  EnvironmentIntensity: 1
+Entities:
+  - Entity: 4
+    TagComponent:
+      Tag: stanford-bunny
+    TransformComponent:
+      Translation:
+        - 0
+        - 1.8
+        - 0
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 8
+        - 8
+        - 8
+    ModelComponent:
+      Model: 15330008245417503354
+  - Entity: 3
+    TagComponent:
+      Tag: Plane
+    TransformComponent:
+      Translation:
+        - 0
+        - -2
+        - 0
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 6.2
+        - 0
+        - 8.7
+    ModelComponent:
+      Model: 5500388562279810050
+  - Entity: 5
+    TagComponent:
+      Tag: EnvironmentTest
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 0
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    ModelComponent:
+      Model: 9118122717863839465
+  - Entity: 1
+    TagComponent:
+      Tag: DamagedHelmet
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 0
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    ModelComponent:
+      Model: 3471539551734178031
+  - Entity: 0
+    TagComponent:
+      Tag: ""
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 0
+      Rotation:
+        - 0
+        - -0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    DirectionalLightComponent:
+      Color:
+        - 1
+        - 1
+        - 1
+      Intensity: 1

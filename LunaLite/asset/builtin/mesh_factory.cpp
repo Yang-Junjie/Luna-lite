@@ -1,3 +1,4 @@
+#include "../../renderer/interface/tangent_space.h"
 #include "builtin_assets.h"
 #include "mesh_factory.h"
 
@@ -53,6 +54,7 @@ std::shared_ptr<renderer::interface::Mesh> MeshFactory::createCube()
 
     renderer::interface::SubMesh submesh;
     submesh.name = "Cube";
+    renderer::interface::generateTangentBasis(vertices, indices);
     submesh.setVertices(std::move(vertices));
     submesh.setIndices(std::move(indices));
 
@@ -74,8 +76,10 @@ std::shared_ptr<renderer::interface::Mesh> MeshFactory::createPlane()
 
     renderer::interface::SubMesh submesh;
     submesh.name = "Plane";
+    const std::vector<uint32_t> indices{0, 1, 2, 2, 3, 0};
+    renderer::interface::generateTangentBasis(vertices, indices);
     submesh.setVertices(std::move(vertices));
-    submesh.setIndices({0, 1, 2, 2, 3, 0});
+    submesh.setIndices(indices);
 
     auto mesh = std::make_shared<renderer::interface::Mesh>();
     mesh->handle = builtin::planeMeshHandle();

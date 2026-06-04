@@ -7,15 +7,6 @@ target_link_libraries(AssetManagerTest
         LunaLite
 )
 
-add_executable(LunaCubeTest
-    lunacube_test.cpp
-)
-
-target_link_libraries(LunaCubeTest
-    PRIVATE
-        LunaLite
-)
-
 add_executable(SceneSerializerTest
     scene_serializer_test.cpp
 )

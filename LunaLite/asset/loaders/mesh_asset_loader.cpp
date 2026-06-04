@@ -1,19 +1,19 @@
 #include "../../core/log.h"
 #include "../../project/project_manager.h"
+#include "../../renderer/interface/tangent_space.h"
 #include "mesh_asset_loader.h"
 
+#include <cctype>
 #include <cstdint>
 
 #include <algorithm>
-#include <cctype>
+#include <fastgltf/core.hpp>
+#include <fastgltf/tools.hpp>
+#include <fastgltf/types.hpp>
 #include <glm/geometric.hpp>
 #include <memory>
 #include <numeric>
 #include <string>
-
-#include <fastgltf/core.hpp>
-#include <fastgltf/tools.hpp>
-#include <fastgltf/types.hpp>
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -60,8 +60,8 @@ std::string normalizeExtension(std::string extension)
 
 fastgltf::Expected<fastgltf::Asset> loadGltfAsset(const std::filesystem::path& path)
 {
-    static constexpr auto extensions = fastgltf::Extensions::KHR_materials_emissive_strength |
-                                       fastgltf::Extensions::KHR_materials_unlit;
+    static constexpr auto extensions =
+        fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit;
     static constexpr auto options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
                                     fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices;
 
@@ -82,6 +82,11 @@ glm::vec3 toVec3(fastgltf::math::fvec3 value)
 glm::vec2 toVec2(fastgltf::math::fvec2 value)
 {
     return {value.x(), value.y()};
+}
+
+glm::vec4 toVec4(fastgltf::math::fvec4 value)
+{
+    return {value.x(), value.y(), value.z(), value.w()};
 }
 
 void normalizeGeneratedNormals(std::vector<renderer::interface::Vertex>& vertices)
@@ -183,6 +188,7 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetM
         renderer::interface::SubMesh submesh;
         submesh.name = std::move(builder.name);
         submesh.material_slot = builder.material_slot;
+        renderer::interface::generateTangentBasis(builder.vertices, builder.indices);
         submesh.setVertices(std::move(builder.vertices));
         submesh.setIndices(std::move(builder.indices));
         submeshes.push_back(std::move(submesh));
@@ -208,7 +214,8 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadGltf(const Asset
 
     auto loadedAsset = loadGltfAsset(path);
     if (!loadedAsset) {
-        LUNA_CORE_ERROR("Failed to load glTF file '{}': {}", path.string(), fastgltf::getErrorMessage(loadedAsset.error()));
+        LUNA_CORE_ERROR(
+            "Failed to load glTF file '{}': {}", path.string(), fastgltf::getErrorMessage(loadedAsset.error()));
         return nullptr;
     }
 
@@ -218,8 +225,8 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadGltf(const Asset
 
     for (size_t meshIndex = 0; meshIndex < asset.meshes.size(); ++meshIndex) {
         const auto& gltfMesh = asset.meshes[meshIndex];
-        const auto gltfMeshName = gltfMesh.name.empty() ? meshName + "_Mesh" + std::to_string(meshIndex)
-                                                        : std::string{gltfMesh.name};
+        const auto gltfMeshName =
+            gltfMesh.name.empty() ? meshName + "_Mesh" + std::to_string(meshIndex) : std::string{gltfMesh.name};
 
         for (size_t primitiveIndex = 0; primitiveIndex < gltfMesh.primitives.size(); ++primitiveIndex) {
             const auto& primitive = gltfMesh.primitives[primitiveIndex];
@@ -266,6 +273,22 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadGltf(const Asset
                     });
             }
 
+            bool hasTangents = false;
+            std::vector<float> tangentSigns(vertices.size(), 1.0f);
+            if (const auto tangentAttribute = primitive.findAttribute("TANGENT");
+                tangentAttribute != primitive.attributes.cend()) {
+                const auto& tangentAccessor = asset.accessors[tangentAttribute->accessorIndex];
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(
+                    asset, tangentAccessor, [&](fastgltf::math::fvec4 tangent, std::size_t index) {
+                        if (index < vertices.size()) {
+                            const glm::vec4 tangentWithSign = toVec4(tangent);
+                            vertices[index].tangent = glm::vec3{tangentWithSign};
+                            tangentSigns[index] = tangentWithSign.w < 0.0f ? -1.0f : 1.0f;
+                        }
+                    });
+                hasTangents = true;
+            }
+
             std::vector<uint32_t> indices;
             if (primitive.indicesAccessor) {
                 const auto& indexAccessor = asset.accessors[*primitive.indicesAccessor];
@@ -301,6 +324,15 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadGltf(const Asset
                     vertices[i2].normal += normal;
                 }
                 normalizeGeneratedNormals(vertices);
+            }
+
+            if (hasTangents) {
+                for (size_t i = 0; i < vertices.size(); ++i) {
+                    vertices[i].bitangent = glm::cross(vertices[i].normal, vertices[i].tangent) * tangentSigns[i];
+                }
+                renderer::interface::orthonormalizeTangentBasis(vertices);
+            } else {
+                renderer::interface::generateTangentBasis(vertices, indices);
             }
 
             renderer::interface::SubMesh submesh;

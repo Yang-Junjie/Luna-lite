@@ -15,7 +15,8 @@ public:
                                     const tinyobj::material_t& material) const;
     void writeGltfMaterialDefinition(const std::filesystem::path& materialPath,
                                      const fastgltf::Material& material,
-                                     const std::unordered_map<size_t, AssetHandle>& textureHandles) const;
+                                     const std::unordered_map<size_t, AssetHandle>& textureHandles,
+                                     bool overwriteExisting = false) const;
 };
 
 } // namespace lunalite::asset

@@ -3,6 +3,8 @@
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUV;
+layout(location = 3) in vec3 aTangent;
+layout(location = 4) in vec3 aBitangent;
 
 layout(std140, binding = 0) uniform FrameUniforms {
     mat4 view;
@@ -35,12 +37,14 @@ layout(std140, binding = 1) uniform ObjectUniforms {
     uint materialShadingModel;
     float materialNormalScale;
     float materialOcclusionStrength;
-    float _padObject0;
+    uint materialHasNormalMap;
     float _padObject1;
 };
 
 out vec3 vWorldPos;
 out vec3 vNormal;
+out vec3 vTangent;
+out vec3 vBitangent;
 out vec2 vUV;
 
 void main()
@@ -48,6 +52,8 @@ void main()
     vec4 worldPosition = model * vec4(aPosition, 1.0);
     vWorldPos = worldPosition.xyz;
     vNormal = normalize(mat3(normalMatrix) * aNormal);
+    vTangent = mat3(model) * aTangent;
+    vBitangent = mat3(model) * aBitangent;
     vUV = aUV;
     gl_Position = projection * view * worldPosition;
 }

@@ -11,7 +11,7 @@ layout(std140, binding = 0) uniform FrameUniforms {
     float _pad2;
     uint directionalLightCount;
     float environmentIntensity;
-    float _pad3;
+    float maxPrefilterMip;
     float _pad4;
     mat4 inverseViewProjection;
     float exposure;
@@ -33,7 +33,6 @@ in vec2 vUV;
 out vec4 outColor;
 
 const float PI = 3.14159265359;
-const float MAX_REFLECTION_LOD = 7.0;
 
 float saturate(float value)
 {
@@ -72,12 +71,6 @@ vec3 fresnelSchlick(float VoH, vec3 F0)
 {
     float Fc = pow(1.0 - VoH, 5.0);
     return F0 + (vec3(1.0) - F0) * Fc;
-}
-
-vec3 fresnelSchlickRoughness(float NoV, vec3 F0, float roughness)
-{
-    float Fc = pow(1.0 - NoV, 5.0);
-    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * Fc;
 }
 
 vec3 toneMapACES(vec3 color)
@@ -127,16 +120,14 @@ void main()
     vec3 diffuseColor = baseColor * (1.0 - metallic);
     vec3 color = vec3(0.0);
 
-    vec3 ambientF = fresnelSchlickRoughness(NoV, F0, roughness);
-    vec3 ambientDiffuseWeight = (vec3(1.0) - ambientF) * (1.0 - metallic);
     vec3 irradiance = texture(uIrradianceMap, N).rgb * environmentIntensity;
-    vec3 diffuseIBL = irradiance * baseColor;
+    vec3 diffuseIBL = irradiance * diffuseColor;
     vec3 reflection = reflect(-V, N);
-    vec3 prefilteredColor = textureLod(uPrefilterMap, reflection, roughness * MAX_REFLECTION_LOD).rgb *
-                            environmentIntensity;
+    float prefilterLod = clamp(roughness * maxPrefilterMip, 0.0, maxPrefilterMip);
+    vec3 prefilteredColor = textureLod(uPrefilterMap, reflection, prefilterLod).rgb * environmentIntensity;
     vec2 brdf = texture(uBrdfLut, vec2(NoV, roughness)).rg;
-    vec3 specularIBL = prefilteredColor * (ambientF * brdf.x + brdf.y);
-    color += (ambientDiffuseWeight * diffuseIBL + specularIBL) * occlusion;
+    vec3 specularIBL = prefilteredColor * (F0 * brdf.x + brdf.y);
+    color += (diffuseIBL + specularIBL) * occlusion;
 
     if (directionalLightCount > 0u) {
         vec3 L = normalize(-lightDir);

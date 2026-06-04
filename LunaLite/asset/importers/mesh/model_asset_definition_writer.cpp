@@ -6,29 +6,51 @@
 #include <yaml-cpp/yaml.h>
 
 namespace lunalite::asset {
-
-void ModelAssetDefinitionWriter::writeSingleMeshDefinition(const std::filesystem::path& modelPath,
-                                                           AssetHandle meshHandle,
-                                                           const std::vector<AssetHandle>& materialHandles) const
+namespace {
+YAML::Node matrixNode(const glm::mat4& matrix)
 {
-    if (std::filesystem::exists(modelPath)) {
+    YAML::Node node{YAML::NodeType::Sequence};
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            node.push_back(matrix[column][row]);
+        }
+    }
+    return node;
+}
+} // namespace
+
+void ModelAssetDefinitionWriter::writeDefinition(const std::filesystem::path& modelPath,
+                                                 const std::vector<ModelMeshDefinition>& meshes,
+                                                 bool overwriteExisting) const
+{
+    if (!overwriteExisting && std::filesystem::exists(modelPath)) {
         return;
     }
 
-    YAML::Node modelMesh;
-    modelMesh["Mesh"] = static_cast<uint64_t>(meshHandle);
+    YAML::Node meshNodes{YAML::NodeType::Sequence};
+    for (const auto& meshDefinition : meshes) {
+        YAML::Node modelMesh;
+        modelMesh["Mesh"] = static_cast<uint64_t>(meshDefinition.mesh);
+        modelMesh["Transform"] = matrixNode(meshDefinition.transform);
 
-    YAML::Node materials{YAML::NodeType::Sequence};
-    for (const auto materialHandle : materialHandles) {
-        materials.push_back(static_cast<uint64_t>(materialHandle));
+        if (meshDefinition.submesh_start != 0) {
+            modelMesh["SubMeshStart"] = meshDefinition.submesh_start;
+        }
+        if (meshDefinition.submesh_count != std::numeric_limits<uint32_t>::max()) {
+            modelMesh["SubMeshCount"] = meshDefinition.submesh_count;
+        }
+
+        YAML::Node materials{YAML::NodeType::Sequence};
+        for (const auto materialHandle : meshDefinition.materials) {
+            materials.push_back(static_cast<uint64_t>(materialHandle));
+        }
+        modelMesh["Materials"] = materials;
+
+        meshNodes.push_back(modelMesh);
     }
-    modelMesh["Materials"] = materials;
-
-    YAML::Node meshes{YAML::NodeType::Sequence};
-    meshes.push_back(modelMesh);
 
     YAML::Node model;
-    model["Meshes"] = meshes;
+    model["Meshes"] = meshNodes;
 
     YAML::Node root;
     root["Model"] = model;
@@ -39,6 +61,13 @@ void ModelAssetDefinitionWriter::writeSingleMeshDefinition(const std::filesystem
     }
 
     out << root;
+}
+
+void ModelAssetDefinitionWriter::writeSingleMeshDefinition(const std::filesystem::path& modelPath,
+                                                           AssetHandle meshHandle,
+                                                           const std::vector<AssetHandle>& materialHandles) const
+{
+    writeDefinition(modelPath, {ModelMeshDefinition{.mesh = meshHandle, .materials = materialHandles}});
 }
 
 } // namespace lunalite::asset

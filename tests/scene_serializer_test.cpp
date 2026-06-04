@@ -48,7 +48,6 @@ int main()
     {
         auto entity = scene.createEntity();
         auto& light = scene.addComponent<scene::DirectionalLightComponent>(entity);
-        light.direction = {0.0f, -1.0f, 0.0f};
         light.color = {0.7f, 0.8f, 0.9f};
         light.intensity = 3.0f;
     }

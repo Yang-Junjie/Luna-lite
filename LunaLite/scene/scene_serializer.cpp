@@ -145,7 +145,6 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         if (registry.all_of<DirectionalLightComponent>(entity)) {
             const auto& light = registry.get<DirectionalLightComponent>(entity);
             YAML::Node node;
-            node["Direction"] = writeVec3(light.direction);
             node["Color"] = writeVec3(light.color);
             node["Intensity"] = light.intensity;
             serializedEntity["DirectionalLightComponent"] = node;
@@ -250,7 +249,6 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
 
             if (const auto lightNode = serializedEntity["DirectionalLightComponent"]) {
                 auto& light = scene.addComponent<DirectionalLightComponent>(entity);
-                light.direction = readVec3(lightNode["Direction"], glm::vec3{0.0f, -1.0f, 0.0f});
                 light.color = readVec3(lightNode["Color"], glm::vec3{1.0f});
                 light.intensity = lightNode["Intensity"].as<float>(1.0f);
             }
