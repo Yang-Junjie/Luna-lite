@@ -12,6 +12,9 @@ std::optional<std::vector<std::filesystem::path>>
                                        const AssetImporterRegistry& importers) const
 {
     std::vector<std::filesystem::path> assetPaths;
+    size_t scannedFileCount = 0;
+    size_t metadataFileCount = 0;
+    size_t unsupportedFileCount = 0;
 
     std::error_code error;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(assetsRoot, error)) {
@@ -20,17 +23,31 @@ std::optional<std::vector<std::filesystem::path>>
             return std::nullopt;
         }
 
-        if (!entry.is_regular_file() || AssetMetadataStore::isMetadataFile(entry.path())) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+
+        ++scannedFileCount;
+        if (AssetMetadataStore::isMetadataFile(entry.path())) {
+            ++metadataFileCount;
             continue;
         }
 
         if (importers.findImporter(entry.path()) == nullptr) {
+            ++unsupportedFileCount;
             continue;
         }
 
+        LUNA_CORE_DEBUG("Found importable asset source '{}'", entry.path().string());
         assetPaths.push_back(entry.path());
     }
 
+    LUNA_CORE_DEBUG("Scanned assets directory '{}' (files: {}, metadata: {}, unsupported: {}, importable: {})",
+                    assetsRoot.string(),
+                    scannedFileCount,
+                    metadataFileCount,
+                    unsupportedFileCount,
+                    assetPaths.size());
     return assetPaths;
 }
 

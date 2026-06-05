@@ -199,9 +199,25 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadObj(const AssetM
         return nullptr;
     }
 
+    size_t vertexCount = 0;
+    size_t indexCount = 0;
+    for (const auto& submesh : submeshes) {
+        vertexCount += submesh.getVertices().size();
+        indexCount += submesh.getIndices().size();
+    }
+
     auto mesh = std::make_shared<renderer::interface::Mesh>();
     mesh->handle = metadata.Handle;
     mesh->setSubMeshes(std::move(submeshes));
+    LUNA_CORE_DEBUG(
+        "Loaded OBJ mesh '{}' (shapes: {}, materials: {}, submeshes: {}, vertices: {}, indices: {}, handle {})",
+        path.string(),
+        shapes.size(),
+        materials.size(),
+        mesh->getSubMeshes().size(),
+        vertexCount,
+        indexCount,
+        metadata.Handle.toString());
 
     return mesh;
 }
@@ -349,9 +365,25 @@ std::shared_ptr<renderer::interface::Mesh> MeshAssetLoader::loadGltf(const Asset
         return nullptr;
     }
 
+    size_t vertexCount = 0;
+    size_t indexCount = 0;
+    for (const auto& submesh : submeshes) {
+        vertexCount += submesh.getVertices().size();
+        indexCount += submesh.getIndices().size();
+    }
+
     auto mesh = std::make_shared<renderer::interface::Mesh>();
     mesh->handle = metadata.Handle;
     mesh->setSubMeshes(std::move(submeshes));
+    LUNA_CORE_DEBUG(
+        "Loaded glTF mesh '{}' (meshes: {}, materials: {}, submeshes: {}, vertices: {}, indices: {}, handle {})",
+        path.string(),
+        asset.meshes.size(),
+        asset.materials.size(),
+        mesh->getSubMeshes().size(),
+        vertexCount,
+        indexCount,
+        metadata.Handle.toString());
     return mesh;
 }
 

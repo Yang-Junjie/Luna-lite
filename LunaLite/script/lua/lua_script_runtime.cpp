@@ -72,6 +72,7 @@ void LuaScriptRuntime::onRuntimeStart(scene::Scene& scene)
     }
 
     const auto view = scene.getRegistry().view<scene::ScriptComponent>();
+    size_t enabledScriptCount = 0;
     for (const auto entity : view) {
         const auto& scriptComponent = view.get<scene::ScriptComponent>(entity);
         for (const auto& binding : scriptComponent.scripts) {
@@ -79,6 +80,7 @@ void LuaScriptRuntime::onRuntimeStart(scene::Scene& scene)
                 continue;
             }
 
+            ++enabledScriptCount;
             const auto* metadata = asset::AssetManager::get().getMetadata(binding.script);
             if (metadata == nullptr || metadata->Type != asset::AssetType::Script) {
                 LUNA_CORE_ERROR("Failed to load Lua script: invalid script asset {}", binding.script.toString());
@@ -124,6 +126,10 @@ void LuaScriptRuntime::onRuntimeStart(scene::Scene& scene)
             m_instances.push_back(std::move(instance));
         }
     }
+
+    LUNA_CORE_INFO("Lua runtime started with {} script instance(s) from {} enabled binding(s)",
+                   m_instances.size(),
+                   enabledScriptCount);
 }
 
 void LuaScriptRuntime::onRuntimeUpdate(core::Timestep dt)
@@ -148,6 +154,7 @@ void LuaScriptRuntime::onRuntimeUpdate(core::Timestep dt)
 
 void LuaScriptRuntime::onRuntimeStop()
 {
+    const auto instanceCount = m_instances.size();
     for (auto& instance : m_instances) {
         if (instance.entity.scene == nullptr || !instance.entity.scene->isValidEntity(instance.entity.entity)) {
             continue;
@@ -164,6 +171,7 @@ void LuaScriptRuntime::onRuntimeStop()
     }
 
     m_instances.clear();
+    LUNA_CORE_INFO("Lua runtime stopped after {} script instance(s)", instanceCount);
 }
 
 void LuaScriptRuntime::registerBindings()

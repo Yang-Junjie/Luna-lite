@@ -1027,6 +1027,11 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateTextureGpuResource(asse
         return getOrCreateFallbackTexture(fallback);
     }
 
+    LUNA_CORE_DEBUG("Created GPU texture resource for asset {} ({}x{}, mip levels: {})",
+                    handle.toString(),
+                    texture->getWidth(),
+                    texture->getHeight(),
+                    mipLevels);
     return m_texture_gpu_cache.emplace(handle, resource).first->second;
 }
 
@@ -1069,6 +1074,8 @@ const Renderer::TextureGpuResource& Renderer::getOrCreateFallbackTexture(Fallbac
                                       });
     }
 
+    LUNA_CORE_DEBUG("Created {} fallback GPU texture",
+                    fallback == FallbackTexture::FlatNormal ? "flat normal" : "white");
     return resource;
 }
 
@@ -1105,6 +1112,11 @@ const Renderer::MaterialGpuResource&
             },
     });
 
+    const auto textureSlotCount =
+        static_cast<unsigned>(key.albedo.isValid()) + static_cast<unsigned>(key.normal.isValid()) +
+        static_cast<unsigned>(key.metallic_roughness.isValid()) + static_cast<unsigned>(key.occlusion.isValid()) +
+        static_cast<unsigned>(key.emission.isValid());
+    LUNA_CORE_DEBUG("Created material GPU texture bind group (texture slots: {})", textureSlotCount);
     return m_material_gpu_cache.emplace(key, MaterialGpuResource{.bind_group = bindGroup}).first->second;
 }
 
@@ -1132,6 +1144,8 @@ const Renderer::EnvironmentGpuResource* Renderer::getOrCreateEnvironmentGpuResou
 
         destroyEnvironmentGpuResource(it->second);
         m_environment_gpu_cache.erase(it);
+        LUNA_CORE_DEBUG("Rebuilding environment GPU resource for asset {} because import settings changed",
+                        handle.toString());
     }
 
     const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
@@ -1360,6 +1374,14 @@ const Renderer::EnvironmentGpuResource* Renderer::getOrCreateEnvironmentGpuResou
     m_device->submit(m_compute_command_list);
     m_device->destroyBindGroup(computeBindGroup);
 
+    LUNA_CORE_DEBUG("Generated environment GPU resource for asset {} (cube: {}px/{} mips, irradiance: {}px, prefilter: "
+                    "{}px/{} mips)",
+                    handle.toString(),
+                    resource.environment_size,
+                    resource.environment_mip_count,
+                    resource.irradiance_size,
+                    resource.prefilter_size,
+                    resource.prefilter_mip_count);
     return &m_environment_gpu_cache.emplace(handle, std::move(resource)).first->second;
 }
 
@@ -2197,6 +2219,7 @@ Renderer::MeshGpuData* Renderer::getOrCreateSubMeshGpuData(const interface::Mesh
 
     if (!gpu_mesh.vertex_buffer || gpu_mesh.vertex_buffer_capacity < vertex_buffer_size ||
         (vertex_changed && !gpu_mesh.vertex_buffer_dynamic)) {
+        const bool creatingVertexBuffer = !gpu_mesh.vertex_buffer;
         if (!gpu_mesh.vertex_buffer) {
             gpu_mesh.vertex_buffer_capacity = vertex_buffer_size;
             gpu_mesh.vertex_buffer_dynamic = false;
@@ -2214,15 +2237,27 @@ Renderer::MeshGpuData* Renderer::getOrCreateSubMeshGpuData(const interface::Mesh
         });
         LUNA_ASSERT(gpu_mesh.vertex_buffer, "Failed to create mesh vertex buffer.");
         gpu_mesh.uploaded_vertex_version = 0;
+        LUNA_CORE_DEBUG("{} mesh vertex buffer for asset {} submesh {} (vertices: {}, capacity: {} bytes)",
+                        creatingVertexBuffer ? "Created" : "Recreated",
+                        mesh.handle.toString(),
+                        submesh_index,
+                        vertices.size(),
+                        gpu_mesh.vertex_buffer_capacity);
     }
 
     if (gpu_mesh.uploaded_vertex_version != vertex_version) {
         m_device->updateBuffer(gpu_mesh.vertex_buffer, 0, vertices.data(), vertex_buffer_size);
         gpu_mesh.uploaded_vertex_version = vertex_version;
+        LUNA_CORE_DEBUG("Uploaded mesh vertices for asset {} submesh {} (vertices: {}, version: {})",
+                        mesh.handle.toString(),
+                        submesh_index,
+                        vertices.size(),
+                        vertex_version);
     }
 
     if (!indices.empty() && (!gpu_mesh.index_buffer || gpu_mesh.index_buffer_capacity < index_buffer_size ||
                              (index_changed && !gpu_mesh.index_buffer_dynamic))) {
+        const bool creatingIndexBuffer = !gpu_mesh.index_buffer;
         if (!gpu_mesh.index_buffer) {
             gpu_mesh.index_buffer_capacity = index_buffer_size;
             gpu_mesh.index_buffer_dynamic = false;
@@ -2240,17 +2275,31 @@ Renderer::MeshGpuData* Renderer::getOrCreateSubMeshGpuData(const interface::Mesh
         });
         LUNA_ASSERT(gpu_mesh.index_buffer, "Failed to create mesh index buffer.");
         gpu_mesh.uploaded_index_version = 0;
+        LUNA_CORE_DEBUG("{} mesh index buffer for asset {} submesh {} (indices: {}, capacity: {} bytes)",
+                        creatingIndexBuffer ? "Created" : "Recreated",
+                        mesh.handle.toString(),
+                        submesh_index,
+                        indices.size(),
+                        gpu_mesh.index_buffer_capacity);
     }
 
     if (!indices.empty() && gpu_mesh.uploaded_index_version != index_version) {
         m_device->updateBuffer(gpu_mesh.index_buffer, 0, indices.data(), index_buffer_size);
         gpu_mesh.uploaded_index_version = index_version;
+        LUNA_CORE_DEBUG("Uploaded mesh indices for asset {} submesh {} (indices: {}, version: {})",
+                        mesh.handle.toString(),
+                        submesh_index,
+                        indices.size(),
+                        index_version);
     } else if (indices.empty() && gpu_mesh.index_buffer) {
         m_device->destroyBuffer(gpu_mesh.index_buffer);
         gpu_mesh.index_buffer = {};
         gpu_mesh.index_buffer_dynamic = false;
         gpu_mesh.index_buffer_capacity = 0;
         gpu_mesh.uploaded_index_version = 0;
+        LUNA_CORE_DEBUG("Destroyed mesh index buffer for asset {} submesh {} because it has no indices",
+                        mesh.handle.toString(),
+                        submesh_index);
     }
 
     gpu_mesh.vertex_count = static_cast<uint32_t>(vertices.size());

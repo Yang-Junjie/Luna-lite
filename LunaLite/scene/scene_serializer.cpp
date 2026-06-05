@@ -177,6 +177,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         return false;
     }
 
+    LUNA_CORE_INFO("Serialized scene '{}' with {} entity/entities", scene_path.string(), sceneEntities.size());
     return true;
 }
 
@@ -254,6 +255,7 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             }
         }
 
+        LUNA_CORE_INFO("Deserialized scene '{}' with {} entity/entities", scene_path.string(), entities.size());
         return true;
     } catch (const YAML::Exception& exception) {
         LUNA_CORE_ERROR("Failed to deserialize scene '{}': {}", scene_path.string(), exception.what());

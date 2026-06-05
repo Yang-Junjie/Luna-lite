@@ -21,6 +21,7 @@ target_link_libraries(LunaLiteRenderer
 target_compile_definitions(LunaLiteRenderer
     PRIVATE
         LUNALITE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+        $<$<CONFIG:Debug>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG>
 )
 
 add_library(LunaLiteImGui
@@ -107,4 +108,9 @@ target_link_libraries(LunaLite
     PRIVATE
         glfw
         stb::stb
+)
+
+target_compile_definitions(LunaLite
+    PUBLIC
+        $<$<CONFIG:Debug>:SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG>
 )

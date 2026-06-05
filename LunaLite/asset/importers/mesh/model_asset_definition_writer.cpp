@@ -1,3 +1,4 @@
+#include "../../../core/log.h"
 #include "model_asset_definition_writer.h"
 
 #include <cstdint>
@@ -29,6 +30,8 @@ void ModelAssetDefinitionWriter::writeDefinition(const std::filesystem::path& mo
 
     YAML::Node meshNodes{YAML::NodeType::Sequence};
     for (const auto& meshDefinition : meshes) {
+        LUNA_ASSERT(meshDefinition.mesh.isValid(), "Model definitions require valid mesh handles.");
+
         YAML::Node modelMesh;
         modelMesh["Mesh"] = static_cast<uint64_t>(meshDefinition.mesh);
         modelMesh["Transform"] = matrixNode(meshDefinition.transform);
@@ -57,10 +60,14 @@ void ModelAssetDefinitionWriter::writeDefinition(const std::filesystem::path& mo
 
     std::ofstream out(modelPath);
     if (!out.is_open()) {
+        LUNA_CORE_ERROR("Failed to open model definition for writing: '{}'", modelPath.string());
         return;
     }
 
     out << root;
+    if (!out.good()) {
+        LUNA_CORE_ERROR("Failed to write model definition: '{}'", modelPath.string());
+    }
 }
 
 void ModelAssetDefinitionWriter::writeSingleMeshDefinition(const std::filesystem::path& modelPath,

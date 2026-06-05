@@ -1,3 +1,4 @@
+#include "../core/log.h"
 #include "../script/script_runtime.h"
 #include "components.h"
 #include "scene.h"
@@ -22,6 +23,7 @@ void Scene::destroyEntity(Entity entity)
 void Scene::clear()
 {
     if (m_script_runtime) {
+        LUNA_CORE_DEBUG("Stopping scene runtime before clearing scene");
         m_script_runtime->onRuntimeStop();
         m_script_runtime.reset();
     }
@@ -66,7 +68,14 @@ void Scene::copyFrom(const Scene& other)
 
 void Scene::onRuntimeStart()
 {
+    if (m_script_runtime) {
+        LUNA_CORE_WARN("Scene runtime was already running; restarting it");
+        m_script_runtime->onRuntimeStop();
+    }
+
     m_script_runtime = script::createScriptRuntime();
+    LUNA_ASSERT(m_script_runtime, "Failed to create script runtime.");
+    LUNA_CORE_INFO("Scene runtime started");
     m_script_runtime->onRuntimeStart(*this);
 }
 
@@ -87,6 +96,7 @@ void Scene::onRuntimeStop()
     if (m_script_runtime) {
         m_script_runtime->onRuntimeStop();
         m_script_runtime.reset();
+        LUNA_CORE_INFO("Scene runtime stopped");
     }
 }
 

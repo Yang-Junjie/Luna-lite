@@ -11,6 +11,7 @@ bool ProjectManager::loadProject(const std::filesystem::path& project_file_path)
 {
     m_project_file_path = std::filesystem::absolute(project_file_path);
     m_project_root_path = m_project_file_path->parent_path();
+    LUNA_CORE_INFO("Loading project from '{}'", m_project_file_path->string());
     return deserializeProject();
 }
 
@@ -44,6 +45,7 @@ bool ProjectManager::createProject(const std::filesystem::path& project_root_pat
     m_project_root_path = std::filesystem::absolute(project_root_path);
     m_project_file_path = *m_project_root_path / (info.name + ".lunaproj");
     m_project_info = info;
+    LUNA_CORE_INFO("Creating project '{}' at '{}'", info.name, m_project_root_path->string());
 
     std::error_code error;
     std::filesystem::create_directories(*m_project_root_path, error);
@@ -94,6 +96,7 @@ bool ProjectManager::serializeProject()
         return false;
     }
 
+    LUNA_CORE_INFO("Saved project '{}' to '{}'", m_project_info->name, m_project_file_path->string());
     return true;
 }
 
@@ -131,6 +134,11 @@ bool ProjectManager::deserializeProject()
         }
 
         m_project_info = info;
+        LUNA_CORE_INFO("Loaded project '{}' from '{}' (assets: '{}', start scene: '{}')",
+                       m_project_info->name,
+                       m_project_file_path->string(),
+                       m_project_info->assets_path.string(),
+                       m_project_info->start_scene.string());
         return true;
     } catch (const YAML::Exception& error) {
         LUNA_CORE_ERROR("Failed to deserialize project '{}': {}", m_project_file_path->string(), error.what());

@@ -140,6 +140,12 @@ std::shared_ptr<renderer::interface::Texture> TextureAssetLoader::load(const Ass
                            static_cast<uint32_t>(height),
                            renderer::interface::TextureFormat::RGBA32F,
                            std::move(pixels));
+        LUNA_CORE_DEBUG("Loaded HDR texture '{}' ({}x{}, source channels: {}, handle {})",
+                        path.string(),
+                        width,
+                        height,
+                        channels,
+                        metadata.Handle.toString());
         return texture;
     }
 
@@ -164,6 +170,12 @@ std::shared_ptr<renderer::interface::Texture> TextureAssetLoader::load(const Ass
                        static_cast<uint32_t>(height),
                        renderer::interface::TextureFormat::RGBA8_UNorm,
                        std::move(pixels));
+    LUNA_CORE_DEBUG("Loaded texture '{}' ({}x{}, source channels: {}, handle {})",
+                    path.string(),
+                    width,
+                    height,
+                    channels,
+                    metadata.Handle.toString());
     return texture;
 }
 

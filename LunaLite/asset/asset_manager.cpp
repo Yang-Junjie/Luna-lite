@@ -48,27 +48,47 @@ bool AssetManager::loadProjectAssets()
         return false;
     }
 
+    LUNA_CORE_INFO("Loading project assets from '{}'", assetsRoot.string());
     clear();
 
     if (!registerBuiltinAssets()) {
+        LUNA_CORE_ERROR("Failed to load project assets: built-in asset registration failed");
         return false;
     }
 
     const auto assetPaths = m_scanner.findImportableAssets(assetsRoot, m_importers);
     if (!assetPaths) {
+        LUNA_CORE_ERROR("Failed to load project assets: asset scan failed");
         return false;
     }
 
+    LUNA_CORE_DEBUG("Asset scan found {} importable source files", assetPaths->size());
     const auto importedMetadata = m_importers.importAll(*assetPaths, m_metadata);
     if (!importedMetadata) {
+        LUNA_CORE_ERROR("Failed to load project assets: asset import failed");
         return false;
     }
 
-    return m_metadata.registerAll(*importedMetadata) && m_loaders.loadAll(m_metadata.all());
+    if (!m_metadata.registerAll(*importedMetadata)) {
+        LUNA_CORE_ERROR("Failed to load project assets: metadata registration failed");
+        return false;
+    }
+
+    if (!m_loaders.loadAll(m_metadata.all())) {
+        LUNA_CORE_ERROR("Failed to load project assets: asset loading failed");
+        return false;
+    }
+
+    LUNA_CORE_INFO(
+        "Loaded project assets ({} source files, {} metadata entries)", assetPaths->size(), m_metadata.all().size());
+    return true;
 }
 
 void AssetManager::clear()
 {
+    if (!m_metadata.all().empty()) {
+        LUNA_CORE_DEBUG("Clearing {} asset metadata entries", m_metadata.all().size());
+    }
     m_metadata.clear();
     AssetDatabase::get().clear();
 }
@@ -107,6 +127,11 @@ bool AssetManager::registerBuiltinAssets()
         createBuiltinMetadata(builtin::cubeModelHandle(), AssetType::Model, "CubeModel", "Builtin/Models/Cube.model");
     const auto planeModelMetadata = createBuiltinMetadata(
         builtin::planeModelHandle(), AssetType::Model, "PlaneModel", "Builtin/Models/Plane.model");
+
+    LUNA_ASSERT(defaultMaterialMetadata.Handle.isValid() && errorMaterialMetadata.Handle.isValid() &&
+                    cubeMeshMetadata.Handle.isValid() && planeMeshMetadata.Handle.isValid() &&
+                    cubeModelMetadata.Handle.isValid() && planeModelMetadata.Handle.isValid(),
+                "Built-in asset handles must be valid.");
 
     if (!m_metadata.registerMetadata(defaultMaterialMetadata) || !m_metadata.registerMetadata(errorMaterialMetadata) ||
         !m_metadata.registerMetadata(cubeMeshMetadata) || !m_metadata.registerMetadata(planeMeshMetadata) ||

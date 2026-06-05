@@ -23,6 +23,11 @@ public:
 
     template <typename T> AssetHandle add(std::shared_ptr<T> asset)
     {
+        LUNA_ASSERT(asset, "Cannot add a null asset.");
+        if (!asset) {
+            LUNA_CORE_ERROR("Failed to add asset: null asset pointer");
+            return AssetHandle{0};
+        }
 
         if (!asset->handle.isValid()) {
             do {

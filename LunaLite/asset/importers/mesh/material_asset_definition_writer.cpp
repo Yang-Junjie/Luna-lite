@@ -1,3 +1,4 @@
+#include "../../../core/log.h"
 #include "material_asset_definition_writer.h"
 
 #include <cstdint>
@@ -41,10 +42,14 @@ void writeDefinitionFile(const std::filesystem::path& path, const YAML::Node& ro
 {
     std::ofstream out(path);
     if (!out.is_open()) {
+        LUNA_CORE_ERROR("Failed to open material definition for writing: '{}'", path.string());
         return;
     }
 
     out << root;
+    if (!out.good()) {
+        LUNA_CORE_ERROR("Failed to write material definition: '{}'", path.string());
+    }
 }
 } // namespace
 

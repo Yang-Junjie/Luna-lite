@@ -1,3 +1,4 @@
+#include "../core/log.h"
 #include "../project/project_manager.h"
 #include "asset_cache.h"
 
@@ -25,9 +26,22 @@ std::filesystem::path getImportedAssetDirectory(AssetHandle handle)
 
 bool ensureImportedAssetDirectory(AssetHandle handle)
 {
+    LUNA_ASSERT(handle.isValid(), "Imported asset cache directories require a valid asset handle.");
+    if (!handle.isValid()) {
+        LUNA_CORE_ERROR("Failed to create imported asset cache directory: invalid asset handle");
+        return false;
+    }
+
+    const auto directory = resolveProjectPath(getImportedAssetDirectory(handle));
     std::error_code error;
-    std::filesystem::create_directories(resolveProjectPath(getImportedAssetDirectory(handle)), error);
-    return !error;
+    std::filesystem::create_directories(directory, error);
+    if (error) {
+        LUNA_CORE_ERROR(
+            "Failed to create imported asset cache directory '{}': {}", directory.string(), error.message());
+        return false;
+    }
+
+    return true;
 }
 
 std::filesystem::path getImportedAssetArtifactPath(AssetHandle handle, std::string_view artifact_name)

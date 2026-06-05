@@ -3,9 +3,17 @@
 
 #include <memory>
 
+namespace {
+#ifdef NDEBUG
+constexpr auto defaultLogLevel = lunalite::core::Logger::Level::Info;
+#else
+constexpr auto defaultLogLevel = lunalite::core::Logger::Level::Debug;
+#endif
+} // namespace
+
 int main(int argc, char** argv)
 {
-    lunalite::core::Logger::init("logs/LunaLite.log");
+    lunalite::core::Logger::init("logs/LunaLite.log", defaultLogLevel);
     LUNA_CORE_INFO("LunaLite starting");
 
     {

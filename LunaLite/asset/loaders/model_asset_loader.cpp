@@ -61,6 +61,10 @@ std::shared_ptr<renderer::interface::Model> ModelAssetLoader::load(const AssetMe
         auto model = std::make_shared<renderer::interface::Model>();
         model->handle = metadata.Handle;
         model->setMeshes(std::move(meshes));
+        LUNA_CORE_DEBUG("Loaded model '{}' (mesh entries: {}, handle {})",
+                        path.string(),
+                        model->getMeshes().size(),
+                        metadata.Handle.toString());
         return model;
     } catch (const YAML::Exception& exception) {
         LUNA_CORE_ERROR("Failed to load model '{}': {}", path.string(), exception.what());

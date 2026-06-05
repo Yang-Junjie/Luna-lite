@@ -38,6 +38,17 @@ renderer::interface::ShadingModel readShadingModel(const YAML::Node& node)
 
     return renderer::interface::ShadingModel::Lit;
 }
+
+const char* shadingModelName(renderer::interface::ShadingModel model)
+{
+    switch (model) {
+        case renderer::interface::ShadingModel::Unlit:
+            return "Unlit";
+        case renderer::interface::ShadingModel::Lit:
+        default:
+            return "Lit";
+    }
+}
 } // namespace
 
 std::shared_ptr<renderer::interface::Material> MaterialAssetLoader::load(const AssetMetadata& metadata)
@@ -70,6 +81,16 @@ std::shared_ptr<renderer::interface::Material> MaterialAssetLoader::load(const A
             parameters.emission_texture = AssetHandle{textures["Emission"].as<uint64_t>(0)};
         }
 
+        const auto textureSlotCount = static_cast<unsigned>(parameters.albedo_texture.isValid()) +
+                                      static_cast<unsigned>(parameters.normal_texture.isValid()) +
+                                      static_cast<unsigned>(parameters.metallic_roughness_texture.isValid()) +
+                                      static_cast<unsigned>(parameters.occlusion_texture.isValid()) +
+                                      static_cast<unsigned>(parameters.emission_texture.isValid());
+        LUNA_CORE_DEBUG("Loaded material '{}' (shading: {}, texture slots: {}, handle {})",
+                        path.string(),
+                        shadingModelName(parameters.shading_model),
+                        textureSlotCount,
+                        metadata.Handle.toString());
         return material;
     } catch (const YAML::Exception& exception) {
         LUNA_CORE_ERROR("Failed to load material '{}': {}", path.string(), exception.what());
