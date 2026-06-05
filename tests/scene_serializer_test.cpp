@@ -2,7 +2,9 @@
 #include "../LunaLite/scene/scene.h"
 #include "../LunaLite/scene/scene_serializer.h"
 
+#include <cmath>
 #include <filesystem>
+#include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <iostream>
 
@@ -14,6 +16,24 @@ template <typename View> size_t countView(const View& view)
         ++count;
     }
     return count;
+}
+
+bool nearlyEqual(float lhs, float rhs)
+{
+    return std::abs(lhs - rhs) <= 0.001f;
+}
+
+bool nearlyEqual(const glm::mat4& lhs, const glm::mat4& rhs)
+{
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            if (!nearlyEqual(lhs[column][row], rhs[column][row])) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 } // namespace
 
@@ -50,6 +70,34 @@ int main()
         auto& light = scene.addComponent<scene::DirectionalLightComponent>(entity);
         light.color = {0.7f, 0.8f, 0.9f};
         light.intensity = 3.0f;
+    }
+
+    const auto parentEntity = scene.createEntity();
+    {
+        auto& tag = scene.getComponent<scene::TagComponent>(parentEntity);
+        tag.tag = "Parent";
+        auto& transform = scene.getComponent<scene::TransformComponent>(parentEntity);
+        transform.translation = {4.0f, 5.0f, 6.0f};
+        transform.rotation = glm::quat{glm::vec3{0.0f, glm::radians(90.0f), 0.0f}};
+    }
+
+    const auto childEntity = scene.createEntity();
+    glm::mat4 childWorldBefore{1.0f};
+    {
+        auto& tag = scene.getComponent<scene::TagComponent>(childEntity);
+        tag.tag = "Child";
+        auto& transform = scene.getComponent<scene::TransformComponent>(childEntity);
+        transform.translation = {1.0f, 2.0f, 3.0f};
+        transform.rotation = glm::quat{glm::vec3{0.1f, 0.2f, 0.3f}};
+        childWorldBefore = transform.getTransform();
+    }
+    if (!scene.setParent(childEntity, parentEntity, true)) {
+        std::cerr << "Failed to parent test entity.\n";
+        return 1;
+    }
+    if (!nearlyEqual(scene.getWorldTransform(childEntity), childWorldBefore)) {
+        std::cerr << "Parenting changed the child world transform.\n";
+        return 1;
     }
 
     const auto scenePath = std::filesystem::current_path() / "build" / "scene_serializer_test.lunascene";
@@ -91,6 +139,35 @@ int main()
     const auto lightView = loadedScene.getRegistry().view<const scene::DirectionalLightComponent>();
     if (countView(lightView) != 1) {
         std::cerr << "Unexpected light entity count.\n";
+        return 1;
+    }
+
+    const auto parentView = loadedScene.getRegistry().view<const scene::ParentComponent>();
+    if (countView(parentView) != 1) {
+        std::cerr << "Unexpected parent component count.\n";
+        return 1;
+    }
+
+    scene::Entity loadedParent{};
+    scene::Entity loadedChild{};
+    for (const auto entity : loadedScene.getRegistry().view<const scene::TagComponent>()) {
+        const auto& tag = loadedScene.getComponent<scene::TagComponent>(scene::Entity{entity});
+        if (tag.tag == "Parent") {
+            loadedParent = scene::Entity{entity};
+        } else if (tag.tag == "Child") {
+            loadedChild = scene::Entity{entity};
+        }
+    }
+    if (!loadedParent || !loadedChild) {
+        std::cerr << "Failed to find serialized hierarchy entities.\n";
+        return 1;
+    }
+    if (loadedScene.getParent(loadedChild).getHandle() != loadedParent.getHandle()) {
+        std::cerr << "Failed to deserialize parent relation.\n";
+        return 1;
+    }
+    if (!nearlyEqual(loadedScene.getWorldTransform(loadedChild), childWorldBefore)) {
+        std::cerr << "Failed to preserve child world transform through serialization.\n";
         return 1;
     }
 

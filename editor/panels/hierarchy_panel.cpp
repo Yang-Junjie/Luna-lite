@@ -11,6 +11,12 @@
 
 namespace lunalite::editor {
 namespace {
+inline constexpr const char* EntityDragDropPayloadName = "LUNALITE_ENTITY";
+
+struct EntityDragDropPayload {
+    uint32_t handle{0};
+};
+
 void setEntityTagFromAsset(scene::Scene& scene, scene::Entity entity, asset::AssetHandle handle)
 {
     if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
@@ -32,11 +38,15 @@ void addScriptToEntity(scene::Scene& scene, scene::Entity entity, asset::AssetHa
 void createEntityWithModel(scene::Scene& scene,
                            scene::Entity& selectedEntity,
                            asset::AssetHandle modelHandle,
-                           const std::string& tag)
+                           const std::string& tag,
+                           scene::Entity parent = {})
 {
     auto entity = scene.createEntity();
     auto& model = scene.addComponent<scene::ModelComponent>(entity);
     model.model = modelHandle;
+    if (parent) {
+        scene.setParent(entity, parent, false);
+    }
     auto& tagComponent = scene.getComponent<scene::TagComponent>(entity);
     tagComponent.tag = tag;
     selectedEntity = entity;
@@ -56,6 +66,9 @@ void createEntityFromAsset(scene::Scene& scene,
         auto entity = scene.createEntity();
         auto& model = scene.addComponent<scene::ModelComponent>(entity);
         model.model = handle;
+        if (scene.isValidEntity(targetEntity)) {
+            scene.setParent(entity, targetEntity, false);
+        }
         setEntityTagFromAsset(scene, entity, handle);
         selectedEntity = entity;
         return;
@@ -72,6 +85,26 @@ void createEntityFromAsset(scene::Scene& scene,
     }
 }
 
+bool acceptEntityDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::Entity targetEntity)
+{
+    bool accepted = false;
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(EntityDragDropPayloadName)) {
+            if (payload->DataSize == sizeof(EntityDragDropPayload)) {
+                const auto& entityPayload = *static_cast<const EntityDragDropPayload*>(payload->Data);
+                const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
+                if (scene.isValidEntity(dragged) && (!targetEntity || dragged.getHandle() != targetEntity.getHandle()) &&
+                    scene.setParent(dragged, targetEntity, true)) {
+                    selectedEntity = dragged;
+                    accepted = true;
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    return accepted;
+}
+
 void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::Entity targetEntity = {})
 {
     if (ImGui::BeginDragDropTarget()) {
@@ -83,6 +116,73 @@ void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::
         }
         ImGui::EndDragDropTarget();
     }
+}
+
+void drawEntityNode(scene::Scene& scene,
+                    scene::Entity& selectedEntity,
+                    scene::Entity entity,
+                    scene::Entity& entityToDelete)
+{
+    const auto handle = entity.getHandle();
+    const auto entityId = static_cast<uint32_t>(handle);
+    const auto children = scene.getChildren(entity);
+
+    std::string label;
+    if (scene.hasComponent<scene::TagComponent>(entity)) {
+        const auto& tag = scene.getComponent<scene::TagComponent>(entity);
+        label = tag.tag.empty() ? "Entity" : tag.tag;
+    } else {
+        label = "Entity";
+    }
+    label += "##" + std::to_string(entityId);
+
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
+                               ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (children.empty()) {
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+    if (selectedEntity.getHandle() == handle) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+
+    ImGui::PushID(static_cast<int>(entityId));
+    const bool open = ImGui::TreeNodeEx("##entity", flags, "%s", label.c_str());
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+        selectedEntity = entity;
+    }
+
+    if (ImGui::BeginDragDropSource()) {
+        const EntityDragDropPayload payload{.handle = entityId};
+        ImGui::SetDragDropPayload(EntityDragDropPayloadName, &payload, sizeof(payload));
+        ImGui::TextUnformatted(label.c_str());
+        ImGui::EndDragDropSource();
+    }
+
+    acceptEntityDrop(scene, selectedEntity, entity);
+    acceptAssetDrop(scene, selectedEntity, entity);
+
+    if (ImGui::BeginPopupContextItem()) {
+        if (ImGui::MenuItem("Create Child")) {
+            auto child = scene.createEntity();
+            scene.setParent(child, entity, false);
+            selectedEntity = child;
+        }
+        if (scene.getParent(entity) && ImGui::MenuItem("Unparent")) {
+            scene.clearParent(entity, true);
+        }
+        if (ImGui::MenuItem("Delete")) {
+            entityToDelete = entity;
+        }
+        ImGui::EndPopup();
+    }
+
+    if (open && !children.empty()) {
+        for (const auto child : children) {
+            drawEntityNode(scene, selectedEntity, child, entityToDelete);
+        }
+        ImGui::TreePop();
+    }
+    ImGui::PopID();
 }
 } // namespace
 
@@ -96,35 +196,30 @@ void HierarchyPanel::onImGuiRender()
     ImGui::Begin("Hierarchy");
 
     scene::Entity entity_to_delete;
-    for (const auto entity : m_scene.getEntities()) {
-        const auto handle = entity.getHandle();
-        const auto entity_id = static_cast<uint32_t>(handle);
-        std::string label = "Entity " + std::to_string(entity_id);
-        if (m_scene.hasComponent<scene::TagComponent>(entity)) {
-            const auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
-            label = (tag.tag.empty() ? "empty tag" : tag.tag) + "##" + std::to_string(entity_id);
-        }
-        const bool selected = m_selected_entity.getHandle() == handle;
-
-        if (ImGui::Selectable(label.c_str(), selected)) {
-            m_selected_entity = scene::Entity{handle};
-        }
-        acceptAssetDrop(m_scene, m_selected_entity, scene::Entity{handle});
-
-        if (ImGui::BeginPopupContextItem()) {
-            if (ImGui::MenuItem("Delete")) {
-                entity_to_delete = scene::Entity{handle};
-            }
-            ImGui::EndPopup();
-        }
+    for (const auto entity : m_scene.getRootEntities()) {
+        drawEntityNode(m_scene, m_selected_entity, entity, entity_to_delete);
     }
 
     const auto available = ImGui::GetContentRegionAvail();
     if (available.y > 0.0f) {
         ImGui::Dummy(available);
         acceptAssetDrop(m_scene, m_selected_entity);
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(EntityDragDropPayloadName)) {
+                if (payload->DataSize == sizeof(EntityDragDropPayload)) {
+                    const auto& entityPayload = *static_cast<const EntityDragDropPayload*>(payload->Data);
+                    const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
+                    if (m_scene.isValidEntity(dragged)) {
+                        m_scene.clearParent(dragged, true);
+                        m_selected_entity = dragged;
+                    }
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
 
-        if (ImGui::BeginPopupContextItem("HierarchyEmptyContext")) {
+        if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext",
+                                           ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
             if (ImGui::MenuItem("Create Entity")) {
                 m_selected_entity = m_scene.createEntity();
             }

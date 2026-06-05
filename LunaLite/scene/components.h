@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <entt/entt.hpp>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,10 @@ struct TransformComponent {
 
 struct ModelComponent {
     asset::AssetHandle model{0};
+};
+
+struct ParentComponent {
+    entt::entity parent{entt::null};
 };
 
 struct ScriptBinding {

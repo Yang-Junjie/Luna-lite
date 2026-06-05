@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <fstream>
 #include <system_error>
+#include <unordered_map>
 #include <vector>
 #include <yaml-cpp/yaml.h>
 
@@ -16,6 +17,16 @@ namespace {
 YAML::Node writeVec3(const glm::vec3& value)
 {
     YAML::Node node;
+    node.push_back(value.x);
+    node.push_back(value.y);
+    node.push_back(value.z);
+    return node;
+}
+
+YAML::Node writeQuat(const glm::quat& value)
+{
+    YAML::Node node;
+    node.push_back(value.w);
     node.push_back(value.x);
     node.push_back(value.y);
     node.push_back(value.z);
@@ -33,6 +44,28 @@ glm::vec3 readVec3(const YAML::Node& node, const glm::vec3& fallback = glm::vec3
         node[1].as<float>(),
         node[2].as<float>(),
     };
+}
+
+glm::quat readQuat(const YAML::Node& node, const glm::quat& fallback = glm::quat{1.0f, 0.0f, 0.0f, 0.0f})
+{
+    if (!node || !node.IsSequence()) {
+        return fallback;
+    }
+
+    if (node.size() == 4) {
+        return glm::normalize(glm::quat{
+            node[0].as<float>(),
+            node[1].as<float>(),
+            node[2].as<float>(),
+            node[3].as<float>(),
+        });
+    }
+
+    if (node.size() == 3) {
+        return glm::normalize(glm::quat{readVec3(node)});
+    }
+
+    return fallback;
 }
 
 const char* projectionTypeToString(renderer::interface::Camera::ProjectionType type)
@@ -91,6 +124,9 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     for (const auto entity : registry.view<const DirectionalLightComponent>()) {
         addEntity(entity);
     }
+    for (const auto entity : registry.view<const ParentComponent>()) {
+        addEntity(entity);
+    }
 
     for (const auto entity : sceneEntities) {
         YAML::Node serializedEntity;
@@ -107,7 +143,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             const auto& transform = registry.get<TransformComponent>(entity);
             YAML::Node node;
             node["Translation"] = writeVec3(transform.translation);
-            node["Rotation"] = writeVec3(glm::eulerAngles(transform.rotation));
+            node["Rotation"] = writeQuat(transform.rotation);
             node["Scale"] = writeVec3(transform.scale);
             serializedEntity["TransformComponent"] = node;
         }
@@ -148,6 +184,15 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             node["Color"] = writeVec3(light.color);
             node["Intensity"] = light.intensity;
             serializedEntity["DirectionalLightComponent"] = node;
+        }
+
+        if (registry.all_of<ParentComponent>(entity)) {
+            const auto& parent = registry.get<ParentComponent>(entity);
+            if (parent.parent != entt::null) {
+                YAML::Node node;
+                node["Parent"] = static_cast<uint32_t>(parent.parent);
+                serializedEntity["ParentComponent"] = node;
+            }
         }
 
         entities.push_back(serializedEntity);
@@ -202,8 +247,20 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             scene.getSettings().environment_intensity = settingsNode["EnvironmentIntensity"].as<float>(1.0f);
         }
 
+        std::unordered_map<uint32_t, Entity> entityMap;
+        entityMap.reserve(entities.size());
         for (const auto& serializedEntity : entities) {
-            const auto entity = scene.createEntity();
+            const auto sourceHandle = serializedEntity["Entity"].as<uint32_t>(0);
+            entityMap.emplace(sourceHandle, scene.createEntity());
+        }
+
+        for (const auto& serializedEntity : entities) {
+            const auto sourceHandle = serializedEntity["Entity"].as<uint32_t>(0);
+            const auto entityIt = entityMap.find(sourceHandle);
+            if (entityIt == entityMap.end()) {
+                continue;
+            }
+            const auto entity = entityIt->second;
 
             if (const auto tagNode = serializedEntity["TagComponent"]) {
                 auto& tag = scene.getComponent<TagComponent>(entity);
@@ -213,7 +270,7 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             if (const auto transformNode = serializedEntity["TransformComponent"]) {
                 auto& transform = scene.getComponent<TransformComponent>(entity);
                 transform.translation = readVec3(transformNode["Translation"]);
-                transform.rotation = glm::quat{readVec3(transformNode["Rotation"])};
+                transform.rotation = readQuat(transformNode["Rotation"]);
                 transform.scale = readVec3(transformNode["Scale"], glm::vec3{1.0f});
             }
 
@@ -252,6 +309,14 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                 auto& light = scene.addComponent<DirectionalLightComponent>(entity);
                 light.color = readVec3(lightNode["Color"], glm::vec3{1.0f});
                 light.intensity = lightNode["Intensity"].as<float>(1.0f);
+            }
+
+            if (const auto parentNode = serializedEntity["ParentComponent"]) {
+                const auto parentHandle = parentNode["Parent"].as<uint32_t>(0);
+                const auto parentIt = entityMap.find(parentHandle);
+                if (parentIt != entityMap.end()) {
+                    scene.addComponent<ParentComponent>(entity).parent = parentIt->second.getHandle();
+                }
             }
         }
 

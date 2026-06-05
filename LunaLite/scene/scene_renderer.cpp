@@ -7,19 +7,52 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/matrix.hpp>
 
 namespace lunalite::scene {
 namespace {
-glm::vec3 directionalLightDirection(const TransformComponent& transform)
+glm::vec3 directionalLightDirection(const glm::quat& rotation)
 {
-    const auto direction = transform.rotation * glm::vec3{0.0f, -1.0f, 0.0f};
+    const auto direction = rotation * glm::vec3{0.0f, -1.0f, 0.0f};
     const auto length = glm::length(direction);
     if (length <= 0.0001f) {
         return glm::vec3{0.0f, -1.0f, 0.0f};
     }
 
     return direction / length;
+}
+
+bool decomposePose(const glm::mat4& matrix, glm::vec3& translation, glm::quat& rotation)
+{
+    translation = glm::vec3{matrix[3]};
+
+    glm::vec3 basis0{matrix[0]};
+    glm::vec3 basis1{matrix[1]};
+    glm::vec3 basis2{matrix[2]};
+
+    const auto scaleX = glm::length(basis0);
+    const auto scaleY = glm::length(basis1);
+    const auto scaleZ = glm::length(basis2);
+    constexpr float minScale = 0.000001f;
+    if (scaleX <= minScale || scaleY <= minScale || scaleZ <= minScale) {
+        return false;
+    }
+
+    basis0 /= scaleX;
+    basis1 /= scaleY;
+    basis2 /= scaleZ;
+
+    if (glm::determinant(glm::mat3{basis0, basis1, basis2}) < 0.0f) {
+        if (scaleX >= scaleY && scaleX >= scaleZ) {
+            basis0 = -basis0;
+        } else if (scaleY >= scaleZ) {
+            basis1 = -basis1;
+        } else {
+            basis2 = -basis2;
+        }
+    }
+
+    rotation = glm::normalize(glm::quat_cast(glm::mat3{basis0, basis1, basis2}));
+    return true;
 }
 } // namespace
 
@@ -59,8 +92,8 @@ void SceneRenderer::onRenderRuntime(const Scene& scene)
 {
     LUNA_ASSERT(m_renderer, "SceneRenderer has no renderer.");
 
-    const TransformComponent* cameraTransform = nullptr;
     const CameraComponent* cameraComponent = nullptr;
+    Entity cameraEntity;
     const auto cameraView = scene.getRegistry().view<const TransformComponent, const CameraComponent>();
     for (const auto entity : cameraView) {
         const auto& candidate = cameraView.get<const CameraComponent>(entity);
@@ -68,21 +101,32 @@ void SceneRenderer::onRenderRuntime(const Scene& scene)
             continue;
         }
 
-        cameraTransform = &cameraView.get<const TransformComponent>(entity);
         cameraComponent = &candidate;
+        cameraEntity = Entity{entity};
         if (candidate.primary) {
             break;
         }
     }
 
-    if (cameraTransform == nullptr || cameraComponent == nullptr) {
+    if (cameraComponent == nullptr || !cameraEntity) {
         return;
     }
 
     const float aspectRatio = static_cast<float>(m_viewport_width) / static_cast<float>(m_viewport_height);
-    const auto view = glm::inverse(cameraTransform->getTransform());
+    const auto cameraWorld = scene.getWorldTransform(cameraEntity);
+    glm::vec3 cameraPosition{cameraWorld[3]};
+    glm::quat cameraRotation{1.0f, 0.0f, 0.0f, 0.0f};
+    if (decomposePose(cameraWorld, cameraPosition, cameraRotation)) {
+        const auto cameraNoScale = glm::translate(glm::mat4{1.0f}, cameraPosition) * glm::mat4_cast(cameraRotation);
+        const auto view = glm::inverse(cameraNoScale);
+        const auto projection = cameraComponent->camera.getProjection(aspectRatio);
+        renderScene(scene, view, projection, cameraPosition, cameraComponent->camera.getExposure());
+        return;
+    }
+
+    const auto view = glm::inverse(cameraWorld);
     const auto projection = cameraComponent->camera.getProjection(aspectRatio);
-    renderScene(scene, view, projection, cameraTransform->translation, cameraComponent->camera.getExposure());
+    renderScene(scene, view, projection, cameraPosition, cameraComponent->camera.getExposure());
 }
 
 void SceneRenderer::onRenderEditor(const Scene& scene, const renderer::interface::Camera& camera)
@@ -105,10 +149,20 @@ void SceneRenderer::renderScene(const Scene& scene,
     {
         const auto lightView = scene.getRegistry().view<const TransformComponent, const DirectionalLightComponent>();
         for (const auto entity : lightView) {
-            const auto& transform = lightView.get<const TransformComponent>(entity);
             const auto& light = lightView.get<const DirectionalLightComponent>(entity);
+            const auto world = scene.getWorldTransform(Entity{entity});
+            glm::vec3 translation{0.0f};
+            glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+            if (decomposePose(world, translation, rotation)) {
+                lighting.directional_light_count = 1;
+                lighting.directional_light.direction = directionalLightDirection(rotation);
+                lighting.directional_light.radiance = light.color * light.intensity;
+                break;
+            }
+
             lighting.directional_light_count = 1;
-            lighting.directional_light.direction = directionalLightDirection(transform);
+            lighting.directional_light.direction = directionalLightDirection(
+                lightView.get<const TransformComponent>(entity).rotation);
             lighting.directional_light.radiance = light.color * light.intensity;
             break;
         }
@@ -119,7 +173,6 @@ void SceneRenderer::renderScene(const Scene& scene,
 
     const auto modelView = scene.getRegistry().view<const TransformComponent, const ModelComponent>();
     for (const auto entity : modelView) {
-        const auto& transform = modelView.get<const TransformComponent>(entity);
         const auto& modelComponent = modelView.get<const ModelComponent>(entity);
         if (!modelComponent.model.isValid()) {
             continue;
@@ -131,7 +184,7 @@ void SceneRenderer::renderScene(const Scene& scene,
             continue;
         }
 
-        m_renderer->renderModel(*model, transform.getTransform());
+        m_renderer->renderModel(*model, scene.getWorldTransform(Entity{entity}));
     }
 }
 } // namespace lunalite::scene

@@ -4,6 +4,7 @@
 #include "../script/script_runtime.h"
 #include "entity.h"
 
+#include <glm/mat4x4.hpp>
 #include <entt/entt.hpp>
 #include <memory>
 #include <utility>
@@ -21,6 +22,8 @@ public:
 
     Entity createEntity();
     void destroyEntity(Entity entity);
+    bool setParent(Entity child, Entity parent, bool keepWorldTransform = true);
+    bool clearParent(Entity child, bool keepWorldTransform = true);
 
     void clear();
     void copyFrom(const Scene& other);
@@ -33,6 +36,11 @@ public:
     bool isValidEntity(Entity entity) const;
 
     std::vector<Entity> getEntities() const;
+    std::vector<Entity> getRootEntities() const;
+    std::vector<Entity> getChildren(Entity entity) const;
+    Entity getParent(Entity entity) const;
+    bool isAncestor(Entity possibleAncestor, Entity entity) const;
+    glm::mat4 getWorldTransform(Entity entity) const;
 
     SceneSettings& getSettings()
     {
