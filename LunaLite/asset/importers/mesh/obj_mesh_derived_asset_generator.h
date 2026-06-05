@@ -8,7 +8,7 @@ namespace lunalite::asset {
 
 class AssetMetadataStore;
 class MaterialAssetDefinitionWriter;
-class ModelAssetDefinitionWriter;
+class PrefabAssetDefinitionWriter;
 
 class ObjMeshDerivedAssetGenerator final {
 public:
@@ -16,7 +16,7 @@ public:
                                         const AssetMetadata& meshMetadata,
                                         AssetMetadataStore& metadataStore,
                                         const MaterialAssetDefinitionWriter& materialDefinitions,
-                                        const ModelAssetDefinitionWriter& modelDefinitions) const;
+                                        const PrefabAssetDefinitionWriter& prefabDefinitions) const;
 };
 
 } // namespace lunalite::asset

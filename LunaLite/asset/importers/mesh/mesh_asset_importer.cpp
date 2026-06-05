@@ -28,9 +28,9 @@ std::vector<AssetMetadata> MeshAssetImporter::import(const std::filesystem::path
     auto importedMetadata = std::vector<AssetMetadata>{meshMetadata};
     auto derivedMetadata = isGltfExtension(assetPath)
                                ? m_gltfDerivedAssets.generate(
-                                     assetPath, meshMetadata, metadataStore, m_materialDefinitions, m_modelDefinitions)
+                                     assetPath, meshMetadata, metadataStore, m_materialDefinitions, m_prefabDefinitions)
                                : m_objDerivedAssets.generate(
-                                     assetPath, meshMetadata, metadataStore, m_materialDefinitions, m_modelDefinitions);
+                                     assetPath, meshMetadata, metadataStore, m_materialDefinitions, m_prefabDefinitions);
     importedMetadata.insert(importedMetadata.end(), derivedMetadata.begin(), derivedMetadata.end());
     return importedMetadata;
 }

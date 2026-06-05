@@ -1,9 +1,9 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
+#include "../LunaLite/asset/prefab.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/mesh.h"
-#include "../LunaLite/renderer/interface/model.h"
 #include "../LunaLite/renderer/interface/texture.h"
 #include "../third_party/stb/stb_image_write.h"
 
@@ -548,26 +548,24 @@ int main()
         return 1;
     }
 
-    const auto gltfModelHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle.lunamodel");
-    const auto* gltfModel = asset::AssetManager::get().getAsset<renderer::interface::Model>(gltfModelHandle);
-    if (gltfModel == nullptr || gltfModel->getMeshes().size() != 2 ||
-        gltfModel->getMeshes().front().mesh != gltfHandle || gltfModel->getMeshes().front().materials.size() != 2 ||
-        gltfModel->getMeshes().front().materials.front() != gltfMaterialHandle ||
-        gltfModel->getMeshes().front().materials[1] != blackGltfMaterialHandle) {
-        std::cerr << "Failed to load generated glTF model through AssetManager.\n";
+    const auto gltfPrefabHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle.lunaprefab");
+    const auto* gltfPrefab = asset::AssetManager::get().getAsset<asset::Prefab>(gltfPrefabHandle);
+    if (gltfPrefab == nullptr || gltfPrefab->getNodes().size() != 3 || gltfPrefab->getRoots().size() != 1) {
+        std::cerr << "Failed to load generated glTF prefab through AssetManager.\n";
         return 1;
     }
-    const auto& firstGltfInstance = gltfModel->getMeshes()[0];
-    const auto& secondGltfInstance = gltfModel->getMeshes()[1];
-    if (firstGltfInstance.submesh_start != 0 || firstGltfInstance.submesh_count != 1 ||
-        secondGltfInstance.submesh_start != 1 || secondGltfInstance.submesh_count != 1 ||
-        !nearlyEqual(firstGltfInstance.transform[3][0], 1.0f) ||
-        !nearlyEqual(firstGltfInstance.transform[3][1], 2.0f) ||
-        !nearlyEqual(firstGltfInstance.transform[3][2], 3.0f) ||
-        !nearlyEqual(secondGltfInstance.transform[3][0], 1.0f) ||
-        !nearlyEqual(secondGltfInstance.transform[3][1], 0.0f) ||
-        !nearlyEqual(secondGltfInstance.transform[3][2], 3.0f)) {
-        std::cerr << "Failed to preserve glTF scene node transforms through AssetManager.\n";
+    const auto& rootNode = gltfPrefab->getNodes()[0];
+    const auto& firstMeshNode = gltfPrefab->getNodes()[1];
+    const auto& secondMeshNode = gltfPrefab->getNodes()[2];
+    if (gltfPrefab->getRoots().front() != 0 || rootNode.children.size() != 2 || rootNode.children[0] != 1 ||
+        rootNode.children[1] != 2 || rootNode.mesh.isValid() || firstMeshNode.mesh != gltfHandle ||
+        firstMeshNode.materials.size() != 2 || firstMeshNode.materials.front() != gltfMaterialHandle ||
+        firstMeshNode.materials[1] != blackGltfMaterialHandle || firstMeshNode.submesh_start != 0 ||
+        firstMeshNode.submesh_count != 1 || secondMeshNode.mesh != gltfHandle || secondMeshNode.submesh_start != 1 ||
+        secondMeshNode.submesh_count != 1 || !nearlyEqual(rootNode.transform[3][0], 1.0f) ||
+        !nearlyEqual(rootNode.transform[3][1], 2.0f) || !nearlyEqual(rootNode.transform[3][2], 3.0f) ||
+        !nearlyEqual(secondMeshNode.transform[3][1], -2.0f)) {
+        std::cerr << "Failed to preserve glTF prefab hierarchy through AssetManager.\n";
         return 1;
     }
 
@@ -575,21 +573,20 @@ int main()
         asset::AssetManager::get().getAsset<renderer::interface::Material>(asset::builtin::defaultMaterialHandle());
     const auto* cubeMesh =
         asset::AssetManager::get().getAsset<renderer::interface::Mesh>(asset::builtin::cubeMeshHandle());
-    const auto* cubeModel =
-        asset::AssetManager::get().getAsset<renderer::interface::Model>(asset::builtin::cubeModelHandle());
     if (defaultMaterial == nullptr || defaultMaterial->parameters == nullptr || cubeMesh == nullptr ||
-        cubeMesh->getSubMeshes().empty() || cubeModel == nullptr || cubeModel->getMeshes().empty()) {
-        std::cerr << "Failed to load built-in mesh, material, and model assets.\n";
+        cubeMesh->getSubMeshes().empty()) {
+        std::cerr << "Failed to load built-in mesh and material assets.\n";
         return 1;
     }
 
-    const auto modelHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube.lunamodel");
-    const auto* model = asset::AssetManager::get().getAsset<renderer::interface::Model>(modelHandle);
-    if (model == nullptr || model->getMeshes().empty() || model->getMeshes().front().materials.empty()) {
-        std::cerr << "Failed to load model through AssetManager.\n";
+    const auto objPrefabHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube.lunaprefab");
+    const auto* objPrefab = asset::AssetManager::get().getAsset<asset::Prefab>(objPrefabHandle);
+    if (objPrefab == nullptr || objPrefab->getNodes().size() != 1 || objPrefab->getRoots().size() != 1 ||
+        !objPrefab->getNodes().front().mesh.isValid()) {
+        std::cerr << "Failed to load generated OBJ prefab through AssetManager.\n";
         return 1;
     }
 
-    std::cout << "AssetManager imported and loaded mesh, material, model, and texture assets.\n";
+    std::cout << "AssetManager imported and loaded mesh, prefab, material, and texture assets.\n";
     return 0;
 }

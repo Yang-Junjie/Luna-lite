@@ -2052,7 +2052,7 @@ void Renderer::setLighting(const interface::RenderLighting& lighting)
     m_frame_uniforms_dirty = true;
 }
 
-void Renderer::renderModel(const interface::Model& model, const glm::mat4& transform)
+void Renderer::renderMesh(const interface::MeshInstance& meshInstance)
 {
     const interface::Material* fallbackMaterial = nullptr;
     bool fallbackMaterialResolved = false;
@@ -2065,50 +2065,46 @@ void Renderer::renderModel(const interface::Model& model, const glm::mat4& trans
         return fallbackMaterial;
     };
 
-    for (const auto& modelMesh : model.getMeshes()) {
-        if (!modelMesh.mesh.isValid()) {
-            continue;
-        }
+    if (!meshInstance.mesh.isValid()) {
+        return;
+    }
 
-        const auto* mesh = asset::AssetDatabase::get().get<interface::Mesh>(modelMesh.mesh);
-        if (mesh == nullptr) {
-            LUNA_CORE_ERROR("Model {} has a null mesh asset", static_cast<uint64_t>(model.handle));
-            continue;
-        }
+    const auto* mesh = asset::AssetDatabase::get().get<interface::Mesh>(meshInstance.mesh);
+    if (mesh == nullptr) {
+        LUNA_CORE_ERROR("Mesh instance {} has a null mesh asset", static_cast<uint64_t>(meshInstance.mesh));
+        return;
+    }
 
-        const auto& submeshes = mesh->getSubMeshes();
-        if (modelMesh.submesh_start >= submeshes.size()) {
-            continue;
-        }
+    const auto& submeshes = mesh->getSubMeshes();
+    if (meshInstance.submesh_start >= submeshes.size()) {
+        return;
+    }
 
-        const auto submeshStart = static_cast<size_t>(modelMesh.submesh_start);
-        const auto availableSubmeshes = submeshes.size() - submeshStart;
-        const auto requestedSubmeshes = modelMesh.submesh_count == std::numeric_limits<uint32_t>::max()
-                                            ? availableSubmeshes
-                                            : static_cast<size_t>(modelMesh.submesh_count);
-        const auto submeshEnd = submeshStart + std::min(availableSubmeshes, requestedSubmeshes);
-        const auto modelMeshTransform = transform * modelMesh.transform;
+    const auto submeshStart = static_cast<size_t>(meshInstance.submesh_start);
+    const auto availableSubmeshes = submeshes.size() - submeshStart;
+    const auto requestedSubmeshes = meshInstance.submesh_count == std::numeric_limits<uint32_t>::max()
+                                        ? availableSubmeshes
+                                        : static_cast<size_t>(meshInstance.submesh_count);
+    const auto submeshEnd = submeshStart + std::min(availableSubmeshes, requestedSubmeshes);
 
-        for (size_t submeshIndex = submeshStart; submeshIndex < submeshEnd; ++submeshIndex) {
-            const auto& submesh = submeshes[submeshIndex];
-            const interface::Material* material = nullptr;
-            if (submesh.material_slot < modelMesh.materials.size()) {
-                const auto materialHandle = modelMesh.materials[submesh.material_slot];
-                if (materialHandle.isValid()) {
-                    if (const auto* resolvedMaterial =
-                            asset::AssetDatabase::get().get<interface::Material>(materialHandle)) {
-                        material = resolvedMaterial;
-                    }
+    for (size_t submeshIndex = submeshStart; submeshIndex < submeshEnd; ++submeshIndex) {
+        const auto& submesh = submeshes[submeshIndex];
+        const interface::Material* material = nullptr;
+        if (submesh.material_slot < meshInstance.materials.size()) {
+            const auto materialHandle = meshInstance.materials[submesh.material_slot];
+            if (materialHandle.isValid()) {
+                if (const auto* resolvedMaterial = asset::AssetDatabase::get().get<interface::Material>(materialHandle)) {
+                    material = resolvedMaterial;
                 }
             }
+        }
 
-            if (material == nullptr) {
-                material = getFallbackMaterial();
-            }
+        if (material == nullptr) {
+            material = getFallbackMaterial();
+        }
 
-            if (material != nullptr) {
-                drawSubMesh(*mesh, submeshIndex, submesh, *material, modelMeshTransform);
-            }
+        if (material != nullptr) {
+            drawSubMesh(*mesh, submeshIndex, submesh, *material, meshInstance.transform);
         }
     }
 }

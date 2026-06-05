@@ -51,8 +51,9 @@ int main()
         transform.rotation = glm::quat{glm::vec3{0.1f, 0.2f, 0.3f}};
         transform.scale = {2.0f, 2.0f, 2.0f};
 
-        auto& model = scene.addComponent<scene::ModelComponent>(entity);
-        model.model = asset::AssetHandle{42};
+        auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
+        meshRenderer.mesh = asset::AssetHandle{42};
+        meshRenderer.materials.push_back(asset::AssetHandle{84});
 
         auto& script = scene.addComponent<scene::ScriptComponent>(entity);
         script.scripts.push_back({asset::AssetHandle{84}, true});
@@ -112,10 +113,16 @@ int main()
         return 1;
     }
 
-    const auto transformModelView =
-        loadedScene.getRegistry().view<const scene::TransformComponent, const scene::ModelComponent>();
-    if (countView(transformModelView) != 1) {
-        std::cerr << "Unexpected transform model entity count.\n";
+    const auto transformMeshView =
+        loadedScene.getRegistry().view<const scene::TransformComponent, const scene::MeshRendererComponent>();
+    if (countView(transformMeshView) != 1) {
+        std::cerr << "Unexpected transform mesh renderer entity count.\n";
+        return 1;
+    }
+    const auto& loadedMeshRenderer = transformMeshView.get<const scene::MeshRendererComponent>(*transformMeshView.begin());
+    if (loadedMeshRenderer.mesh != asset::AssetHandle{42} || loadedMeshRenderer.materials.size() != 1 ||
+        loadedMeshRenderer.materials.front() != asset::AssetHandle{84}) {
+        std::cerr << "Unexpected mesh renderer component data.\n";
         return 1;
     }
 

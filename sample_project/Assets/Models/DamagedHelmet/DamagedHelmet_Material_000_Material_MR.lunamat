@@ -15,8 +15,8 @@ Material:
   NormalScale: 1
   OcclusionStrength: 1
   Textures:
-    Albedo: 3471539551734188030
-    Normal: 3471539551734188034
-    MetallicRoughness: 3471539551734188031
-    Occlusion: 3471539551734188033
-    Emission: 3471539551734188032
+    Albedo: 4807869584785374302
+    Normal: 4807869584785374306
+    MetallicRoughness: 4807869584785374303
+    Occlusion: 4807869584785374305
+    Emission: 4807869584785374304

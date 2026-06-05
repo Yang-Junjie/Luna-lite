@@ -59,19 +59,18 @@ add_library(LunaLite STATIC
     asset/asset_scanner.cpp
     asset/builtin/material_factory.cpp
     asset/builtin/mesh_factory.cpp
-    asset/builtin/model_factory.cpp
     asset/importers/material_asset_importer.cpp
     asset/importers/mesh/material_asset_definition_writer.cpp
-    asset/importers/mesh/model_asset_definition_writer.cpp
+    asset/importers/mesh/prefab_asset_definition_writer.cpp
     asset/importers/mesh/mesh_asset_importer.cpp
     asset/importers/mesh/obj_mesh_derived_asset_generator.cpp
     asset/importers/mesh/gltf_mesh_derived_asset_generator.cpp
-    asset/importers/model_asset_importer.cpp
+    asset/importers/prefab_asset_importer.cpp
     asset/importers/script_asset_importer.cpp
     asset/importers/texture_asset_importer.cpp
     asset/loaders/material_asset_loader.cpp
     asset/loaders/mesh_asset_loader.cpp
-    asset/loaders/model_asset_loader.cpp
+    asset/loaders/prefab_asset_loader.cpp
     asset/loaders/texture_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp

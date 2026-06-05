@@ -1,6 +1,6 @@
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
-#include "../../LunaLite/renderer/interface/model.h"
+#include "../../LunaLite/renderer/interface/mesh.h"
 #include "../../LunaLite/scene/components.h"
 #include "content_browser_panel.h"
 #include "inspector_panel.h"
@@ -10,9 +10,11 @@
 #include <cstring>
 
 #include <array>
+#include <algorithm>
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 #include <span>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -141,8 +143,9 @@ void InspectorPanel::onImGuiRender()
     }
 
     if (ImGui::BeginPopup("AddComponent")) {
-        if (!m_scene.hasComponent<scene::ModelComponent>(m_selected_entity) && ImGui::MenuItem("Model")) {
-            m_scene.addComponent<scene::ModelComponent>(m_selected_entity);
+        if (!m_scene.hasComponent<scene::MeshRendererComponent>(m_selected_entity) &&
+            ImGui::MenuItem("Mesh Renderer")) {
+            m_scene.addComponent<scene::MeshRendererComponent>(m_selected_entity);
         }
 
         if (!m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity) && ImGui::MenuItem("Script")) {
@@ -193,20 +196,16 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::ModelComponent>(m_selected_entity)) {
-        const bool open = ImGui::CollapsingHeader("Model", ImGuiTreeNodeFlags_DefaultOpen);
-        if (ImGui::BeginPopupContextItem("ModelPopup")) {
+    if (m_scene.hasComponent<scene::MeshRendererComponent>(m_selected_entity)) {
+        const bool open = ImGui::CollapsingHeader("Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen);
+        if (ImGui::BeginPopupContextItem("MeshRendererPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::ModelComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::MeshRendererComponent>(m_selected_entity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::ModelComponent>(m_selected_entity)) {
-            auto& model = m_scene.getComponent<scene::ModelComponent>(m_selected_entity);
-            const BuiltinAssetOption builtinModels[] = {
-                {"Cube", asset::builtin::cubeModelHandle()},
-                {"Plane", asset::builtin::planeModelHandle()},
-            };
+        if (open && m_scene.hasComponent<scene::MeshRendererComponent>(m_selected_entity)) {
+            auto& meshRenderer = m_scene.getComponent<scene::MeshRendererComponent>(m_selected_entity);
             const BuiltinAssetOption builtinMeshes[] = {
                 {"Cube", asset::builtin::cubeMeshHandle()},
                 {"Plane", asset::builtin::planeMeshHandle()},
@@ -216,64 +215,38 @@ void InspectorPanel::onImGuiRender()
                 {"Error", asset::builtin::errorMaterialHandle()},
             };
 
-            drawAssetHandleControl("Model", asset::AssetType::Model, model.model, builtinModels);
+            drawAssetHandleControl("Mesh", asset::AssetType::Mesh, meshRenderer.mesh, builtinMeshes);
 
-            auto* modelAsset = model.model.isValid()
-                                   ? asset::AssetManager::get().getAsset<renderer::interface::Model>(model.model)
-                                   : nullptr;
-            if (modelAsset == nullptr) {
-                ImGui::TextDisabled("No model asset loaded");
+            auto* meshAsset = meshRenderer.mesh.isValid()
+                                  ? asset::AssetManager::get().getAsset<renderer::interface::Mesh>(meshRenderer.mesh)
+                                  : nullptr;
+            if (meshAsset == nullptr) {
+                ImGui::TextDisabled("No mesh asset loaded");
             } else {
-                auto& meshes = modelAsset->editMeshes();
-                if (ImGui::Button("Add Mesh")) {
-                    renderer::interface::ModelMesh modelMesh;
-                    modelMesh.mesh = asset::builtin::cubeMeshHandle();
-                    modelMesh.materials.push_back(asset::builtin::defaultMaterialHandle());
-                    meshes.push_back(std::move(modelMesh));
+                ImGui::TextDisabled("Submeshes: %zu", meshAsset->getSubMeshes().size());
+            }
+
+            if (ImGui::Button("Add Material")) {
+                meshRenderer.materials.push_back(asset::builtin::defaultMaterialHandle());
+            }
+
+            int materialToDelete = -1;
+            for (size_t materialIndex = 0; materialIndex < meshRenderer.materials.size(); ++materialIndex) {
+                ImGui::PushID(static_cast<int>(materialIndex));
+                ImGui::Text("Material %zu", materialIndex);
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Delete")) {
+                    materialToDelete = static_cast<int>(materialIndex);
                 }
+                drawAssetHandleControl("Material",
+                                       asset::AssetType::Material,
+                                       meshRenderer.materials[materialIndex],
+                                       builtinMaterials);
+                ImGui::PopID();
+            }
 
-                int meshToDelete = -1;
-                for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex) {
-                    ImGui::PushID(static_cast<int>(meshIndex));
-                    ImGui::Separator();
-                    ImGui::Text("Mesh %zu", meshIndex);
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("Delete Mesh")) {
-                        meshToDelete = static_cast<int>(meshIndex);
-                    }
-
-                    auto& modelMesh = meshes[meshIndex];
-                    drawAssetHandleControl("Mesh", asset::AssetType::Mesh, modelMesh.mesh, builtinMeshes);
-
-                    if (ImGui::SmallButton("Add Material")) {
-                        modelMesh.materials.push_back(asset::builtin::defaultMaterialHandle());
-                    }
-
-                    int materialToDelete = -1;
-                    for (size_t materialIndex = 0; materialIndex < modelMesh.materials.size(); ++materialIndex) {
-                        ImGui::PushID(static_cast<int>(materialIndex));
-                        ImGui::Text("Material %zu", materialIndex);
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton("Delete Material")) {
-                            materialToDelete = static_cast<int>(materialIndex);
-                        }
-                        drawAssetHandleControl("Material",
-                                               asset::AssetType::Material,
-                                               modelMesh.materials[materialIndex],
-                                               builtinMaterials);
-                        ImGui::PopID();
-                    }
-
-                    if (materialToDelete >= 0) {
-                        modelMesh.materials.erase(modelMesh.materials.begin() + materialToDelete);
-                    }
-
-                    ImGui::PopID();
-                }
-
-                if (meshToDelete >= 0) {
-                    meshes.erase(meshes.begin() + meshToDelete);
-                }
+            if (materialToDelete >= 0) {
+                meshRenderer.materials.erase(meshRenderer.materials.begin() + materialToDelete);
             }
         }
     }

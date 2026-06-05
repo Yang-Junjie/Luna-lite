@@ -21,14 +21,4 @@ inline AssetHandle planeMeshHandle()
 {
     return AssetHandle{0x4C'55'4E'41'4D'45'53'02ull};
 }
-
-inline AssetHandle cubeModelHandle()
-{
-    return AssetHandle{0x4C'55'4E'41'4D'4F'44'01ull};
-}
-
-inline AssetHandle planeModelHandle()
-{
-    return AssetHandle{0x4C'55'4E'41'4D'4F'44'02ull};
-}
 } // namespace lunalite::asset::builtin

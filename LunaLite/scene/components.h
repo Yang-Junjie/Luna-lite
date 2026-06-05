@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <entt/entt.hpp>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -35,8 +36,11 @@ struct TransformComponent {
     }
 };
 
-struct ModelComponent {
-    asset::AssetHandle model{0};
+struct MeshRendererComponent {
+    asset::AssetHandle mesh{0};
+    std::vector<asset::AssetHandle> materials;
+    uint32_t submesh_start{0};
+    uint32_t submesh_count{std::numeric_limits<uint32_t>::max()};
 };
 
 struct ParentComponent {

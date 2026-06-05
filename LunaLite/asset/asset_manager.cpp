@@ -4,7 +4,6 @@
 #include "builtin/builtin_assets.h"
 #include "builtin/material_factory.h"
 #include "builtin/mesh_factory.h"
-#include "builtin/model_factory.h"
 
 #include <string>
 #include <utility>
@@ -123,28 +122,19 @@ bool AssetManager::registerBuiltinAssets()
         createBuiltinMetadata(builtin::cubeMeshHandle(), AssetType::Mesh, "CubeMesh", "Builtin/Meshes/Cube.mesh");
     const auto planeMeshMetadata =
         createBuiltinMetadata(builtin::planeMeshHandle(), AssetType::Mesh, "PlaneMesh", "Builtin/Meshes/Plane.mesh");
-    const auto cubeModelMetadata =
-        createBuiltinMetadata(builtin::cubeModelHandle(), AssetType::Model, "CubeModel", "Builtin/Models/Cube.model");
-    const auto planeModelMetadata = createBuiltinMetadata(
-        builtin::planeModelHandle(), AssetType::Model, "PlaneModel", "Builtin/Models/Plane.model");
-
     LUNA_ASSERT(defaultMaterialMetadata.Handle.isValid() && errorMaterialMetadata.Handle.isValid() &&
-                    cubeMeshMetadata.Handle.isValid() && planeMeshMetadata.Handle.isValid() &&
-                    cubeModelMetadata.Handle.isValid() && planeModelMetadata.Handle.isValid(),
+                    cubeMeshMetadata.Handle.isValid() && planeMeshMetadata.Handle.isValid(),
                 "Built-in asset handles must be valid.");
 
     if (!m_metadata.registerMetadata(defaultMaterialMetadata) || !m_metadata.registerMetadata(errorMaterialMetadata) ||
-        !m_metadata.registerMetadata(cubeMeshMetadata) || !m_metadata.registerMetadata(planeMeshMetadata) ||
-        !m_metadata.registerMetadata(cubeModelMetadata) || !m_metadata.registerMetadata(planeModelMetadata)) {
+        !m_metadata.registerMetadata(cubeMeshMetadata) || !m_metadata.registerMetadata(planeMeshMetadata)) {
         return false;
     }
 
     return AssetDatabase::get().add(MaterialFactory::createDefault()).isValid() &&
            AssetDatabase::get().add(MaterialFactory::createError()).isValid() &&
            AssetDatabase::get().add(MeshFactory::createCube()).isValid() &&
-           AssetDatabase::get().add(MeshFactory::createPlane()).isValid() &&
-           AssetDatabase::get().add(ModelFactory::createCube()).isValid() &&
-           AssetDatabase::get().add(ModelFactory::createPlane()).isValid();
+           AssetDatabase::get().add(MeshFactory::createPlane()).isValid();
 }
 
 } // namespace lunalite::asset

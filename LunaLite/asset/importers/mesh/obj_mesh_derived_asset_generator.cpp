@@ -1,8 +1,8 @@
 #include "../../../core/log.h"
 #include "../../metadata/asset_metadata_store.h"
 #include "material_asset_definition_writer.h"
-#include "model_asset_definition_writer.h"
 #include "obj_mesh_derived_asset_generator.h"
+#include "prefab_asset_definition_writer.h"
 
 #include <cctype>
 
@@ -48,7 +48,7 @@ std::vector<AssetMetadata>
                                            const AssetMetadata& meshMetadata,
                                            AssetMetadataStore& metadataStore,
                                            const MaterialAssetDefinitionWriter& materialDefinitions,
-                                           const ModelAssetDefinitionWriter& modelDefinitions) const
+                                           const PrefabAssetDefinitionWriter& prefabDefinitions) const
 {
     tinyobj::attrib_t attributes;
     std::vector<tinyobj::shape_t> shapes;
@@ -109,13 +109,24 @@ std::vector<AssetMetadata>
         }
     }
 
-    const auto modelPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunamodel");
-    modelDefinitions.writeSingleMeshDefinition(modelPath, meshMetadata.Handle, materialHandles);
+    Prefab prefab;
+    PrefabNode node;
+    node.name = sanitizeAssetName(sourceMeshPath.stem().string());
+    node.mesh = meshMetadata.Handle;
+    node.materials = materialHandles;
+    prefab.editNodes().push_back(std::move(node));
+    prefab.setRoots({0});
 
-    const auto modelMetadata = createDerivedMetadataFile(
-        metadataStore, modelPath, AssetType::Model, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
-    if (modelMetadata.Handle.isValid()) {
-        derivedMetadata.push_back(modelMetadata);
+    const auto prefabPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunaprefab");
+    prefabDefinitions.writeDefinition(prefabPath, prefab, true);
+
+    const auto prefabMetadata =
+        createDerivedMetadataFile(metadataStore,
+                                  prefabPath,
+                                  AssetType::Prefab,
+                                  AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
+    if (prefabMetadata.Handle.isValid()) {
+        derivedMetadata.push_back(prefabMetadata);
     }
 
     return derivedMetadata;

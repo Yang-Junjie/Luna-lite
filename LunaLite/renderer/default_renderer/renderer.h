@@ -26,7 +26,7 @@ public:
                            const glm::vec3& cameraPos,
                            float exposure) override;
     void setLighting(const interface::RenderLighting& lighting) override;
-    void renderModel(const interface::Model& model, const glm::mat4& transform) override;
+    void renderMesh(const interface::MeshInstance& meshInstance) override;
     void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
     const interface::FrameImage& getFrameImage() const override;
 

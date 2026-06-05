@@ -2,7 +2,7 @@
 #include "../../metadata/asset_metadata_store.h"
 #include "gltf_mesh_derived_asset_generator.h"
 #include "material_asset_definition_writer.h"
-#include "model_asset_definition_writer.h"
+#include "prefab_asset_definition_writer.h"
 
 #include <cctype>
 
@@ -212,56 +212,77 @@ std::vector<std::pair<uint32_t, uint32_t>> calculateMeshSubmeshRanges(const fast
     return ranges;
 }
 
-std::vector<ModelMeshDefinition> buildSceneModelDefinitions(fastgltf::Asset& asset,
-                                                            AssetHandle meshHandle,
-                                                            const std::vector<AssetHandle>& materialHandles)
+Prefab buildPrefabDefinition(fastgltf::Asset& asset,
+                             AssetHandle meshHandle,
+                             const std::vector<AssetHandle>& materialHandles)
 {
-    std::vector<ModelMeshDefinition> definitions;
+    Prefab prefab;
+    auto& nodes = prefab.editNodes();
+    nodes.reserve(asset.nodes.size() + 1);
     const auto meshRanges = calculateMeshSubmeshRanges(asset);
+    std::vector<uint32_t> nodeMap(asset.nodes.size(), std::numeric_limits<uint32_t>::max());
 
-    const auto appendMeshNode = [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4& matrix) {
-        if (!node.meshIndex || *node.meshIndex >= meshRanges.size()) {
-            return;
-        }
-
-        const auto [submeshStart, submeshCount] = meshRanges[*node.meshIndex];
-        if (submeshCount == 0) {
-            return;
-        }
-
-        ModelMeshDefinition definition;
-        definition.mesh = meshHandle;
-        definition.materials = materialHandles;
-        definition.transform = toGlmMatrix(matrix);
-        definition.submesh_start = submeshStart;
-        definition.submesh_count = submeshCount;
-        definitions.push_back(std::move(definition));
-    };
-
-    const auto traverseNode =
-        [&](const auto& self, size_t nodeIndex, const fastgltf::math::fmat4x4& parentTransform) -> void {
+    const auto appendNode = [&](size_t nodeIndex) -> uint32_t {
         if (nodeIndex >= asset.nodes.size()) {
-            return;
+            return std::numeric_limits<uint32_t>::max();
         }
 
         const auto& node = asset.nodes[nodeIndex];
-        const auto transform = fastgltf::getTransformMatrix(node, parentTransform);
-        appendMeshNode(node, transform);
+        PrefabNode prefabNode;
+        prefabNode.name = sanitizeAssetName(node.name.empty() ? "Node" + std::to_string(nodeIndex)
+                                                              : std::string{node.name});
+        prefabNode.transform = toGlmMatrix(fastgltf::getLocalTransformMatrix(node));
 
-        for (const auto child : node.children) {
-            self(self, child, transform);
+        if (node.meshIndex && *node.meshIndex < meshRanges.size()) {
+            const auto [submeshStart, submeshCount] = meshRanges[*node.meshIndex];
+            if (submeshCount > 0) {
+                prefabNode.mesh = meshHandle;
+                prefabNode.materials = materialHandles;
+                prefabNode.submesh_start = submeshStart;
+                prefabNode.submesh_count = submeshCount;
+            }
         }
+
+        const auto prefabIndex = static_cast<uint32_t>(nodes.size());
+        nodes.push_back(std::move(prefabNode));
+        nodeMap[nodeIndex] = prefabIndex;
+        return prefabIndex;
     };
 
+    const auto traverseNode = [&](const auto& self, size_t nodeIndex) -> uint32_t {
+        if (nodeIndex >= asset.nodes.size()) {
+            return std::numeric_limits<uint32_t>::max();
+        }
+
+        if (nodeMap[nodeIndex] != std::numeric_limits<uint32_t>::max()) {
+            return nodeMap[nodeIndex];
+        }
+
+        const auto prefabIndex = appendNode(nodeIndex);
+        if (prefabIndex == std::numeric_limits<uint32_t>::max()) {
+            return prefabIndex;
+        }
+
+        for (const auto child : asset.nodes[nodeIndex].children) {
+            const auto childIndex = self(self, child);
+            if (childIndex != std::numeric_limits<uint32_t>::max()) {
+                nodes[prefabIndex].children.push_back(childIndex);
+            }
+        }
+
+        return prefabIndex;
+    };
+
+    std::vector<uint32_t> roots;
     if (!asset.scenes.empty()) {
         const auto sceneIndex = asset.defaultScene.value_or(0);
         if (sceneIndex < asset.scenes.size()) {
-            fastgltf::iterateSceneNodes(asset,
-                                        sceneIndex,
-                                        fastgltf::math::fmat4x4{},
-                                        [&](fastgltf::Node& node, const fastgltf::math::fmat4x4& matrix) {
-                                            appendMeshNode(node, matrix);
-                                        });
+            for (const auto rootNode : asset.scenes[sceneIndex].nodeIndices) {
+                const auto rootIndex = traverseNode(traverseNode, rootNode);
+                if (rootIndex != std::numeric_limits<uint32_t>::max()) {
+                    roots.push_back(rootIndex);
+                }
+            }
         }
     } else {
         std::vector<bool> referencedByParent(asset.nodes.size(), false);
@@ -275,19 +296,23 @@ std::vector<ModelMeshDefinition> buildSceneModelDefinitions(fastgltf::Asset& ass
 
         for (size_t nodeIndex = 0; nodeIndex < asset.nodes.size(); ++nodeIndex) {
             if (!referencedByParent[nodeIndex]) {
-                traverseNode(traverseNode, nodeIndex, fastgltf::math::fmat4x4{});
+                const auto rootIndex = traverseNode(traverseNode, nodeIndex);
+                if (rootIndex != std::numeric_limits<uint32_t>::max()) {
+                    roots.push_back(rootIndex);
+                }
             }
         }
     }
 
-    if (definitions.empty()) {
-        ModelMeshDefinition definition;
-        definition.mesh = meshHandle;
-        definition.materials = materialHandles;
-        definitions.push_back(std::move(definition));
+    if (roots.empty() && !asset.nodes.empty()) {
+        const auto rootIndex = traverseNode(traverseNode, 0);
+        if (rootIndex != std::numeric_limits<uint32_t>::max()) {
+            roots.push_back(rootIndex);
+        }
     }
 
-    return definitions;
+    prefab.setRoots(std::move(roots));
+    return prefab;
 }
 } // namespace
 
@@ -296,7 +321,7 @@ std::vector<AssetMetadata>
                                             const AssetMetadata& meshMetadata,
                                             AssetMetadataStore& metadataStore,
                                             const MaterialAssetDefinitionWriter& materialDefinitions,
-                                            const ModelAssetDefinitionWriter& modelDefinitions) const
+                                            const PrefabAssetDefinitionWriter& prefabDefinitions) const
 {
     auto loadedAsset = loadGltfAsset(sourceMeshPath);
     if (!loadedAsset) {
@@ -405,14 +430,16 @@ std::vector<AssetMetadata>
         }
     }
 
-    const auto modelPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunamodel");
-    modelDefinitions.writeDefinition(
-        modelPath, buildSceneModelDefinitions(asset, meshMetadata.Handle, materialHandles), true);
+    const auto prefabPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunaprefab");
+    prefabDefinitions.writeDefinition(prefabPath, buildPrefabDefinition(asset, meshMetadata.Handle, materialHandles), true);
 
-    const auto modelMetadata = createDerivedMetadataFile(
-        metadataStore, modelPath, AssetType::Model, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
-    if (modelMetadata.Handle.isValid()) {
-        derivedMetadata.push_back(modelMetadata);
+    const auto prefabMetadata =
+        createDerivedMetadataFile(metadataStore,
+                                  prefabPath,
+                                  AssetType::Prefab,
+                                  AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
+    if (prefabMetadata.Handle.isValid()) {
+        derivedMetadata.push_back(prefabMetadata);
     }
 
     return derivedMetadata;

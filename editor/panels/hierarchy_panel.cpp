@@ -5,6 +5,7 @@
 #include "hierarchy_panel.h"
 
 #include <cstdint>
+#include <filesystem>
 
 #include <imgui.h>
 #include <string>
@@ -16,6 +17,17 @@ inline constexpr const char* EntityDragDropPayloadName = "LUNALITE_ENTITY";
 struct EntityDragDropPayload {
     uint32_t handle{0};
 };
+
+asset::AssetHandle resolvePrefabCompanion(asset::AssetHandle handle)
+{
+    const auto* metadata = asset::AssetManager::get().getMetadata(handle);
+    if (metadata == nullptr || metadata->Type != asset::AssetType::Mesh) {
+        return {};
+    }
+
+    const auto prefabPath = metadata->FilePath.parent_path() / (metadata->FilePath.stem().string() + ".lunaprefab");
+    return asset::AssetManager::get().getHandleByRelativePath(prefabPath);
+}
 
 void setEntityTagFromAsset(scene::Scene& scene, scene::Entity entity, asset::AssetHandle handle)
 {
@@ -35,21 +47,18 @@ void addScriptToEntity(scene::Scene& scene, scene::Entity entity, asset::AssetHa
     script.scripts.push_back({handle, true});
 }
 
-void createEntityWithModel(scene::Scene& scene,
-                           scene::Entity& selectedEntity,
-                           asset::AssetHandle modelHandle,
-                           const std::string& tag,
-                           scene::Entity parent = {})
+scene::Entity createMeshRendererEntity(scene::Scene& scene,
+                                       asset::AssetHandle meshHandle,
+                                       scene::Entity parent = {})
 {
     auto entity = scene.createEntity();
-    auto& model = scene.addComponent<scene::ModelComponent>(entity);
-    model.model = modelHandle;
+    auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
+    meshRenderer.mesh = meshHandle;
     if (parent) {
         scene.setParent(entity, parent, false);
     }
-    auto& tagComponent = scene.getComponent<scene::TagComponent>(entity);
-    tagComponent.tag = tag;
-    selectedEntity = entity;
+    setEntityTagFromAsset(scene, entity, meshHandle);
+    return entity;
 }
 
 void createEntityFromAsset(scene::Scene& scene,
@@ -62,14 +71,25 @@ void createEntityFromAsset(scene::Scene& scene,
         return;
     }
 
-    if (payload.type == asset::AssetType::Model) {
-        auto entity = scene.createEntity();
-        auto& model = scene.addComponent<scene::ModelComponent>(entity);
-        model.model = handle;
-        if (scene.isValidEntity(targetEntity)) {
-            scene.setParent(entity, targetEntity, false);
+    if (payload.type == asset::AssetType::Prefab) {
+        const auto roots = scene.instantiatePrefab(handle, targetEntity);
+        if (!roots.empty()) {
+            selectedEntity = roots.front();
         }
-        setEntityTagFromAsset(scene, entity, handle);
+        return;
+    }
+
+    if (payload.type == asset::AssetType::Mesh) {
+        const auto prefabHandle = resolvePrefabCompanion(handle);
+        if (prefabHandle.isValid()) {
+            const auto roots = scene.instantiatePrefab(prefabHandle, targetEntity);
+            if (!roots.empty()) {
+                selectedEntity = roots.front();
+                return;
+            }
+        }
+
+        auto entity = createMeshRendererEntity(scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
         selectedEntity = entity;
         return;
     }
@@ -225,10 +245,20 @@ void HierarchyPanel::onImGuiRender()
             }
             if (ImGui::BeginMenu("Create Builtin Mesh")) {
                 if (ImGui::MenuItem("Cube")) {
-                    createEntityWithModel(m_scene, m_selected_entity, asset::builtin::cubeModelHandle(), "Cube");
+                    auto entity = createMeshRendererEntity(m_scene, asset::builtin::cubeMeshHandle());
+                    m_scene.getComponent<scene::MeshRendererComponent>(entity).materials = {
+                        asset::builtin::defaultMaterialHandle(),
+                    };
+                    m_scene.getComponent<scene::TagComponent>(entity).tag = "Cube";
+                    m_selected_entity = entity;
                 }
                 if (ImGui::MenuItem("Plane")) {
-                    createEntityWithModel(m_scene, m_selected_entity, asset::builtin::planeModelHandle(), "Plane");
+                    auto entity = createMeshRendererEntity(m_scene, asset::builtin::planeMeshHandle());
+                    m_scene.getComponent<scene::MeshRendererComponent>(entity).materials = {
+                        asset::builtin::defaultMaterialHandle(),
+                    };
+                    m_scene.getComponent<scene::TagComponent>(entity).tag = "Plane";
+                    m_selected_entity = entity;
                 }
                 ImGui::EndMenu();
             }

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <limits>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
@@ -112,7 +113,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     for (const auto entity : registry.view<const TransformComponent>()) {
         addEntity(entity);
     }
-    for (const auto entity : registry.view<const ModelComponent>()) {
+    for (const auto entity : registry.view<const MeshRendererComponent>()) {
         addEntity(entity);
     }
     for (const auto entity : registry.view<const ScriptComponent>()) {
@@ -148,11 +149,24 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             serializedEntity["TransformComponent"] = node;
         }
 
-        if (registry.all_of<ModelComponent>(entity)) {
-            const auto& model = registry.get<ModelComponent>(entity);
+        if (registry.all_of<MeshRendererComponent>(entity)) {
+            const auto& meshRenderer = registry.get<MeshRendererComponent>(entity);
             YAML::Node node;
-            node["Model"] = static_cast<uint64_t>(model.model);
-            serializedEntity["ModelComponent"] = node;
+            node["Mesh"] = static_cast<uint64_t>(meshRenderer.mesh);
+            if (!meshRenderer.materials.empty()) {
+                YAML::Node materials(YAML::NodeType::Sequence);
+                for (const auto materialHandle : meshRenderer.materials) {
+                    materials.push_back(static_cast<uint64_t>(materialHandle));
+                }
+                node["Materials"] = materials;
+            }
+            if (meshRenderer.submesh_start != 0) {
+                node["SubMeshStart"] = meshRenderer.submesh_start;
+            }
+            if (meshRenderer.submesh_count != std::numeric_limits<uint32_t>::max()) {
+                node["SubMeshCount"] = meshRenderer.submesh_count;
+            }
+            serializedEntity["MeshRendererComponent"] = node;
         }
 
         if (registry.all_of<ScriptComponent>(entity)) {
@@ -274,9 +288,16 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                 transform.scale = readVec3(transformNode["Scale"], glm::vec3{1.0f});
             }
 
-            if (const auto modelNode = serializedEntity["ModelComponent"]) {
-                auto& model = scene.addComponent<ModelComponent>(entity);
-                model.model = asset::AssetHandle{modelNode["Model"].as<uint64_t>(0)};
+            if (const auto meshNode = serializedEntity["MeshRendererComponent"]) {
+                auto& meshRenderer = scene.addComponent<MeshRendererComponent>(entity);
+                meshRenderer.mesh = asset::AssetHandle{meshNode["Mesh"].as<uint64_t>(0)};
+                if (const auto materialsNode = meshNode["Materials"]; materialsNode && materialsNode.IsSequence()) {
+                    for (const auto& materialNode : materialsNode) {
+                        meshRenderer.materials.push_back(asset::AssetHandle{materialNode.as<uint64_t>(0)});
+                    }
+                }
+                meshRenderer.submesh_start = meshNode["SubMeshStart"].as<uint32_t>(0);
+                meshRenderer.submesh_count = meshNode["SubMeshCount"].as<uint32_t>(std::numeric_limits<uint32_t>::max());
             }
 
             if (const auto scriptNode = serializedEntity["ScriptComponent"]) {

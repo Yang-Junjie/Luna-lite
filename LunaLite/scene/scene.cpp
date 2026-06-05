@@ -1,3 +1,5 @@
+#include "../asset/asset_database.h"
+#include "../asset/prefab.h"
 #include "../core/log.h"
 #include "../script/script_runtime.h"
 #include "components.h"
@@ -169,6 +171,82 @@ bool Scene::clearParent(Entity child, bool keepWorldTransform)
     return setParent(child, Entity{}, keepWorldTransform);
 }
 
+std::vector<Entity> Scene::instantiatePrefab(asset::AssetHandle prefabHandle, Entity parent)
+{
+    const auto* prefab = asset::AssetDatabase::get().get<asset::Prefab>(prefabHandle);
+    if (prefab == nullptr) {
+        LUNA_CORE_ERROR("Failed to instantiate prefab {}: asset is missing", prefabHandle.toString());
+        return {};
+    }
+
+    const auto& nodes = prefab->getNodes();
+    const auto& roots = prefab->getRoots();
+    if (nodes.empty()) {
+        return {};
+    }
+
+    const auto instantiateNode = [&](const auto& self, uint32_t nodeIndex, Entity parentEntity) -> Entity {
+        if (nodeIndex >= nodes.size()) {
+            return {};
+        }
+
+        const auto& node = nodes[nodeIndex];
+        auto entity = createEntity();
+
+        if (!node.name.empty()) {
+            getComponent<TagComponent>(entity).tag = node.name;
+        }
+
+        auto& transform = getComponent<TransformComponent>(entity);
+        if (!decomposeTransform(node.transform, transform)) {
+            LUNA_CORE_WARN("Failed to decompose prefab node {} transform while instantiating prefab {}",
+                           nodeIndex,
+                           prefabHandle.toString());
+        }
+
+        if (node.mesh.isValid()) {
+            auto& renderer = addComponent<MeshRendererComponent>(entity);
+            renderer.mesh = node.mesh;
+            renderer.materials = node.materials;
+            renderer.submesh_start = node.submesh_start;
+            renderer.submesh_count = node.submesh_count;
+        }
+
+        if (parentEntity) {
+            if (!setParent(entity, parentEntity, false)) {
+                LUNA_CORE_WARN("Failed to parent prefab node {} under entity {}",
+                               nodeIndex,
+                               static_cast<uint32_t>(parentEntity.getHandle()));
+            }
+        }
+
+        for (const auto childIndex : node.children) {
+            self(self, childIndex, entity);
+        }
+
+        return entity;
+    };
+
+    std::vector<Entity> instantiatedRoots;
+    instantiatedRoots.reserve(roots.size());
+
+    for (const auto rootIndex : roots) {
+        const auto rootEntity = instantiateNode(instantiateNode, rootIndex, parent);
+        if (rootEntity) {
+            instantiatedRoots.push_back(rootEntity);
+        }
+    }
+
+    if (instantiatedRoots.empty() && !nodes.empty()) {
+        const auto rootEntity = instantiateNode(instantiateNode, 0, parent);
+        if (rootEntity) {
+            instantiatedRoots.push_back(rootEntity);
+        }
+    }
+
+    return instantiatedRoots;
+}
+
 void Scene::clear()
 {
     if (m_script_runtime) {
@@ -200,8 +278,9 @@ void Scene::copyFrom(const Scene& other)
             getComponent<TransformComponent>(targetEntity) = other.getComponent<TransformComponent>(sourceEntity);
         }
 
-        if (other.hasComponent<ModelComponent>(sourceEntity)) {
-            addComponent<ModelComponent>(targetEntity) = other.getComponent<ModelComponent>(sourceEntity);
+        if (other.hasComponent<MeshRendererComponent>(sourceEntity)) {
+            addComponent<MeshRendererComponent>(targetEntity) =
+                other.getComponent<MeshRendererComponent>(sourceEntity);
         }
 
         if (other.hasComponent<ScriptComponent>(sourceEntity)) {

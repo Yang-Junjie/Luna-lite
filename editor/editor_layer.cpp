@@ -9,10 +9,37 @@
 #include "editor_layer.h"
 
 #include <cstdint>
+#include <filesystem>
 
 #include <imgui.h>
 
 namespace lunalite::editor {
+namespace {
+asset::AssetHandle resolvePrefabCompanion(asset::AssetHandle handle)
+{
+    const auto* metadata = asset::AssetManager::get().getMetadata(handle);
+    if (metadata == nullptr || metadata->Type != asset::AssetType::Mesh) {
+        return {};
+    }
+
+    const auto prefabPath = metadata->FilePath.parent_path() / (metadata->FilePath.stem().string() + ".lunaprefab");
+    return asset::AssetManager::get().getHandleByRelativePath(prefabPath);
+}
+
+scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle meshHandle)
+{
+    auto entity = scene.createEntity();
+    auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
+    meshRenderer.mesh = meshHandle;
+
+    if (const auto* metadata = asset::AssetManager::get().getMetadata(meshHandle)) {
+        auto& tag = scene.getComponent<scene::TagComponent>(entity);
+        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    }
+
+    return entity;
+}
+} // namespace
 
 EditorLayer::EditorLayer()
     : Layer("EditorLayer"),
@@ -251,17 +278,25 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
         return;
     }
 
-    if (payload.type == asset::AssetType::Model) {
-        auto entity = m_scene.createEntity();
-        auto& model = m_scene.addComponent<scene::ModelComponent>(entity);
-        model.model = handle;
+    if (payload.type == asset::AssetType::Prefab) {
+        const auto roots = m_scene.instantiatePrefab(handle);
+        if (!roots.empty()) {
+            m_selected_entity = roots.front();
+        }
+        return;
+    }
 
-        if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
-            auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
-            tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    if (payload.type == asset::AssetType::Mesh) {
+        const auto prefabHandle = resolvePrefabCompanion(handle);
+        if (prefabHandle.isValid()) {
+            const auto roots = m_scene.instantiatePrefab(prefabHandle);
+            if (!roots.empty()) {
+                m_selected_entity = roots.front();
+                return;
+            }
         }
 
-        m_selected_entity = entity;
+        m_selected_entity = createMeshRendererEntity(m_scene, handle);
         return;
     }
 

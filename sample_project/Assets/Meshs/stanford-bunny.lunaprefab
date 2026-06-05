@@ -1,0 +1,25 @@
+Prefab:
+  Nodes:
+    - Name: stanford-bunny
+      Transform:
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+      Mesh: 3459685110480262193
+      Materials:
+        - 3459685110480262195
+  Roots:
+    - 0

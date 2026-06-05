@@ -3,7 +3,7 @@
 #include "asset_loader_registry.h"
 #include "loaders/material_asset_loader.h"
 #include "loaders/mesh_asset_loader.h"
-#include "loaders/model_asset_loader.h"
+#include "loaders/prefab_asset_loader.h"
 #include "loaders/texture_asset_loader.h"
 
 namespace lunalite::asset {
@@ -16,7 +16,7 @@ void AssetLoaderRegistry::registerDefaults()
 
     registerLoader(AssetType::Mesh, MeshAssetLoader::load);
     registerLoader(AssetType::Material, MaterialAssetLoader::load);
-    registerLoader(AssetType::Model, ModelAssetLoader::load);
+    registerLoader(AssetType::Prefab, PrefabAssetLoader::load);
     registerLoader(AssetType::Texture, TextureAssetLoader::load);
 }
 

@@ -10,6 +10,10 @@
 #include <utility>
 #include <vector>
 
+namespace lunalite::asset {
+class Prefab;
+}
+
 namespace lunalite::scene {
 struct SceneSettings {
     asset::AssetHandle environment_map{0};
@@ -24,6 +28,7 @@ public:
     void destroyEntity(Entity entity);
     bool setParent(Entity child, Entity parent, bool keepWorldTransform = true);
     bool clearParent(Entity child, bool keepWorldTransform = true);
+    std::vector<Entity> instantiatePrefab(asset::AssetHandle prefab, Entity parent = {});
 
     void clear();
     void copyFrom(const Scene& other);

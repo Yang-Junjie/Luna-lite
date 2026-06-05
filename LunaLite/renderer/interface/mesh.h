@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+#include <glm/mat4x4.hpp>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -104,5 +106,13 @@ public:
 
 private:
     std::vector<SubMesh> m_submeshes;
+};
+
+struct MeshInstance {
+    asset::AssetHandle mesh{0};
+    std::vector<asset::AssetHandle> materials;
+    glm::mat4 transform{1.0f};
+    uint32_t submesh_start{0};
+    uint32_t submesh_count{std::numeric_limits<uint32_t>::max()};
 };
 } // namespace lunalite::renderer::interface

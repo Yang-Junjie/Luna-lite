@@ -1,7 +1,6 @@
 #pragma once
 #include "frame_image.h"
 #include "mesh.h"
-#include "model.h"
 #include "render_lighting.h"
 
 #include <cstdint>
@@ -21,7 +20,7 @@ public:
         setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos, float exposure) = 0;
     virtual void setLighting(const RenderLighting& lighting) = 0;
 
-    virtual void renderModel(const Model& model, const glm::mat4& transform) = 0;
+    virtual void renderMesh(const MeshInstance& meshInstance) = 0;
 
     virtual void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) = 0;
 

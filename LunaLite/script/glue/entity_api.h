@@ -34,10 +34,10 @@ public:
     static glm::vec3 getScale(scene::Scene& scene, scene::Entity entity);
     static void setScale(scene::Scene& scene, scene::Entity entity, const glm::vec3& value);
 
-    static bool hasModel(scene::Scene& scene, scene::Entity entity);
-    static asset::AssetHandle getModel(scene::Scene& scene, scene::Entity entity);
-    static void setModel(scene::Scene& scene, scene::Entity entity, asset::AssetHandle model);
-    static void removeModel(scene::Scene& scene, scene::Entity entity);
+    static bool hasMeshRenderer(scene::Scene& scene, scene::Entity entity);
+    static asset::AssetHandle getMeshRenderer(scene::Scene& scene, scene::Entity entity);
+    static void setMeshRenderer(scene::Scene& scene, scene::Entity entity, asset::AssetHandle mesh);
+    static void removeMeshRenderer(scene::Scene& scene, scene::Entity entity);
 
     static bool hasCamera(scene::Scene& scene, scene::Entity entity);
     static void addCamera(scene::Scene& scene, scene::Entity entity);

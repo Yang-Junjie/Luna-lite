@@ -75,22 +75,28 @@ void DemoLayer::onAttach()
         return;
     }
 
-    if (project_info->start_scene.empty()) {
-        LUNA_CORE_ERROR("Runtime failed to load scene: project '{}' has no StartScene", project_info->name);
-        return;
-    }
-
-    const auto scene_path = *project_root_path / project_info->start_scene;
-    if (!scene::SceneSerializer::deserialize(m_scene, scene_path)) {
-        LUNA_CORE_ERROR("Runtime failed to load start scene '{}'", scene_path.string());
+    if (!project_info->start_scene.empty()) {
+        const auto scene_path = *project_root_path / project_info->start_scene;
+        if (!scene::SceneSerializer::deserialize(m_scene, scene_path)) {
+            LUNA_CORE_ERROR("Runtime failed to load start scene '{}'", scene_path.string());
+            return;
+        }
+        LUNA_CORE_INFO("Runtime loaded project '{}' and scene '{}'", project_info->name, scene_path.string());
+    } else {
+        LUNA_CORE_WARN("Runtime project '{}' has no StartScene; starting with an empty scene", project_info->name);
+        m_scene_loaded = true;
+        core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
+        m_scene.onRuntimeStart();
+        m_runtime_started = true;
+        LUNA_CORE_INFO("Runtime started empty scene for project '{}'", project_info->name);
         return;
     }
 
     m_scene_loaded = true;
-    LUNA_CORE_INFO("Runtime loaded project '{}' and scene '{}'", project_info->name, scene_path.string());
     core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
     m_scene.onRuntimeStart();
     m_runtime_started = true;
+    const auto scene_path = *project_root_path / project_info->start_scene;
     LUNA_CORE_INFO("Runtime started scene '{}'", scene_path.string());
 }
 

@@ -2,7 +2,7 @@
 #include "../asset_importer.h"
 
 namespace lunalite::asset {
-class ModelAssetImporter final : public Importer {
+class PrefabAssetImporter final : public Importer {
 public:
     std::vector<AssetMetadata> import(const std::filesystem::path& assetPath,
                                       AssetMetadataStore& metadataStore) override;
