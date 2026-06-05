@@ -1,0 +1,16 @@
+Asset:
+  Handle: 9732334432868309540
+  Type: Texture
+  Name: FlightHelmet_Materials_GlassPlasticMat_BaseColor
+  FilePath: Assets/Models/FlightHelmet/glTF/FlightHelmet_Materials_GlassPlasticMat_BaseColor.png
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: SRGB
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: Repeat
+      AddressW: Repeat

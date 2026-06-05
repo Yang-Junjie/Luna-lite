@@ -1,5 +1,27 @@
 Prefab:
   Nodes:
+    - Name: EnvironmentTest
+      Transform:
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+      Children:
+        - 1
+        - 2
+        - 3
     - Name: render_camera_n3d
       Transform:
         - 0.9999533
@@ -55,9 +77,9 @@ Prefab:
         - -1.0962677
         - 1
       Children:
-        - 3
         - 4
         - 5
+        - 6
     - Name: Metallic0
       Transform:
         - 1
@@ -132,7 +154,4 @@ Prefab:
         - 17403369179540497490
       SubMeshStart: 2
       SubMeshCount: 1
-  Roots:
-    - 0
-    - 1
-    - 2
+  Root: 0

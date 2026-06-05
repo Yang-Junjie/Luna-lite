@@ -21,5 +21,4 @@ Prefab:
       Mesh: 3220637738742488297
       Materials:
         - 3220637738742488299
-  Roots:
-    - 0
+  Root: 0

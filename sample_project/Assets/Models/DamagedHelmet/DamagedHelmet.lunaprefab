@@ -1,5 +1,25 @@
 Prefab:
   Nodes:
+    - Name: DamagedHelmet
+      Transform:
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+        - 0
+        - 0
+        - 0
+        - 0
+        - 1
+      Children:
+        - 1
     - Name: node_damagedHelmet_-6514
       Transform:
         - 1
@@ -22,5 +42,4 @@ Prefab:
       Materials:
         - 4807869584785364304
       SubMeshCount: 1
-  Roots:
-    - 0
+  Root: 0

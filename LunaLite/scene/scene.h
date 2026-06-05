@@ -4,8 +4,8 @@
 #include "../script/script_runtime.h"
 #include "entity.h"
 
-#include <glm/mat4x4.hpp>
 #include <entt/entt.hpp>
+#include <glm/mat4x4.hpp>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -28,7 +28,7 @@ public:
     void destroyEntity(Entity entity);
     bool setParent(Entity child, Entity parent, bool keepWorldTransform = true);
     bool clearParent(Entity child, bool keepWorldTransform = true);
-    std::vector<Entity> instantiatePrefab(asset::AssetHandle prefab, Entity parent = {});
+    Entity instantiatePrefab(asset::AssetHandle prefab, Entity parent = {});
 
     void clear();
     void copyFrom(const Scene& other);

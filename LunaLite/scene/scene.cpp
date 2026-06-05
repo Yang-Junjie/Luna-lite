@@ -51,9 +51,7 @@ bool decomposeTransform(const glm::mat4& matrix, TransformComponent& transform)
     return true;
 }
 
-glm::mat4 getWorldTransformRecursive(const Scene& scene,
-                                     Entity entity,
-                                     std::unordered_set<entt::entity>& visited)
+glm::mat4 getWorldTransformRecursive(const Scene& scene, Entity entity, std::unordered_set<entt::entity>& visited)
 {
     if (!scene.isValidEntity(entity) || !visited.insert(entity.getHandle()).second) {
         return glm::mat4{1.0f};
@@ -171,7 +169,7 @@ bool Scene::clearParent(Entity child, bool keepWorldTransform)
     return setParent(child, Entity{}, keepWorldTransform);
 }
 
-std::vector<Entity> Scene::instantiatePrefab(asset::AssetHandle prefabHandle, Entity parent)
+Entity Scene::instantiatePrefab(asset::AssetHandle prefabHandle, Entity parent)
 {
     const auto* prefab = asset::AssetDatabase::get().get<asset::Prefab>(prefabHandle);
     if (prefab == nullptr) {
@@ -180,8 +178,7 @@ std::vector<Entity> Scene::instantiatePrefab(asset::AssetHandle prefabHandle, En
     }
 
     const auto& nodes = prefab->getNodes();
-    const auto& roots = prefab->getRoots();
-    if (nodes.empty()) {
+    if (nodes.empty() || !prefab->hasRoot()) {
         return {};
     }
 
@@ -227,24 +224,7 @@ std::vector<Entity> Scene::instantiatePrefab(asset::AssetHandle prefabHandle, En
         return entity;
     };
 
-    std::vector<Entity> instantiatedRoots;
-    instantiatedRoots.reserve(roots.size());
-
-    for (const auto rootIndex : roots) {
-        const auto rootEntity = instantiateNode(instantiateNode, rootIndex, parent);
-        if (rootEntity) {
-            instantiatedRoots.push_back(rootEntity);
-        }
-    }
-
-    if (instantiatedRoots.empty() && !nodes.empty()) {
-        const auto rootEntity = instantiateNode(instantiateNode, 0, parent);
-        if (rootEntity) {
-            instantiatedRoots.push_back(rootEntity);
-        }
-    }
-
-    return instantiatedRoots;
+    return instantiateNode(instantiateNode, prefab->getRoot(), parent);
 }
 
 void Scene::clear()
@@ -279,8 +259,7 @@ void Scene::copyFrom(const Scene& other)
         }
 
         if (other.hasComponent<MeshRendererComponent>(sourceEntity)) {
-            addComponent<MeshRendererComponent>(targetEntity) =
-                other.getComponent<MeshRendererComponent>(sourceEntity);
+            addComponent<MeshRendererComponent>(targetEntity) = other.getComponent<MeshRendererComponent>(sourceEntity);
         }
 
         if (other.hasComponent<ScriptComponent>(sourceEntity)) {

@@ -1,14 +1,13 @@
 #include "../../core/log.h"
-#include "../asset_metadata.h"
 #include "../../project/project_manager.h"
+#include "../asset_metadata.h"
 #include "prefab_asset_loader.h"
 
 #include <cstdint>
 
 #include <filesystem>
 #include <limits>
-#include <unordered_set>
-#include <variant>
+#include <string>
 #include <yaml-cpp/yaml.h>
 
 namespace lunalite::asset {
@@ -42,76 +41,25 @@ std::vector<AssetHandle> parseHandles(const YAML::Node& node)
     return handles;
 }
 
-std::vector<uint32_t> computeRoots(const std::vector<PrefabNode>& nodes)
+uint32_t parseRootIndex(const YAML::Node& prefabNode, size_t nodeCount, const std::filesystem::path& path)
 {
-    std::vector<bool> referenced(nodes.size(), false);
-    for (const auto& node : nodes) {
-        for (const auto child : node.children) {
-            if (child < referenced.size()) {
-                referenced[child] = true;
-            }
-        }
-    }
-
-    std::vector<uint32_t> roots;
-    for (uint32_t index = 0; index < nodes.size(); ++index) {
-        if (!referenced[index]) {
-            roots.push_back(index);
-        }
-    }
-    return roots;
-}
-
-std::shared_ptr<Prefab> loadLegacyModel(const AssetMetadata& metadata, const std::filesystem::path& path)
-{
-    auto prefab = std::make_shared<Prefab>();
-    prefab->handle = metadata.Handle;
-
-    try {
-        const auto root = YAML::LoadFile(path.string());
-        const auto modelNode = root["Model"] ? root["Model"] : root;
-        const auto meshesNode = modelNode["Meshes"];
-        if (!meshesNode || !meshesNode.IsSequence()) {
-            LUNA_CORE_ERROR("Failed to load legacy model '{}': missing Meshes sequence", path.string());
-            return nullptr;
+    if (const auto rootNode = prefabNode["Root"]; rootNode) {
+        const auto rootIndex = rootNode.as<uint32_t>(Prefab::InvalidRoot);
+        if (rootIndex < nodeCount) {
+            return rootIndex;
         }
 
-        std::vector<PrefabNode> nodes;
-        nodes.reserve(meshesNode.size() + 1);
-
-        PrefabNode rootNode;
-        rootNode.name = metadata.Name.empty() ? path.stem().string() : metadata.Name;
-        for (size_t meshIndex = 0; meshIndex < meshesNode.size(); ++meshIndex) {
-            const auto& meshNode = meshesNode[meshIndex];
-
-            PrefabNode node;
-            node.name = rootNode.name + "_Mesh_" + std::to_string(meshIndex);
-            node.transform = parseMatrix(meshNode["Transform"]);
-            node.mesh = AssetHandle{meshNode["Mesh"].as<uint64_t>(0)};
-            node.submesh_start = meshNode["SubMeshStart"].as<uint32_t>(0);
-            node.submesh_count = meshNode["SubMeshCount"].as<uint32_t>(std::numeric_limits<uint32_t>::max());
-            node.materials = parseHandles(meshNode["Materials"]);
-
-            rootNode.children.push_back(static_cast<uint32_t>(nodes.size() + 1));
-            nodes.push_back(std::move(node));
-        }
-
-        nodes.insert(nodes.begin(), std::move(rootNode));
-        prefab->setNodes(std::move(nodes));
-        prefab->setRoots({0});
-        LUNA_CORE_DEBUG("Loaded legacy prefab '{}' (mesh entries: {}, handle {})",
+        LUNA_CORE_ERROR("Failed to load prefab '{}': Root index {} is out of range for {} node(s)",
                         path.string(),
-                        prefab->getNodes().size() > 0 ? prefab->getNodes().size() - 1 : 0,
-                        metadata.Handle.toString());
-        return prefab;
-    } catch (const YAML::Exception& exception) {
-        LUNA_CORE_ERROR("Failed to load legacy model '{}': {}", path.string(), exception.what());
-    } catch (const std::filesystem::filesystem_error& exception) {
-        LUNA_CORE_ERROR("Failed to load legacy model '{}': {}", path.string(), exception.what());
+                        rootIndex,
+                        nodeCount);
+        return Prefab::InvalidRoot;
     }
 
-    return nullptr;
+    LUNA_CORE_ERROR("Failed to load prefab '{}': missing Root", path.string());
+    return Prefab::InvalidRoot;
 }
+
 } // namespace
 
 std::shared_ptr<Prefab> PrefabAssetLoader::load(const AssetMetadata& metadata)
@@ -122,10 +70,6 @@ std::shared_ptr<Prefab> PrefabAssetLoader::load(const AssetMetadata& metadata)
 
     try {
         const auto root = YAML::LoadFile(path.string());
-
-        if (root["Model"]) {
-            return loadLegacyModel(metadata, path);
-        }
 
         const auto prefabNode = root["Prefab"] ? root["Prefab"] : root;
         const auto nodesNode = prefabNode["Nodes"];
@@ -157,23 +101,18 @@ std::shared_ptr<Prefab> PrefabAssetLoader::load(const AssetMetadata& metadata)
             nodes.push_back(std::move(node));
         }
 
-        prefab->setNodes(std::move(nodes));
-
-        std::vector<uint32_t> roots;
-        if (const auto rootsNode = prefabNode["Roots"]; rootsNode && rootsNode.IsSequence()) {
-            roots.reserve(rootsNode.size());
-            for (const auto& rootEntry : rootsNode) {
-                roots.push_back(rootEntry.as<uint32_t>(0));
-            }
-        } else {
-            roots = computeRoots(prefab->getNodes());
+        const auto rootIndex = parseRootIndex(prefabNode, nodes.size(), path);
+        if (rootIndex == Prefab::InvalidRoot) {
+            return nullptr;
         }
-        prefab->setRoots(std::move(roots));
 
-        LUNA_CORE_DEBUG("Loaded prefab '{}' (nodes: {}, roots: {}, handle {})",
+        prefab->setNodes(std::move(nodes));
+        prefab->setRoot(rootIndex);
+
+        LUNA_CORE_DEBUG("Loaded prefab '{}' (nodes: {}, root: {}, handle {})",
                         path.string(),
                         prefab->getNodes().size(),
-                        prefab->getRoots().size(),
+                        prefab->hasRoot() ? std::to_string(prefab->getRoot()) : "none",
                         metadata.Handle.toString());
         return prefab;
     } catch (const YAML::Exception& exception) {

@@ -22,6 +22,8 @@ struct PrefabNode {
 
 class Prefab : public Asset {
 public:
+    static constexpr uint32_t InvalidRoot = std::numeric_limits<uint32_t>::max();
+
     const std::vector<PrefabNode>& getNodes() const
     {
         return m_nodes;
@@ -37,19 +39,19 @@ public:
         m_nodes = std::move(nodes);
     }
 
-    const std::vector<uint32_t>& getRoots() const
+    bool hasRoot() const
     {
-        return m_roots;
+        return m_root != InvalidRoot;
     }
 
-    std::vector<uint32_t>& editRoots()
+    uint32_t getRoot() const
     {
-        return m_roots;
+        return m_root;
     }
 
-    void setRoots(std::vector<uint32_t> roots)
+    void setRoot(uint32_t root)
     {
-        m_roots = std::move(roots);
+        m_root = root;
     }
 
     AssetType getAssetsType() const override
@@ -59,6 +61,6 @@ public:
 
 private:
     std::vector<PrefabNode> m_nodes;
-    std::vector<uint32_t> m_roots;
+    uint32_t m_root{InvalidRoot};
 };
 } // namespace lunalite::asset

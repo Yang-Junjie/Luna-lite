@@ -9,8 +9,8 @@
 #include "editor_layer.h"
 
 #include <cstdint>
-#include <filesystem>
 
+#include <filesystem>
 #include <imgui.h>
 
 namespace lunalite::editor {
@@ -279,9 +279,9 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
     }
 
     if (payload.type == asset::AssetType::Prefab) {
-        const auto roots = m_scene.instantiatePrefab(handle);
-        if (!roots.empty()) {
-            m_selected_entity = roots.front();
+        const auto root = m_scene.instantiatePrefab(handle);
+        if (root) {
+            m_selected_entity = root;
         }
         return;
     }
@@ -289,9 +289,9 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
     if (payload.type == asset::AssetType::Mesh) {
         const auto prefabHandle = resolvePrefabCompanion(handle);
         if (prefabHandle.isValid()) {
-            const auto roots = m_scene.instantiatePrefab(prefabHandle);
-            if (!roots.empty()) {
-                m_selected_entity = roots.front();
+            const auto root = m_scene.instantiatePrefab(prefabHandle);
+            if (root) {
+                m_selected_entity = root;
                 return;
             }
         }

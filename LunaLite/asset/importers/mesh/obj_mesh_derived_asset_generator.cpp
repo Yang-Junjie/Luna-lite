@@ -115,16 +115,13 @@ std::vector<AssetMetadata>
     node.mesh = meshMetadata.Handle;
     node.materials = materialHandles;
     prefab.editNodes().push_back(std::move(node));
-    prefab.setRoots({0});
+    prefab.setRoot(0);
 
     const auto prefabPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunaprefab");
     prefabDefinitions.writeDefinition(prefabPath, prefab, true);
 
-    const auto prefabMetadata =
-        createDerivedMetadataFile(metadataStore,
-                                  prefabPath,
-                                  AssetType::Prefab,
-                                  AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
+    const auto prefabMetadata = createDerivedMetadataFile(
+        metadataStore, prefabPath, AssetType::Prefab, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
     if (prefabMetadata.Handle.isValid()) {
         derivedMetadata.push_back(prefabMetadata);
     }

@@ -5,8 +5,8 @@
 #include "hierarchy_panel.h"
 
 #include <cstdint>
-#include <filesystem>
 
+#include <filesystem>
 #include <imgui.h>
 #include <string>
 
@@ -47,9 +47,7 @@ void addScriptToEntity(scene::Scene& scene, scene::Entity entity, asset::AssetHa
     script.scripts.push_back({handle, true});
 }
 
-scene::Entity createMeshRendererEntity(scene::Scene& scene,
-                                       asset::AssetHandle meshHandle,
-                                       scene::Entity parent = {})
+scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle meshHandle, scene::Entity parent = {})
 {
     auto entity = scene.createEntity();
     auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
@@ -72,9 +70,9 @@ void createEntityFromAsset(scene::Scene& scene,
     }
 
     if (payload.type == asset::AssetType::Prefab) {
-        const auto roots = scene.instantiatePrefab(handle, targetEntity);
-        if (!roots.empty()) {
-            selectedEntity = roots.front();
+        const auto root = scene.instantiatePrefab(handle, targetEntity);
+        if (root) {
+            selectedEntity = root;
         }
         return;
     }
@@ -82,14 +80,15 @@ void createEntityFromAsset(scene::Scene& scene,
     if (payload.type == asset::AssetType::Mesh) {
         const auto prefabHandle = resolvePrefabCompanion(handle);
         if (prefabHandle.isValid()) {
-            const auto roots = scene.instantiatePrefab(prefabHandle, targetEntity);
-            if (!roots.empty()) {
-                selectedEntity = roots.front();
+            const auto root = scene.instantiatePrefab(prefabHandle, targetEntity);
+            if (root) {
+                selectedEntity = root;
                 return;
             }
         }
 
-        auto entity = createMeshRendererEntity(scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
+        auto entity =
+            createMeshRendererEntity(scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
         selectedEntity = entity;
         return;
     }
@@ -113,7 +112,8 @@ bool acceptEntityDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene:
             if (payload->DataSize == sizeof(EntityDragDropPayload)) {
                 const auto& entityPayload = *static_cast<const EntityDragDropPayload*>(payload->Data);
                 const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
-                if (scene.isValidEntity(dragged) && (!targetEntity || dragged.getHandle() != targetEntity.getHandle()) &&
+                if (scene.isValidEntity(dragged) &&
+                    (!targetEntity || dragged.getHandle() != targetEntity.getHandle()) &&
                     scene.setParent(dragged, targetEntity, true)) {
                     selectedEntity = dragged;
                     accepted = true;
@@ -156,8 +156,8 @@ void drawEntityNode(scene::Scene& scene,
     }
     label += "##" + std::to_string(entityId);
 
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
-                               ImGuiTreeNodeFlags_SpanAvailWidth;
+    ImGuiTreeNodeFlags flags =
+        ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (children.empty()) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }

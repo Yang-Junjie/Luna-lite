@@ -203,12 +203,12 @@ bool writeGltfTriangle(const std::filesystem::path& gltfPath,
     }
   ],
   "nodes": [
-    { "children": [1, 2], "translation": [1.0, 2.0, 3.0] },
+    { "children": [1], "translation": [1.0, 2.0, 3.0] },
     { "mesh": 0 },
     { "mesh": 1, "translation": [0.0, -2.0, 0.0] }
   ],
   "scenes": [
-    { "nodes": [0] }
+    { "nodes": [0, 2] }
   ],
   "scene": 0
 })";
@@ -550,20 +550,23 @@ int main()
 
     const auto gltfPrefabHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/triangle.lunaprefab");
     const auto* gltfPrefab = asset::AssetManager::get().getAsset<asset::Prefab>(gltfPrefabHandle);
-    if (gltfPrefab == nullptr || gltfPrefab->getNodes().size() != 3 || gltfPrefab->getRoots().size() != 1) {
+    if (gltfPrefab == nullptr || gltfPrefab->getNodes().size() != 4 || !gltfPrefab->hasRoot()) {
         std::cerr << "Failed to load generated glTF prefab through AssetManager.\n";
         return 1;
     }
-    const auto& rootNode = gltfPrefab->getNodes()[0];
-    const auto& firstMeshNode = gltfPrefab->getNodes()[1];
-    const auto& secondMeshNode = gltfPrefab->getNodes()[2];
-    if (gltfPrefab->getRoots().front() != 0 || rootNode.children.size() != 2 || rootNode.children[0] != 1 ||
-        rootNode.children[1] != 2 || rootNode.mesh.isValid() || firstMeshNode.mesh != gltfHandle ||
-        firstMeshNode.materials.size() != 2 || firstMeshNode.materials.front() != gltfMaterialHandle ||
+    const auto& importRootNode = gltfPrefab->getNodes()[0];
+    const auto& sceneRootNode = gltfPrefab->getNodes()[1];
+    const auto& firstMeshNode = gltfPrefab->getNodes()[2];
+    const auto& secondMeshNode = gltfPrefab->getNodes()[3];
+    if (gltfPrefab->getRoot() != 0 || importRootNode.name != "triangle" || importRootNode.children.size() != 2 ||
+        importRootNode.children[0] != 1 || importRootNode.children[1] != 3 || importRootNode.mesh.isValid() ||
+        sceneRootNode.children.size() != 1 || sceneRootNode.children.front() != 2 || sceneRootNode.mesh.isValid() ||
+        firstMeshNode.mesh != gltfHandle || firstMeshNode.materials.size() != 2 ||
+        firstMeshNode.materials.front() != gltfMaterialHandle ||
         firstMeshNode.materials[1] != blackGltfMaterialHandle || firstMeshNode.submesh_start != 0 ||
         firstMeshNode.submesh_count != 1 || secondMeshNode.mesh != gltfHandle || secondMeshNode.submesh_start != 1 ||
-        secondMeshNode.submesh_count != 1 || !nearlyEqual(rootNode.transform[3][0], 1.0f) ||
-        !nearlyEqual(rootNode.transform[3][1], 2.0f) || !nearlyEqual(rootNode.transform[3][2], 3.0f) ||
+        secondMeshNode.submesh_count != 1 || !nearlyEqual(sceneRootNode.transform[3][0], 1.0f) ||
+        !nearlyEqual(sceneRootNode.transform[3][1], 2.0f) || !nearlyEqual(sceneRootNode.transform[3][2], 3.0f) ||
         !nearlyEqual(secondMeshNode.transform[3][1], -2.0f)) {
         std::cerr << "Failed to preserve glTF prefab hierarchy through AssetManager.\n";
         return 1;
@@ -581,8 +584,8 @@ int main()
 
     const auto objPrefabHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/cube.lunaprefab");
     const auto* objPrefab = asset::AssetManager::get().getAsset<asset::Prefab>(objPrefabHandle);
-    if (objPrefab == nullptr || objPrefab->getNodes().size() != 1 || objPrefab->getRoots().size() != 1 ||
-        !objPrefab->getNodes().front().mesh.isValid()) {
+    if (objPrefab == nullptr || objPrefab->getNodes().size() != 1 || !objPrefab->hasRoot() ||
+        objPrefab->getRoot() != 0 || !objPrefab->getNodes().front().mesh.isValid()) {
         std::cerr << "Failed to load generated OBJ prefab through AssetManager.\n";
         return 1;
     }

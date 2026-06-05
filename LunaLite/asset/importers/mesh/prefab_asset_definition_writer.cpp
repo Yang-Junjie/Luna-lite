@@ -62,12 +62,8 @@ void PrefabAssetDefinitionWriter::writeDefinition(const std::filesystem::path& p
     }
     prefabNode["Nodes"] = nodeList;
 
-    if (!prefab.getRoots().empty()) {
-        YAML::Node roots{YAML::NodeType::Sequence};
-        for (const auto root : prefab.getRoots()) {
-            roots.push_back(root);
-        }
-        prefabNode["Roots"] = roots;
+    if (prefab.hasRoot()) {
+        prefabNode["Root"] = prefab.getRoot();
     }
 
     YAML::Node root;

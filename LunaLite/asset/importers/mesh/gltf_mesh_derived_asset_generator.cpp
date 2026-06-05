@@ -213,6 +213,7 @@ std::vector<std::pair<uint32_t, uint32_t>> calculateMeshSubmeshRanges(const fast
 }
 
 Prefab buildPrefabDefinition(fastgltf::Asset& asset,
+                             const std::string& prefabName,
                              AssetHandle meshHandle,
                              const std::vector<AssetHandle>& materialHandles)
 {
@@ -229,8 +230,8 @@ Prefab buildPrefabDefinition(fastgltf::Asset& asset,
 
         const auto& node = asset.nodes[nodeIndex];
         PrefabNode prefabNode;
-        prefabNode.name = sanitizeAssetName(node.name.empty() ? "Node" + std::to_string(nodeIndex)
-                                                              : std::string{node.name});
+        prefabNode.name =
+            sanitizeAssetName(node.name.empty() ? "Node" + std::to_string(nodeIndex) : std::string{node.name});
         prefabNode.transform = toGlmMatrix(fastgltf::getLocalTransformMatrix(node));
 
         if (node.meshIndex && *node.meshIndex < meshRanges.size()) {
@@ -311,7 +312,26 @@ Prefab buildPrefabDefinition(fastgltf::Asset& asset,
         }
     }
 
-    prefab.setRoots(std::move(roots));
+    if (!nodes.empty()) {
+        for (auto& node : nodes) {
+            for (auto& child : node.children) {
+                ++child;
+            }
+        }
+
+        PrefabNode importRoot;
+        importRoot.name = sanitizeAssetName(prefabName);
+        importRoot.children.reserve(roots.size());
+        for (const auto root : roots) {
+            importRoot.children.push_back(root + 1);
+        }
+
+        nodes.insert(nodes.begin(), std::move(importRoot));
+        prefab.setRoot(0);
+        return prefab;
+    }
+
+    prefab.setRoot(Prefab::InvalidRoot);
     return prefab;
 }
 } // namespace
@@ -431,13 +451,13 @@ std::vector<AssetMetadata>
     }
 
     const auto prefabPath = sourceMeshPath.parent_path() / (sourceMeshPath.stem().string() + ".lunaprefab");
-    prefabDefinitions.writeDefinition(prefabPath, buildPrefabDefinition(asset, meshMetadata.Handle, materialHandles), true);
+    prefabDefinitions.writeDefinition(
+        prefabPath,
+        buildPrefabDefinition(asset, sourceMeshPath.stem().string(), meshMetadata.Handle, materialHandles),
+        true);
 
-    const auto prefabMetadata =
-        createDerivedMetadataFile(metadataStore,
-                                  prefabPath,
-                                  AssetType::Prefab,
-                                  AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
+    const auto prefabMetadata = createDerivedMetadataFile(
+        metadataStore, prefabPath, AssetType::Prefab, AssetHandle{static_cast<uint64_t>(meshMetadata.Handle) + 1});
     if (prefabMetadata.Handle.isValid()) {
         derivedMetadata.push_back(prefabMetadata);
     }

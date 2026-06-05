@@ -1,0 +1,16 @@
+Asset:
+  Handle: 9732334432868309545
+  Type: Texture
+  Name: FlightHelmet_Materials_LeatherPartsMat_OcclusionRoughMetal
+  FilePath: Assets/Models/FlightHelmet/glTF/FlightHelmet_Materials_LeatherPartsMat_OcclusionRoughMetal.png
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: Linear
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: Repeat
+      AddressW: Repeat

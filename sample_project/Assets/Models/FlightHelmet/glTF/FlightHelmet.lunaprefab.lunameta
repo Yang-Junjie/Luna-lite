@@ -1,0 +1,6 @@
+Asset:
+  Handle: 9732334432868299536
+  Type: Prefab
+  Name: FlightHelmet
+  FilePath: Assets/Models/FlightHelmet/glTF/FlightHelmet.lunaprefab
+  MemoryOnly: false
