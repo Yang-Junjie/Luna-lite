@@ -1,6 +1,7 @@
 #pragma once
 #include "../interface/frame_image.h"
 #include "../interface/material.h"
+#include "../interface/mesh.h"
 #include "../interface/renderer.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
@@ -21,13 +22,7 @@ public:
     void beginFrame() override;
     void endFrame() override;
     void resize(uint32_t width, uint32_t height) override;
-    void setViewProjection(const glm::mat4& view,
-                           const glm::mat4& proj,
-                           const glm::vec3& cameraPos,
-                           float exposure) override;
-    void setLighting(const interface::RenderLighting& lighting) override;
-    void renderMesh(const interface::MeshInstance& meshInstance) override;
-    void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) override;
+    void renderFrame(const interface::FrameRenderData& frame) override;
     const interface::FrameImage& getFrameImage() const override;
 
     struct alignas(16) FrameUniforms {
@@ -150,6 +145,10 @@ private:
     };
 
     void ensureGBuffer(uint32_t width, uint32_t height);
+    void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos, float exposure);
+    void setLighting(const interface::RenderLighting& lighting);
+    void renderMesh(const interface::MeshDrawCommand& meshCommand);
+    void renderLine(const interface::LineDrawCommand& lineCommand);
     void flushFrameUniforms();
     void drawSubMesh(const interface::Mesh& mesh,
                      size_t submesh_index,

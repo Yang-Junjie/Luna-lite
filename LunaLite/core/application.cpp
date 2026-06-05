@@ -2,6 +2,7 @@
 #include "../imgui/imgui_renderer.h"
 #include "../renderer/debug_renderer.h"
 #include "../renderer/frame_presenter/rhi_frame_presenter.h"
+#include "../renderer/interface/renderer.h"
 #include "../renderer/renderer_controller.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
@@ -79,18 +80,25 @@ void Application::run()
         const std::chrono::duration<float> deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
 
+        m_frame_render_data.clear();
+        m_scene_renderer->beginFrame(m_frame_render_data);
+        m_debug_renderer->beginFrame(m_frame_render_data);
+
         m_window->onUpdate();
 
         for (auto& layer : m_layer_stack) {
             layer->onUpdate(deltaTime.count());
         }
 
-        m_renderer_controller->getRenderer().beginFrame();
-
         for (auto& layer : m_layer_stack) {
             layer->onRender();
         }
 
+        m_debug_renderer->endFrame();
+        m_scene_renderer->endFrame();
+
+        m_renderer_controller->getRenderer().beginFrame();
+        m_renderer_controller->getRenderer().renderFrame(m_frame_render_data);
         m_renderer_controller->getRenderer().endFrame();
 
         if (m_imgui_renderer) {
@@ -141,12 +149,8 @@ void Application::pushOverlay(std::unique_ptr<Layer> overlay)
 void Application::switchRenderer(renderer::interface::RendererKind kind)
 {
     LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
-    LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
-    LUNA_ASSERT(m_debug_renderer, "Debug renderer is null.");
 
     m_renderer_controller->switchRenderer(kind);
-    m_scene_renderer->setRenderer(m_renderer_controller->getRenderer());
-    m_debug_renderer->setRenderer(m_renderer_controller->getRenderer());
 }
 
 scene::SceneRenderer& Application::getSceneRenderer()
@@ -225,8 +229,8 @@ void Application::initialize(const ApplicationCreateInfo& info)
     m_renderer_controller = std::make_unique<renderer::RendererController>(
         *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, m_swapchain_handle);
-    m_debug_renderer = std::make_unique<renderer::DebugRenderer>(m_renderer_controller->getRenderer());
-    m_scene_renderer.reset(new scene::SceneRenderer(m_renderer_controller->getRenderer()));
+    m_debug_renderer = std::make_unique<renderer::DebugRenderer>();
+    m_scene_renderer.reset(new scene::SceneRenderer());
     m_scene_renderer->setViewportSize(info.width, info.height);
 
     if (info.enable_imgui) {

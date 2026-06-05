@@ -2015,6 +2015,20 @@ void Renderer::resize(uint32_t width, uint32_t height)
     ensureGBuffer(width, height);
 }
 
+void Renderer::renderFrame(const interface::FrameRenderData& frame)
+{
+    setLighting(frame.lighting);
+    setViewProjection(frame.camera.view, frame.camera.projection, frame.camera.position, frame.camera.exposure);
+
+    for (const auto& meshCommand : frame.meshes) {
+        renderMesh(meshCommand);
+    }
+
+    for (const auto& lineCommand : frame.debug_lines) {
+        renderLine(lineCommand);
+    }
+}
+
 void Renderer::setViewProjection(const glm::mat4& view,
                                  const glm::mat4& proj,
                                  const glm::vec3& cameraPos,
@@ -2052,7 +2066,7 @@ void Renderer::setLighting(const interface::RenderLighting& lighting)
     m_frame_uniforms_dirty = true;
 }
 
-void Renderer::renderMesh(const interface::MeshInstance& meshInstance)
+void Renderer::renderMesh(const interface::MeshDrawCommand& meshInstance)
 {
     const interface::Material* fallbackMaterial = nullptr;
     bool fallbackMaterialResolved = false;
@@ -2093,7 +2107,8 @@ void Renderer::renderMesh(const interface::MeshInstance& meshInstance)
         if (submesh.material_slot < meshInstance.materials.size()) {
             const auto materialHandle = meshInstance.materials[submesh.material_slot];
             if (materialHandle.isValid()) {
-                if (const auto* resolvedMaterial = asset::AssetDatabase::get().get<interface::Material>(materialHandle)) {
+                if (const auto* resolvedMaterial =
+                        asset::AssetDatabase::get().get<interface::Material>(materialHandle)) {
                     material = resolvedMaterial;
                 }
             }
@@ -2151,11 +2166,11 @@ void Renderer::drawSubMesh(const interface::Mesh& mesh,
     }
 }
 
-void Renderer::renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color)
+void Renderer::renderLine(const interface::LineDrawCommand& lineCommand)
 {
     const LineVertex vertices[] = {
-        LineVertex{.position = start, .color = color},
-        LineVertex{.position = end, .color = color},
+        LineVertex{.position = lineCommand.start, .color = glm::vec3{lineCommand.color}},
+        LineVertex{.position = lineCommand.end, .color = glm::vec3{lineCommand.color}},
     };
 
     flushFrameUniforms();

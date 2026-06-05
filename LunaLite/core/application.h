@@ -1,4 +1,5 @@
 #pragma once
+#include "../renderer/interface/frame_render_data.h"
 #include "../renderer/interface/renderer_kind.h"
 #include "application_event.h"
 #include "event.h"
@@ -98,6 +99,7 @@ private:
     std::unique_ptr<imgui::ImGuiRenderer> m_imgui_renderer;
     bool m_present_scene_to_swapchain{true};
 
+    renderer::interface::FrameRenderData m_frame_render_data;
     LayerStack m_layer_stack;
 };
 

@@ -1,11 +1,8 @@
 #pragma once
 #include "frame_image.h"
-#include "mesh.h"
-#include "render_lighting.h"
+#include "frame_render_data.h"
 
 #include <cstdint>
-
-#include <glm/glm.hpp>
 
 namespace lunalite::renderer::interface {
 class Renderer {
@@ -16,13 +13,7 @@ public:
     virtual void beginFrame() = 0;
     virtual void endFrame() = 0;
     virtual void resize(uint32_t width, uint32_t height) = 0;
-    virtual void
-        setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos, float exposure) = 0;
-    virtual void setLighting(const RenderLighting& lighting) = 0;
-
-    virtual void renderMesh(const MeshInstance& meshInstance) = 0;
-
-    virtual void renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color) = 0;
+    virtual void renderFrame(const FrameRenderData& frame) = 0;
 
     virtual const FrameImage& getFrameImage() const = 0;
 };
