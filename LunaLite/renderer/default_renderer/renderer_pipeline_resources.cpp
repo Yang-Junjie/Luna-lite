@@ -42,6 +42,8 @@ void RendererPipelineResources::createShaders()
     const auto environmentCubemapComputeShaderSource = loadDefaultRendererShader("environment_cubemap.comp");
     const auto environmentIrradianceComputeShaderSource = loadDefaultRendererShader("environment_irradiance.comp");
     const auto environmentPrefilterComputeShaderSource = loadDefaultRendererShader("environment_prefilter.comp");
+    const auto shadowVertexShaderSource = loadDefaultRendererShader("shadow.vert");
+    const auto shadowFragmentShaderSource = loadDefaultRendererShader("shadow.frag");
 
     m_geometry_vertex_shader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Vertex,
@@ -86,6 +88,14 @@ void RendererPipelineResources::createShaders()
     m_environment_prefilter_compute_shader = m_device->createShader(rhi::ShaderDesc{
         .stage = rhi::ShaderStage::Compute,
         .source = environmentPrefilterComputeShaderSource.c_str(),
+    });
+    m_shadow_vertex_shader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Vertex,
+        .source = shadowVertexShaderSource.c_str(),
+    });
+    m_shadow_fragment_shader = m_device->createShader(rhi::ShaderDesc{
+        .stage = rhi::ShaderStage::Fragment,
+        .source = shadowFragmentShaderSource.c_str(),
     });
 }
 
@@ -217,6 +227,38 @@ void RendererPipelineResources::createBindGroupLayouts()
                 },
             },
     });
+
+    m_shadow_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
+        .entries =
+            {
+                rhi::BindGroupLayoutEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::UniformBuffer,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 1,
+                    .type = rhi::BindingType::UniformBuffer,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex),
+                },
+            },
+    });
+
+    m_shadow_lighting_bind_group_layout = m_device->createBindGroupLayout(rhi::BindGroupLayoutDesc{
+        .entries =
+            {
+                rhi::BindGroupLayoutEntry{
+                    .binding = 0,
+                    .type = rhi::BindingType::UniformBuffer,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+                rhi::BindGroupLayoutEntry{
+                    .binding = 1,
+                    .type = rhi::BindingType::CombinedImageSampler,
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Fragment),
+                },
+            },
+    });
 }
 
 void RendererPipelineResources::createPipelineLayouts()
@@ -225,7 +267,9 @@ void RendererPipelineResources::createPipelineLayouts()
         .bind_group_layouts = {m_geometry_bind_group_layout, m_material_texture_bind_group_layout},
     });
     m_lighting_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
-        .bind_group_layouts = {m_lighting_bind_group_layout, m_environment_bind_group_layout},
+        .bind_group_layouts = {m_lighting_bind_group_layout,
+                               m_environment_bind_group_layout,
+                               m_shadow_lighting_bind_group_layout},
     });
     m_skybox_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
         .bind_group_layouts = {m_geometry_bind_group_layout, m_environment_bind_group_layout},
@@ -240,6 +284,9 @@ void RendererPipelineResources::createPipelineLayouts()
                     .size = sizeof(glm::vec4),
                 },
             },
+    });
+    m_shadow_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
+        .bind_group_layouts = {m_shadow_bind_group_layout},
     });
 }
 
@@ -391,6 +438,44 @@ void RendererPipelineResources::createPipelines()
             },
     });
 
+    m_shadow_pipeline =
+        m_device->createPipeline(
+            rhi::PipelineDesc{
+                .topology = rhi::PrimitiveTopology::Triangle,
+                .vertex_input =
+                    rhi::VertexInputDesc{
+                        .buffers =
+                            {
+                                rhi::VertexBufferLayoutDesc{
+                                    .binding = 0,
+                                    .stride = sizeof(interface::Vertex),
+                                    .attributes =
+                                        {
+                                            rhi::VertexAttributeDesc{
+                                                .location = 0,
+                                                .format = rhi::VertexFormat::Float3,
+                                                .offset = offsetof(interface::Vertex, position),
+                                            },
+                                        },
+                                },
+                            },
+                    },
+                .layout = m_shadow_pipeline_layout,
+                .vertex_shader = m_shadow_vertex_shader,
+                .fragment_shader = m_shadow_fragment_shader,
+                .render_target_state =
+                    rhi::RenderTargetState{
+                        .has_depth_stencil = true,
+                        .depth_stencil_format = rhi::TextureFormat::Depth32F,
+                    },
+                .depth_state =
+                    rhi::DepthState{
+                        .enabled = true,
+                        .write_enabled = true,
+                        .compare = rhi::CompareOp::Less,
+                    },
+            });
+
     m_environment_cubemap_pipeline = m_device->createComputePipeline(rhi::ComputePipelineDesc{
         .layout = m_environment_compute_pipeline_layout,
         .compute_shader = m_environment_cubemap_compute_shader,
@@ -464,6 +549,8 @@ void RendererPipelineResources::validateShaders() const
     LUNA_ASSERT(m_environment_cubemap_compute_shader, "Failed to create environment cubemap compute shader.");
     LUNA_ASSERT(m_environment_irradiance_compute_shader, "Failed to create environment irradiance compute shader.");
     LUNA_ASSERT(m_environment_prefilter_compute_shader, "Failed to create environment prefilter compute shader.");
+    LUNA_ASSERT(m_shadow_vertex_shader, "Failed to create shadow vertex shader.");
+    LUNA_ASSERT(m_shadow_fragment_shader, "Failed to create shadow fragment shader.");
 }
 
 void RendererPipelineResources::validateBindGroupLayouts() const
@@ -473,6 +560,8 @@ void RendererPipelineResources::validateBindGroupLayouts() const
     LUNA_ASSERT(m_lighting_bind_group_layout, "Failed to create lighting bind group layout.");
     LUNA_ASSERT(m_environment_bind_group_layout, "Failed to create environment bind group layout.");
     LUNA_ASSERT(m_environment_compute_bind_group_layout, "Failed to create environment compute bind group layout.");
+    LUNA_ASSERT(m_shadow_bind_group_layout, "Failed to create shadow bind group layout.");
+    LUNA_ASSERT(m_shadow_lighting_bind_group_layout, "Failed to create shadow lighting bind group layout.");
 }
 
 void RendererPipelineResources::validatePipelineLayouts() const
@@ -481,6 +570,7 @@ void RendererPipelineResources::validatePipelineLayouts() const
     LUNA_ASSERT(m_lighting_pipeline_layout, "Failed to create lighting pipeline layout.");
     LUNA_ASSERT(m_skybox_pipeline_layout, "Failed to create skybox pipeline layout.");
     LUNA_ASSERT(m_environment_compute_pipeline_layout, "Failed to create environment compute pipeline layout.");
+    LUNA_ASSERT(m_shadow_pipeline_layout, "Failed to create shadow pipeline layout.");
 }
 
 void RendererPipelineResources::validatePipelines() const
@@ -492,6 +582,7 @@ void RendererPipelineResources::validatePipelines() const
     LUNA_ASSERT(m_environment_cubemap_pipeline, "Failed to create environment cubemap pipeline.");
     LUNA_ASSERT(m_environment_irradiance_pipeline, "Failed to create environment irradiance pipeline.");
     LUNA_ASSERT(m_environment_prefilter_pipeline, "Failed to create environment prefilter pipeline.");
+    LUNA_ASSERT(m_shadow_pipeline, "Failed to create shadow pipeline.");
 }
 
 void RendererPipelineResources::validateUniformBindings() const
@@ -519,6 +610,10 @@ void RendererPipelineResources::destroy()
     if (m_environment_prefilter_pipeline) {
         m_device->destroyPipeline(m_environment_prefilter_pipeline);
         m_environment_prefilter_pipeline = {};
+    }
+    if (m_shadow_pipeline) {
+        m_device->destroyPipeline(m_shadow_pipeline);
+        m_shadow_pipeline = {};
     }
     if (m_environment_irradiance_pipeline) {
         m_device->destroyPipeline(m_environment_irradiance_pipeline);
@@ -549,6 +644,10 @@ void RendererPipelineResources::destroy()
         m_device->destroyPipelineLayout(m_environment_compute_pipeline_layout);
         m_environment_compute_pipeline_layout = {};
     }
+    if (m_shadow_pipeline_layout) {
+        m_device->destroyPipelineLayout(m_shadow_pipeline_layout);
+        m_shadow_pipeline_layout = {};
+    }
     if (m_skybox_pipeline_layout) {
         m_device->destroyPipelineLayout(m_skybox_pipeline_layout);
         m_skybox_pipeline_layout = {};
@@ -565,6 +664,14 @@ void RendererPipelineResources::destroy()
     if (m_environment_compute_bind_group_layout) {
         m_device->destroyBindGroupLayout(m_environment_compute_bind_group_layout);
         m_environment_compute_bind_group_layout = {};
+    }
+    if (m_shadow_bind_group_layout) {
+        m_device->destroyBindGroupLayout(m_shadow_bind_group_layout);
+        m_shadow_bind_group_layout = {};
+    }
+    if (m_shadow_lighting_bind_group_layout) {
+        m_device->destroyBindGroupLayout(m_shadow_lighting_bind_group_layout);
+        m_shadow_lighting_bind_group_layout = {};
     }
     if (m_environment_bind_group_layout) {
         m_device->destroyBindGroupLayout(m_environment_bind_group_layout);
@@ -586,6 +693,14 @@ void RendererPipelineResources::destroy()
     if (m_environment_prefilter_compute_shader) {
         m_device->destroyShader(m_environment_prefilter_compute_shader);
         m_environment_prefilter_compute_shader = {};
+    }
+    if (m_shadow_fragment_shader) {
+        m_device->destroyShader(m_shadow_fragment_shader);
+        m_shadow_fragment_shader = {};
+    }
+    if (m_shadow_vertex_shader) {
+        m_device->destroyShader(m_shadow_vertex_shader);
+        m_shadow_vertex_shader = {};
     }
     if (m_environment_irradiance_compute_shader) {
         m_device->destroyShader(m_environment_irradiance_compute_shader);

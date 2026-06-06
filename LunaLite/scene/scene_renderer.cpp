@@ -4,6 +4,7 @@
 #include "components.h"
 #include "scene_renderer.h"
 
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <utility>
@@ -53,6 +54,20 @@ bool decomposePose(const glm::mat4& matrix, glm::vec3& translation, glm::quat& r
 
     rotation = glm::normalize(glm::quat_cast(glm::mat3{basis0, basis1, basis2}));
     return true;
+}
+
+renderer::interface::RenderShadowSettings toRenderShadowSettings(const ShadowSettings& shadow)
+{
+    return renderer::interface::RenderShadowSettings{
+        .enabled = shadow.enabled,
+        .map_size = std::max(shadow.map_size, 1u),
+        .max_distance = std::max(shadow.max_distance, 0.0f),
+        .bias = std::max(shadow.bias, 0.0f),
+        .normal_bias = std::max(shadow.normal_bias, 0.0f),
+        .pcf_radius = shadow.pcf_radius,
+        .cascade_count = std::clamp(shadow.cascade_count, 1u, 4u),
+        .cascade_split_lambda = std::clamp(shadow.cascade_split_lambda, 0.0f, 1.0f),
+    };
 }
 } // namespace
 
@@ -153,6 +168,7 @@ void SceneRenderer::renderScene(const Scene& scene,
                 lighting.directional_light_count = 1;
                 lighting.directional_light.direction = directionalLightDirection(rotation);
                 lighting.directional_light.radiance = light.color * light.intensity;
+                lighting.directional_light.shadow = toRenderShadowSettings(light.shadow);
                 break;
             }
 
@@ -160,6 +176,7 @@ void SceneRenderer::renderScene(const Scene& scene,
             lighting.directional_light.direction =
                 directionalLightDirection(lightView.get<const TransformComponent>(entity).rotation);
             lighting.directional_light.radiance = light.color * light.intensity;
+            lighting.directional_light.shadow = toRenderShadowSettings(light.shadow);
             break;
         }
     }

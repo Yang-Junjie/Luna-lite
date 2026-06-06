@@ -19,6 +19,8 @@ class GeometryPass;
 class LightingPass;
 class MaterialGpuCache;
 class RendererPipelineResources;
+class ShadowMapResource;
+class ShadowPass;
 class SkyboxPass;
 class TextureGpuCache;
 
@@ -49,11 +51,14 @@ private:
     std::unique_ptr<TextureGpuCache> m_texture_gpu_cache;
     std::unique_ptr<MaterialGpuCache> m_material_gpu_cache;
     std::unique_ptr<EnvironmentMapCache> m_environment_map_cache;
+    std::unique_ptr<ShadowMapResource> m_shadow_map;
     std::unique_ptr<GeometryPass> m_geometry_pass;
+    std::unique_ptr<ShadowPass> m_shadow_pass;
     std::unique_ptr<DebugLinePass> m_debug_line_pass;
     std::unique_ptr<LightingPass> m_lighting_pass;
     std::unique_ptr<SkyboxPass> m_skybox_pass;
     FrameUniforms m_frameUniforms;
     bool m_frame_uniforms_dirty{true};
+    bool m_geometry_pass_recorded_this_frame{false};
 };
 } // namespace lunalite::renderer

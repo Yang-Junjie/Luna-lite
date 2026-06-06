@@ -54,6 +54,20 @@ struct alignas(16) ObjectUniforms {
     float _pad1{0.0f};
 };
 
+struct alignas(16) ShadowFrameUniforms {
+    glm::mat4 lightViewProjection{1.0f};
+};
+
+struct alignas(16) ShadowObjectUniforms {
+    glm::mat4 model{1.0f};
+};
+
+struct alignas(16) ShadowLightingUniforms {
+    glm::mat4 lightViewProjection{1.0f};
+    glm::vec4 texelSizeBiasNormalBias{0.0f};
+    glm::uvec4 enabledPcfRadiusPadding{0u};
+};
+
 struct MeshGpuData {
     rhi::BufferHandle vertex_buffer{};
     rhi::BufferHandle index_buffer{};

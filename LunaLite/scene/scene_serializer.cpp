@@ -197,6 +197,16 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             YAML::Node node;
             node["Color"] = writeVec3(light.color);
             node["Intensity"] = light.intensity;
+            YAML::Node shadowNode;
+            shadowNode["Enabled"] = light.shadow.enabled;
+            shadowNode["MapSize"] = light.shadow.map_size;
+            shadowNode["MaxDistance"] = light.shadow.max_distance;
+            shadowNode["Bias"] = light.shadow.bias;
+            shadowNode["NormalBias"] = light.shadow.normal_bias;
+            shadowNode["PCFRadius"] = light.shadow.pcf_radius;
+            shadowNode["CascadeCount"] = light.shadow.cascade_count;
+            shadowNode["CascadeSplitLambda"] = light.shadow.cascade_split_lambda;
+            node["Shadow"] = shadowNode;
             serializedEntity["DirectionalLightComponent"] = node;
         }
 
@@ -297,7 +307,8 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                     }
                 }
                 meshRenderer.submesh_start = meshNode["SubMeshStart"].as<uint32_t>(0);
-                meshRenderer.submesh_count = meshNode["SubMeshCount"].as<uint32_t>(std::numeric_limits<uint32_t>::max());
+                meshRenderer.submesh_count =
+                    meshNode["SubMeshCount"].as<uint32_t>(std::numeric_limits<uint32_t>::max());
             }
 
             if (const auto scriptNode = serializedEntity["ScriptComponent"]) {
@@ -330,6 +341,20 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                 auto& light = scene.addComponent<DirectionalLightComponent>(entity);
                 light.color = readVec3(lightNode["Color"], glm::vec3{1.0f});
                 light.intensity = lightNode["Intensity"].as<float>(1.0f);
+                if (const auto shadowNode = lightNode["Shadow"]) {
+                    light.shadow.enabled = shadowNode["Enabled"].as<bool>(light.shadow.enabled);
+                    light.shadow.map_size = std::max(shadowNode["MapSize"].as<uint32_t>(light.shadow.map_size), 1u);
+                    light.shadow.max_distance =
+                        std::max(shadowNode["MaxDistance"].as<float>(light.shadow.max_distance), 0.0f);
+                    light.shadow.bias = std::max(shadowNode["Bias"].as<float>(light.shadow.bias), 0.0f);
+                    light.shadow.normal_bias =
+                        std::max(shadowNode["NormalBias"].as<float>(light.shadow.normal_bias), 0.0f);
+                    light.shadow.pcf_radius = shadowNode["PCFRadius"].as<uint32_t>(light.shadow.pcf_radius);
+                    light.shadow.cascade_count =
+                        std::clamp(shadowNode["CascadeCount"].as<uint32_t>(light.shadow.cascade_count), 1u, 4u);
+                    light.shadow.cascade_split_lambda = std::clamp(
+                        shadowNode["CascadeSplitLambda"].as<float>(light.shadow.cascade_split_lambda), 0.0f, 1.0f);
+                }
             }
 
             if (const auto parentNode = serializedEntity["ParentComponent"]) {

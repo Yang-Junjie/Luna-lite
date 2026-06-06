@@ -3,56 +3,63 @@ Settings:
   EnvironmentMap: 12342259277423478970
   EnvironmentIntensity: 1
 Entities:
-  - Entity: 10
-    TagComponent:
-      Tag: Plane
-    TransformComponent:
-      Translation:
-        - -6.5
-        - 0
-        - 0
-      Rotation:
-        - -1
-        - 9.472835e-09
-        - 8.9215376e-08
-        - 0
-      Scale:
-        - 5
-        - 1
-        - 6
-    MeshRendererComponent:
-      Mesh: 5500388562279158530
-      Materials:
-        - 5500388562278896641
-  - Entity: 9
-    TagComponent:
-      Tag: Cube
-    TransformComponent:
-      Translation:
-        - 0
-        - -1.9
-        - 0
-      Rotation:
-        - 1
-        - 0
-        - 0
-        - 0
-      Scale:
-        - 9.1
-        - 0.9
-        - 5.8
-    MeshRendererComponent:
-      Mesh: 5500388562279158529
-      Materials:
-        - 5500388562278896641
-  - Entity: 8
+  - Entity: 11
     TagComponent:
       Tag: ""
     TransformComponent:
       Translation:
         - 0
         - 0
-        - 13.4
+        - 0
+      Rotation:
+        - 0.9063079
+        - 0.42261824
+        - 9.384018e-16
+        - 2.012408e-15
+      Scale:
+        - 1
+        - 1
+        - 1
+    DirectionalLightComponent:
+      Color:
+        - 1
+        - 1
+        - 1
+      Intensity: 1
+      Shadow:
+        Enabled: true
+        MapSize: 8192
+        MaxDistance: 80
+        Bias: 0.0015
+        NormalBias: 0.02
+        PCFRadius: 4
+        CascadeCount: 1
+        CascadeSplitLambda: 0.5
+  - Entity: 10
+    TagComponent:
+      Tag: render_camera_n3d
+    TransformComponent:
+      Translation:
+        - -0.7599077
+        - 7.7087607
+        - 27.743376
+      Rotation:
+        - 0.9970078
+        - -0.077150166
+        - -0.0048167077
+        - -0.0003727092
+      Scale:
+        - 1
+        - 1
+        - 1
+  - Entity: 9
+    TagComponent:
+      Tag: ground_plane_n3d
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 0
       Rotation:
         - 1
         - 0
@@ -62,20 +69,29 @@ Entities:
         - 1
         - 1
         - 1
-    ScriptComponent:
-      Scripts:
-        - Script: 9557520703294432819
-          Enabled: true
-    CameraComponent:
-      Primary: true
-      ProjectionType: Perspective
-      Exposure: 1
+  - Entity: 8
+    TagComponent:
+      Tag: ENV_Spheres
+    TransformComponent:
+      Translation:
+        - -0.5564079
+        - 4.774585
+        - -1.0962677
+      Rotation:
+        - 1
+        - 0
+        - 0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
   - Entity: 7
     TagComponent:
-      Tag: stanford-bunny
+      Tag: Metallic0
     TransformComponent:
       Translation:
-        - -2
+        - 0
         - 0
         - 0
       Rotation:
@@ -84,39 +100,45 @@ Entities:
         - 0
         - 0
       Scale:
-        - 8
-        - 8
-        - 8
+        - 1
+        - 1
+        - 1
     MeshRendererComponent:
-      Mesh: 3459685110480262193
+      Mesh: 17403369179540497486
       Materials:
-        - 3459685110480262195
+        - 17403369179540497488
+        - 17403369179540497489
+        - 17403369179540497490
+      SubMeshCount: 1
+    ParentComponent:
+      Parent: 8
   - Entity: 6
     TagComponent:
-      Tag: node_damagedHelmet_-6514
+      Tag: Dielectric0
     TransformComponent:
       Translation:
         - 0
         - 0
         - 0
       Rotation:
-        - 0.7071067
-        - 0.7071068
+        - 1
+        - 0
         - 0
         - 0
       Scale:
         - 1
-        - 1.0000001
-        - 1.0000001
+        - 1
+        - 1
     MeshRendererComponent:
-      Mesh: 4807869584785364302
+      Mesh: 17403369179540497486
       Materials:
-        - 4807869584785364304
+        - 17403369179540497488
+        - 17403369179540497489
+        - 17403369179540497490
+      SubMeshStart: 1
       SubMeshCount: 1
-    ScriptComponent:
-      Scripts:
-        - Script: 18087706206740559173
-          Enabled: true
+    ParentComponent:
+      Parent: 8
   - Entity: 5
     TagComponent:
       Tag: Dielectric0-Black
@@ -143,40 +165,39 @@ Entities:
       SubMeshStart: 2
       SubMeshCount: 1
     ParentComponent:
-      Parent: 2
+      Parent: 8
   - Entity: 4
     TagComponent:
-      Tag: Dielectric0
+      Tag: node_damagedHelmet_-6514
     TransformComponent:
       Translation:
         - 0
         - 0
         - 0
       Rotation:
-        - 1
-        - 0
+        - 0.7071067
+        - 0.7071068
         - 0
         - 0
       Scale:
         - 1
-        - 1
-        - 1
+        - 1.0000001
+        - 1.0000001
     MeshRendererComponent:
-      Mesh: 17403369179540497486
+      Mesh: 4807869584785364302
       Materials:
-        - 17403369179540497488
-        - 17403369179540497489
-        - 17403369179540497490
-      SubMeshStart: 1
+        - 4807869584785364304
       SubMeshCount: 1
-    ParentComponent:
-      Parent: 2
+    ScriptComponent:
+      Scripts:
+        - Script: 18087706206740559173
+          Enabled: true
   - Entity: 3
     TagComponent:
-      Tag: Metallic0
+      Tag: stanford-bunny
     TransformComponent:
       Translation:
-        - 0
+        - -2
         - 0
         - 0
       Rotation:
@@ -185,26 +206,21 @@ Entities:
         - 0
         - 0
       Scale:
-        - 1
-        - 1
-        - 1
+        - 8
+        - 8
+        - 8
     MeshRendererComponent:
-      Mesh: 17403369179540497486
+      Mesh: 3459685110480262193
       Materials:
-        - 17403369179540497488
-        - 17403369179540497489
-        - 17403369179540497490
-      SubMeshCount: 1
-    ParentComponent:
-      Parent: 2
+        - 3459685110480262195
   - Entity: 2
     TagComponent:
-      Tag: ENV_Spheres
+      Tag: ""
     TransformComponent:
       Translation:
-        - -0.5564079
-        - 4.774585
-        - -1.0962677
+        - 0
+        - 0
+        - 13.4
       Rotation:
         - 1
         - 0
@@ -214,13 +230,21 @@ Entities:
         - 1
         - 1
         - 1
+    ScriptComponent:
+      Scripts:
+        - Script: 9557520703294432819
+          Enabled: true
+    CameraComponent:
+      Primary: true
+      ProjectionType: Perspective
+      Exposure: 1
   - Entity: 1
     TagComponent:
-      Tag: ground_plane_n3d
+      Tag: Cube
     TransformComponent:
       Translation:
         - 0
-        - 0
+        - -1.9
         - 0
       Rotation:
         - 1
@@ -228,23 +252,31 @@ Entities:
         - 0
         - 0
       Scale:
-        - 1
-        - 1
-        - 1
+        - 35.9
+        - 0.4
+        - 25.4
+    MeshRendererComponent:
+      Mesh: 5500388562279158529
+      Materials:
+        - 5500388562278896641
   - Entity: 0
     TagComponent:
-      Tag: render_camera_n3d
+      Tag: Plane
     TransformComponent:
       Translation:
-        - -0.7599077
-        - 7.7087607
-        - 27.743376
+        - -14.9
+        - 0
+        - 0
       Rotation:
-        - 0.9970078
-        - -0.077150166
-        - -0.0048167077
-        - -0.0003727092
+        - -1
+        - 9.472835e-09
+        - 8.9215376e-08
+        - 0
       Scale:
+        - 5
         - 1
-        - 1
-        - 1
+        - 6
+    MeshRendererComponent:
+      Mesh: 5500388562279158530
+      Materials:
+        - 5500388562278896641

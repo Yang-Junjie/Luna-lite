@@ -1,6 +1,7 @@
 #version 450 core
 
-layout(std140, binding = 0) uniform FrameUniforms {
+layout(std140, binding = 0) uniform FrameUniforms
+{
     mat4 view;
     mat4 projection;
     vec3 cameraPos;
@@ -29,6 +30,15 @@ layout(binding = 17) uniform samplerCube uIrradianceMap;
 layout(binding = 18) uniform samplerCube uPrefilterMap;
 layout(binding = 19) uniform sampler2D uBrdfLut;
 
+layout(std140, binding = 32) uniform ShadowLightingUniforms
+{
+    mat4 shadowLightViewProjection;
+    vec4 shadowTexelSizeBiasNormalBias;
+    uvec4 shadowEnabledPcfRadius;
+};
+
+layout(binding = 33) uniform sampler2D uShadowMap;
+
 in vec2 vUV;
 out vec4 outColor;
 
@@ -45,6 +55,44 @@ vec3 reconstructWorldPosition(vec2 uv, float depth)
     vec4 worldPosition = inverseViewProjection * clipPosition;
     float invW = abs(worldPosition.w) > 1e-6 ? 1.0 / worldPosition.w : 1.0;
     return worldPosition.xyz * invW;
+}
+
+float directionalShadowFactor(vec3 worldPos, vec3 N, vec3 L)
+{
+    if (shadowEnabledPcfRadius.x == 0u) {
+        return 1.0;
+    }
+
+    float NoL = saturate(dot(N, L));
+    float normalOffset = shadowTexelSizeBiasNormalBias.w * (1.0 - NoL);
+    vec3 shadowWorldPos = worldPos + N * normalOffset;
+    vec4 lightClip = shadowLightViewProjection * vec4(shadowWorldPos, 1.0);
+    if (abs(lightClip.w) <= 1e-6) {
+        return 1.0;
+    }
+
+    vec3 shadowCoord = lightClip.xyz / lightClip.w;
+    shadowCoord = shadowCoord * 0.5 + 0.5;
+    if (shadowCoord.x < 0.0 || shadowCoord.x > 1.0 || shadowCoord.y < 0.0 || shadowCoord.y > 1.0 ||
+        shadowCoord.z < 0.0 || shadowCoord.z > 1.0) {
+        return 1.0;
+    }
+
+    vec2 texelSize = shadowTexelSizeBiasNormalBias.xy;
+    float receiverDepth = shadowCoord.z - shadowTexelSizeBiasNormalBias.z;
+    int radius = int(min(shadowEnabledPcfRadius.y, 4u));
+    float lit = 0.0;
+    float samples = 0.0;
+    for (int y = -radius; y <= radius; ++y) {
+        for (int x = -radius; x <= radius; ++x) {
+            vec2 offset = vec2(float(x), float(y)) * texelSize;
+            float closestDepth = texture(uShadowMap, shadowCoord.xy + offset).r;
+            lit += receiverDepth <= closestDepth ? 1.0 : 0.0;
+            samples += 1.0;
+        }
+    }
+
+    return samples > 0.0 ? lit / samples : 1.0;
 }
 
 float distributionGGX(float NoH, float roughness)
@@ -144,7 +192,8 @@ void main()
 
         vec3 directDiffuse = diffuseBRDF * lightRadiance;
         vec3 directSpecular = specularBRDF * lightRadiance;
-        color += (directDiffuse + directSpecular) * NoL;
+        float shadowFactor = directionalShadowFactor(worldPos, N, L);
+        color += (directDiffuse + directSpecular) * NoL * shadowFactor;
     }
 
     color += emission;

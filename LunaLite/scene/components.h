@@ -2,10 +2,10 @@
 #include "../asset/asset.h"
 #include "../renderer/interface/camera.h"
 
+#include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <entt/entt.hpp>
 #include <limits>
 #include <string>
 #include <vector>
@@ -61,8 +61,20 @@ struct CameraComponent {
     bool primary{true};
 };
 
+struct ShadowSettings {
+    bool enabled{true};
+    uint32_t map_size{2'048};
+    float max_distance{80.0f};
+    float bias{0.0015f};
+    float normal_bias{0.02f};
+    uint32_t pcf_radius{1};
+    uint32_t cascade_count{1};
+    float cascade_split_lambda{0.5f};
+};
+
 struct DirectionalLightComponent {
     glm::vec3 color{1.0f};
     float intensity{1.0f};
+    ShadowSettings shadow;
 };
 } // namespace lunalite::scene

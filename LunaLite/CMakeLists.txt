@@ -10,10 +10,12 @@ add_library(LunaLiteRenderer
     renderer/default_renderer/passes/debug_line_pass.cpp
     renderer/default_renderer/passes/geometry_pass.cpp
     renderer/default_renderer/passes/lighting_pass.cpp
+    renderer/default_renderer/passes/shadow_pass.cpp
     renderer/default_renderer/passes/skybox_pass.cpp
     renderer/default_renderer/renderer.cpp
     renderer/default_renderer/renderer_common.cpp
     renderer/default_renderer/renderer_pipeline_resources.cpp
+    renderer/default_renderer/shadow_map_resource.cpp
     renderer/default_renderer/texture_gpu_cache.cpp
     renderer/renderer_controller.cpp
     renderer/frame_presenter/rhi_frame_presenter.cpp

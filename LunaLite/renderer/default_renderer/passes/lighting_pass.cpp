@@ -7,7 +7,10 @@ LightingPass::LightingPass(rhi::CommandList& commands, rhi::PipelineHandle light
       m_lighting_pipeline(lighting_pipeline)
 {}
 
-void LightingPass::execute(const GBuffer& gbuffer, rhi::BindGroupHandle environment_bind_group)
+void LightingPass::execute(const GBuffer& gbuffer,
+                           rhi::BindGroupHandle environment_bind_group,
+                           rhi::BindGroupHandle shadow_lighting_bind_group,
+                           rhi::TextureHandle shadow_map)
 {
     const rhi::TextureTransition barriers[] = {
         rhi::TextureTransition{
@@ -32,6 +35,13 @@ void LightingPass::execute(const GBuffer& gbuffer, rhi::BindGroupHandle environm
         },
     };
     m_cmd->transition(barriers, 5);
+    if (shadow_map) {
+        const rhi::TextureTransition shadowMapBarrier{
+            .texture = shadow_map,
+            .state = rhi::ResourceState::ShaderRead,
+        };
+        m_cmd->transition(&shadowMapBarrier, 1);
+    }
 
     rhi::RenderPassBeginInfo lightingPass;
     lightingPass.color_attachments.push_back(rhi::ColorAttachmentDesc{
@@ -47,6 +57,7 @@ void LightingPass::execute(const GBuffer& gbuffer, rhi::BindGroupHandle environm
     m_cmd->setPipeline(m_lighting_pipeline);
     m_cmd->setBindGroup(0, gbuffer.lighting_bind_group);
     m_cmd->setBindGroup(1, environment_bind_group);
+    m_cmd->setBindGroup(2, shadow_lighting_bind_group);
     m_cmd->draw(3);
     m_cmd->endRenderPass();
 }

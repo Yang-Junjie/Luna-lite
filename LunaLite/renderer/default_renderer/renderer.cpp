@@ -5,15 +5,144 @@
 #include "passes/debug_line_pass.h"
 #include "passes/geometry_pass.h"
 #include "passes/lighting_pass.h"
+#include "passes/shadow_pass.h"
 #include "passes/skybox_pass.h"
 #include "renderer.h"
 #include "renderer_pipeline_resources.h"
+#include "shadow_map_resource.h"
 #include "texture_gpu_cache.h"
 
+#include <cmath>
+
 #include <algorithm>
+#include <array>
+#include <glm/gtc/matrix_transform.hpp>
+#include <limits>
 #include <memory>
 
 namespace lunalite::renderer {
+namespace {
+
+glm::vec3 safeNormalize(const glm::vec3& value, const glm::vec3& fallback)
+{
+    const auto length = glm::length(value);
+    if (length <= 0.0001f) {
+        return fallback;
+    }
+
+    return value / length;
+}
+
+std::array<glm::vec3, 8> cameraFrustumCornersWorld(const interface::CameraData& camera, float shadow_distance)
+{
+    const auto invViewProjection = glm::inverse(camera.projection * camera.view);
+    const std::array<glm::vec3, 8> ndcCorners = {
+        glm::vec3{-1.0f, -1.0f, -1.0f},
+        glm::vec3{1.0f, -1.0f, -1.0f},
+        glm::vec3{-1.0f, 1.0f, -1.0f},
+        glm::vec3{1.0f, 1.0f, -1.0f},
+        glm::vec3{-1.0f, -1.0f, 1.0f},
+        glm::vec3{1.0f, -1.0f, 1.0f},
+        glm::vec3{-1.0f, 1.0f, 1.0f},
+        glm::vec3{1.0f, 1.0f, 1.0f},
+    };
+
+    std::array<glm::vec3, 8> corners{};
+    for (size_t i = 0; i < ndcCorners.size(); ++i) {
+        const auto clip = glm::vec4{ndcCorners[i], 1.0f};
+        const auto world = invViewProjection * clip;
+        corners[i] = glm::vec3{world} / world.w;
+    }
+
+    for (size_t i = 4; i < corners.size(); ++i) {
+        const auto fromCamera = corners[i] - camera.position;
+        const auto distance = glm::length(fromCamera);
+        if (distance > shadow_distance) {
+            corners[i] = camera.position + safeNormalize(fromCamera, glm::vec3{0.0f, 0.0f, -1.0f}) * shadow_distance;
+        }
+    }
+
+    return corners;
+}
+
+auto snapProjectionToShadowTexels(glm::mat4 light_projection, const glm::mat4& light_view, uint32_t shadow_map_size)
+    -> glm::mat4
+{
+    const auto safeShadowMapSize = std::max(shadow_map_size, 1u);
+    const auto lightViewProjection = light_projection * light_view;
+    const auto shadowMapScale = static_cast<float>(safeShadowMapSize) * 0.5f;
+    const auto shadowOrigin = lightViewProjection * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f} * shadowMapScale;
+    const glm::vec2 roundedOrigin{std::round(shadowOrigin.x), std::round(shadowOrigin.y)};
+    const auto roundOffset = (roundedOrigin - glm::vec2{shadowOrigin}) * (2.0f / static_cast<float>(safeShadowMapSize));
+
+    light_projection[3][0] += roundOffset.x;
+    light_projection[3][1] += roundOffset.y;
+    return light_projection;
+}
+
+glm::mat4 directionalShadowLightViewProjection(const interface::CameraData& camera,
+                                               const interface::RenderDirectionalLight& light,
+                                               uint32_t shadow_map_size)
+{
+    const auto lightDir = safeNormalize(light.direction, glm::vec3{0.0f, -1.0f, 0.0f});
+    const auto shadowDistance = std::max(light.shadow.max_distance, 1.0f);
+    const auto corners = cameraFrustumCornersWorld(camera, shadowDistance);
+
+    glm::vec3 center{0.0f};
+    for (const auto& corner : corners) {
+        center += corner;
+    }
+    center /= static_cast<float>(corners.size());
+
+    const auto lightPosition = center - lightDir * shadowDistance;
+    auto up = glm::vec3{0.0f, 1.0f, 0.0f};
+    if (std::abs(glm::dot(up, lightDir)) > 0.95f) {
+        up = glm::vec3{1.0f, 0.0f, 0.0f};
+    }
+
+    const auto lightView = glm::lookAt(lightPosition, center, up);
+    glm::vec3 minBounds{std::numeric_limits<float>::max()};
+    glm::vec3 maxBounds{-std::numeric_limits<float>::max()};
+    for (const auto& corner : corners) {
+        const auto lightSpaceCorner = glm::vec3{lightView * glm::vec4{corner, 1.0f}};
+        minBounds = glm::min(minBounds, lightSpaceCorner);
+        maxBounds = glm::max(maxBounds, lightSpaceCorner);
+    }
+
+    constexpr float depthPadding = 10.0f;
+    minBounds.z -= depthPadding;
+    maxBounds.z += depthPadding;
+
+    auto lightProjection = glm::ortho(minBounds.x, maxBounds.x, minBounds.y, maxBounds.y, -maxBounds.z, -minBounds.z);
+    lightProjection = snapProjectionToShadowTexels(lightProjection, lightView, shadow_map_size);
+    return lightProjection * lightView;
+}
+
+bool shouldRenderShadowMap(const interface::FrameRenderData& frame)
+{
+    return frame.lighting.directional_light_count > 0 && frame.lighting.directional_light.shadow.enabled &&
+           !frame.meshes.empty();
+}
+
+ShadowLightingUniforms makeShadowLightingUniforms(const glm::mat4& light_view_projection,
+                                                  const interface::RenderShadowSettings& settings,
+                                                  uint32_t shadow_map_size,
+                                                  bool enabled)
+{
+    constexpr uint32_t maxPcfRadius = 4;
+    const auto safeShadowMapSize = std::max(shadow_map_size, 1u);
+    const auto texelSize = 1.0f / static_cast<float>(safeShadowMapSize);
+
+    ShadowLightingUniforms uniforms;
+    uniforms.lightViewProjection = light_view_projection;
+    uniforms.texelSizeBiasNormalBias =
+        glm::vec4{texelSize, texelSize, std::max(settings.bias, 0.0f), std::max(settings.normal_bias, 0.0f)};
+    uniforms.enabledPcfRadiusPadding =
+        glm::uvec4{enabled ? 1u : 0u, std::min(settings.pcf_radius, maxPcfRadius), 0u, 0u};
+    return uniforms;
+}
+
+} // namespace
 
 Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     : m_device(&device),
@@ -48,6 +177,8 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                               m_pipeline_resources->environmentIrradiancePipeline(),
                                               m_pipeline_resources->environmentPrefilterPipeline(),
                                               *m_texture_gpu_cache);
+    m_shadow_map =
+        std::make_unique<ShadowMapResource>(*m_device, m_pipeline_resources->shadowLightingBindGroupLayout());
 
     m_geometry_pass = std::make_unique<GeometryPass>(*m_device,
                                                      *m_cmd,
@@ -58,6 +189,8 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                                      *m_material_gpu_cache,
                                                      m_frameUniforms,
                                                      m_frame_uniforms_dirty);
+    m_shadow_pass = std::make_unique<ShadowPass>(
+        *m_device, *m_cmd, m_pipeline_resources->shadowPipeline(), m_pipeline_resources->shadowBindGroupLayout());
     m_debug_line_pass = std::make_unique<DebugLinePass>(*m_device,
                                                         *m_cmd,
                                                         m_pipeline_resources->linePipeline(),
@@ -80,8 +213,10 @@ Renderer::~Renderer()
     m_skybox_pass.reset();
     m_lighting_pass.reset();
     m_debug_line_pass.reset();
+    m_shadow_pass.reset();
     m_geometry_pass.reset();
     m_environment_map_cache.reset();
+    m_shadow_map.reset();
     m_gbuffer.reset();
     m_material_gpu_cache.reset();
     m_texture_gpu_cache.reset();
@@ -109,16 +244,24 @@ void Renderer::beginFrame()
     const auto& gbuffer = m_gbuffer->get();
     LUNA_ASSERT(gbuffer.lighting_bind_group, "GBuffer is not initialized.");
     LUNA_ASSERT(m_environment_map_cache->bindGroup(), "Environment bind group is not initialized.");
+    LUNA_ASSERT(m_shadow_map->lightingBindGroup(), "Shadow lighting bind group is not initialized.");
 
+    m_shadow_map->updateLightingUniforms(
+        makeShadowLightingUniforms(glm::mat4{1.0f}, interface::RenderShadowSettings{}, m_shadow_map->size(), false));
     m_cmd->begin();
-    m_geometry_pass->begin(gbuffer);
+    m_geometry_pass_recorded_this_frame = false;
 }
 
 void Renderer::endFrame()
 {
     const auto& gbuffer = m_gbuffer->get();
-    m_geometry_pass->end();
-    m_lighting_pass->execute(gbuffer, m_environment_map_cache->bindGroup());
+    if (m_geometry_pass_recorded_this_frame) {
+        m_geometry_pass->end();
+        m_geometry_pass_recorded_this_frame = false;
+    }
+
+    m_lighting_pass->execute(
+        gbuffer, m_environment_map_cache->bindGroup(), m_shadow_map->lightingBindGroup(), m_shadow_map->texture());
 
     if (m_frameUniforms.environmentIntensity > 0.0f) {
         m_skybox_pass->execute(gbuffer, m_environment_map_cache->bindGroup());
@@ -139,6 +282,22 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
 {
     setLighting(frame.lighting);
     setViewProjection(frame.camera.view, frame.camera.projection, frame.camera.position, frame.camera.exposure);
+
+    if (shouldRenderShadowMap(frame)) {
+        m_shadow_map->ensure(frame.lighting.directional_light.shadow);
+        const auto lightViewProjection =
+            directionalShadowLightViewProjection(frame.camera, frame.lighting.directional_light, m_shadow_map->size());
+        m_shadow_pass->execute(*m_shadow_map, lightViewProjection, frame.meshes);
+        m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
+            lightViewProjection, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));
+    } else {
+        m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
+            glm::mat4{1.0f}, frame.lighting.directional_light.shadow, m_shadow_map->size(), false));
+    }
+
+    const auto& gbuffer = m_gbuffer->get();
+    m_geometry_pass->begin(gbuffer);
+    m_geometry_pass_recorded_this_frame = true;
 
     for (const auto& meshCommand : frame.meshes) {
         m_geometry_pass->renderMesh(meshCommand);

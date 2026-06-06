@@ -9,12 +9,12 @@
 #include <cstdint>
 #include <cstring>
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
-#include <span>
 #include <limits>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -117,6 +117,30 @@ bool sameOrientation(const glm::quat& lhs, const glm::quat& rhs)
     const auto a = safeNormalize(lhs);
     const auto b = safeNormalize(rhs);
     return std::abs(glm::dot(a, b)) > 0.99999f;
+}
+
+bool drawShadowMapSizeControl(uint32_t& map_size)
+{
+    static constexpr std::array<uint32_t, 5> mapSizeOptions{512u, 1'024u, 2'048u, 4'096u, 8'192u};
+
+    bool changed = false;
+    const auto preview = std::to_string(map_size);
+    if (ImGui::BeginCombo("Map Size", preview.c_str())) {
+        for (const auto option : mapSizeOptions) {
+            const bool selected = map_size == option;
+            const auto label = std::to_string(option);
+            if (ImGui::Selectable(label.c_str(), selected)) {
+                map_size = option;
+                changed = true;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    return changed;
 }
 } // namespace
 
@@ -332,6 +356,37 @@ void InspectorPanel::onImGuiRender()
             auto& light = m_scene.getComponent<scene::DirectionalLightComponent>(m_selected_entity);
             ImGui::ColorEdit3("Color", &light.color.x);
             ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f, "%.3f");
+
+            if (ImGui::TreeNodeEx("Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Checkbox("Enabled", &light.shadow.enabled);
+
+                drawShadowMapSizeControl(light.shadow.map_size);
+                light.shadow.map_size = std::max(light.shadow.map_size, 1u);
+
+                ImGui::DragFloat("Max Distance", &light.shadow.max_distance, 0.5f, 0.0f, 10000.0f, "%.2f");
+                light.shadow.max_distance = std::max(light.shadow.max_distance, 0.0f);
+
+                ImGui::DragFloat("Bias", &light.shadow.bias, 0.0001f, 0.0f, 0.1f, "%.6f");
+                light.shadow.bias = std::max(light.shadow.bias, 0.0f);
+
+                ImGui::DragFloat("Normal Bias", &light.shadow.normal_bias, 0.001f, 0.0f, 1.0f, "%.4f");
+                light.shadow.normal_bias = std::max(light.shadow.normal_bias, 0.0f);
+
+                int pcfRadius = static_cast<int>(light.shadow.pcf_radius);
+                if (ImGui::SliderInt("PCF Radius", &pcfRadius, 0, 4)) {
+                    light.shadow.pcf_radius = static_cast<uint32_t>(std::clamp(pcfRadius, 0, 4));
+                }
+
+                int cascadeCount = static_cast<int>(light.shadow.cascade_count);
+                if (ImGui::SliderInt("Cascade Count", &cascadeCount, 1, 4)) {
+                    light.shadow.cascade_count = static_cast<uint32_t>(std::clamp(cascadeCount, 1, 4));
+                }
+
+                ImGui::DragFloat("Cascade Split Lambda", &light.shadow.cascade_split_lambda, 0.01f, 0.0f, 1.0f, "%.3f");
+                light.shadow.cascade_split_lambda = std::clamp(light.shadow.cascade_split_lambda, 0.0f, 1.0f);
+
+                ImGui::TreePop();
+            }
         }
     }
 
