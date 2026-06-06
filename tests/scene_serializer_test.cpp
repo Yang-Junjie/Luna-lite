@@ -73,6 +73,7 @@ int main()
         light.color = {0.7f, 0.8f, 0.9f};
         light.intensity = 3.0f;
         light.shadow.cascade_seam_blend = 5.0f;
+        light.shadow.cascade_caster_depth_padding = 125.0f;
     }
 
     const auto parentEntity = scene.createEntity();
@@ -193,7 +194,7 @@ int main()
 
     const auto& loadedLight = lightView.get<const scene::DirectionalLightComponent>(*lightView.begin());
     if (loadedLight.color != glm::vec3{0.7f, 0.8f, 0.9f} || loadedLight.intensity != 3.0f ||
-        loadedLight.shadow.cascade_seam_blend != 5.0f) {
+        loadedLight.shadow.cascade_seam_blend != 5.0f || loadedLight.shadow.cascade_caster_depth_padding != 125.0f) {
         std::cerr << "Unexpected directional light parameters.\n";
         return 1;
     }

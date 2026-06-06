@@ -16,6 +16,15 @@ target_link_libraries(SceneSerializerTest
         LunaLite
 )
 
+add_executable(MeshBoundsTest
+    mesh_bounds_test.cpp
+)
+
+target_link_libraries(MeshBoundsTest
+    PRIVATE
+        LunaLite
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )

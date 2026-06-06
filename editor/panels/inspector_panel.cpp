@@ -386,6 +386,14 @@ void InspectorPanel::onImGuiRender()
                 ImGui::DragFloat("Cascade Seam Blend", &light.shadow.cascade_seam_blend, 0.1f, 0.0f, 1000.0f, "%.2f");
                 light.shadow.cascade_seam_blend = std::max(light.shadow.cascade_seam_blend, 0.0f);
 
+                ImGui::DragFloat("Cascade Caster Depth Padding",
+                                 &light.shadow.cascade_caster_depth_padding,
+                                 0.5f,
+                                 0.0f,
+                                 10000.0f,
+                                 "%.2f");
+                light.shadow.cascade_caster_depth_padding = std::max(light.shadow.cascade_caster_depth_padding, 0.0f);
+
                 ImGui::TreePop();
             }
         }

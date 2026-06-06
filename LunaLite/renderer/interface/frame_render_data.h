@@ -1,5 +1,6 @@
 #pragma once
 #include "../../asset/asset.h"
+#include "aabb.h"
 #include "render_lighting.h"
 
 #include <cstdint>
@@ -23,6 +24,8 @@ struct MeshDrawCommand {
     asset::AssetHandle mesh{0};
     std::vector<asset::AssetHandle> materials;
     glm::mat4 transform{1.0f};
+    AABB local_aabb;
+    AABB world_aabb;
     uint32_t submesh_start{0};
     uint32_t submesh_count{std::numeric_limits<uint32_t>::max()};
 };

@@ -1,4 +1,5 @@
 #include "../../core/log.h"
+#include "../interface/frame_render_data.h"
 #include "environment_map_cache.h"
 #include "gbuffer_resource.h"
 #include "material_gpu_cache.h"
@@ -19,6 +20,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
 #include <memory>
+#include <vector>
 
 namespace lunalite::renderer {
 namespace {
@@ -115,10 +117,21 @@ auto snapProjectionToShadowTexels(glm::mat4 light_projection, const glm::mat4& l
     return light_projection;
 }
 
+bool overlapsLightSpaceXY(const interface::AABB& lhs, const interface::AABB& rhs)
+{
+    if (!lhs.valid || !rhs.valid) {
+        return false;
+    }
+
+    return lhs.min.x <= rhs.max.x && lhs.max.x >= rhs.min.x && lhs.min.y <= rhs.max.y && lhs.max.y >= rhs.min.y;
+}
+
 glm::mat4 directionalShadowLightViewProjection(const std::array<glm::vec3, 8>& corners,
                                                const glm::vec3& light_direction,
                                                float cascade_far_distance,
-                                               uint32_t shadow_map_size)
+                                               uint32_t shadow_map_size,
+                                               const std::vector<interface::MeshDrawCommand>& mesh_commands,
+                                               float caster_depth_padding)
 {
     glm::vec3 center{0.0f};
     for (const auto& corner : corners) {
@@ -134,15 +147,25 @@ glm::mat4 directionalShadowLightViewProjection(const std::array<glm::vec3, 8>& c
     }
 
     const auto lightView = glm::lookAt(lightPosition, center, up);
-    glm::vec3 minBounds{std::numeric_limits<float>::max()};
-    glm::vec3 maxBounds{-std::numeric_limits<float>::max()};
+    interface::AABB receiverBounds;
     for (const auto& corner : corners) {
         const auto lightSpaceCorner = glm::vec3{lightView * glm::vec4{corner, 1.0f}};
-        minBounds = glm::min(minBounds, lightSpaceCorner);
-        maxBounds = glm::max(maxBounds, lightSpaceCorner);
+        receiverBounds.include(lightSpaceCorner);
     }
 
-    constexpr float depthPadding = 10.0f;
+    auto minBounds = receiverBounds.min;
+    auto maxBounds = receiverBounds.max;
+    for (const auto& meshCommand : mesh_commands) {
+        const auto casterBounds = meshCommand.world_aabb.transformed(lightView);
+        if (!overlapsLightSpaceXY(casterBounds, receiverBounds)) {
+            continue;
+        }
+
+        minBounds.z = std::min(minBounds.z, casterBounds.min.z);
+        maxBounds.z = std::max(maxBounds.z, casterBounds.max.z);
+    }
+
+    const auto depthPadding = std::max(caster_depth_padding, 0.0f);
     minBounds.z -= depthPadding;
     maxBounds.z += depthPadding;
 
@@ -154,7 +177,8 @@ glm::mat4 directionalShadowLightViewProjection(const std::array<glm::vec3, 8>& c
 ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
                                             const interface::RenderDirectionalLight& light,
                                             uint32_t shadow_map_size,
-                                            uint32_t cascade_count)
+                                            uint32_t cascade_count,
+                                            const std::vector<interface::MeshDrawCommand>& mesh_commands)
 {
     ShadowCascadeData cascadeData;
     cascadeData.count = std::clamp(cascade_count, 1u, MaxShadowCascades);
@@ -176,8 +200,12 @@ ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
         const auto corners = cameraFrustumSliceCornersWorld(camera, planes, previousSplit, splitDistance);
 
         auto& cascade = cascadeData.cascades[cascadeIndex];
-        cascade.light_view_projection =
-            directionalShadowLightViewProjection(corners, light.direction, splitDistance, shadow_map_size);
+        cascade.light_view_projection = directionalShadowLightViewProjection(corners,
+                                                                             light.direction,
+                                                                             splitDistance,
+                                                                             shadow_map_size,
+                                                                             mesh_commands,
+                                                                             light.shadow.cascade_caster_depth_padding);
         cascade.split_depth = splitDistance;
         previousSplit = splitDistance;
     }
@@ -362,8 +390,11 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
 
     if (shouldRenderShadowMap(frame)) {
         m_shadow_map->ensure(frame.lighting.directional_light.shadow);
-        const auto cascadeData = directionalShadowCascades(
-            frame.camera, frame.lighting.directional_light, m_shadow_map->size(), m_shadow_map->cascadeCount());
+        const auto cascadeData = directionalShadowCascades(frame.camera,
+                                                           frame.lighting.directional_light,
+                                                           m_shadow_map->size(),
+                                                           m_shadow_map->cascadeCount(),
+                                                           frame.meshes);
         m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
             cascadeData, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));

@@ -16,6 +16,7 @@ struct RenderShadowSettings {
     uint32_t cascade_count{1};
     float cascade_split_lambda{0.5f};
     float cascade_seam_blend{0.0f};
+    float cascade_caster_depth_padding{50.0f};
 };
 
 struct RenderDirectionalLight {

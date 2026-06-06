@@ -68,6 +68,7 @@ renderer::interface::RenderShadowSettings toRenderShadowSettings(const ShadowSet
         .cascade_count = std::clamp(shadow.cascade_count, 1u, 4u),
         .cascade_split_lambda = std::clamp(shadow.cascade_split_lambda, 0.0f, 1.0f),
         .cascade_seam_blend = std::max(shadow.cascade_seam_blend, 0.0f),
+        .cascade_caster_depth_padding = std::max(shadow.cascade_caster_depth_padding, 0.0f),
     };
 }
 } // namespace
@@ -207,6 +208,8 @@ void SceneRenderer::renderScene(const Scene& scene,
         meshCommand.mesh = meshRenderer.mesh;
         meshCommand.materials = meshRenderer.materials;
         meshCommand.transform = scene.getWorldTransform(Entity{entity});
+        meshCommand.local_aabb = mesh->getLocalAABB(meshRenderer.submesh_start, meshRenderer.submesh_count);
+        meshCommand.world_aabb = meshCommand.local_aabb.transformed(meshCommand.transform);
         meshCommand.submesh_start = meshRenderer.submesh_start;
         meshCommand.submesh_count = meshRenderer.submesh_count;
         frame.meshes.push_back(std::move(meshCommand));
