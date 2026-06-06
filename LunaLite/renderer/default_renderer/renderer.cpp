@@ -33,33 +33,68 @@ glm::vec3 safeNormalize(const glm::vec3& value, const glm::vec3& fallback)
     return value / length;
 }
 
-std::array<glm::vec3, 8> cameraFrustumCornersWorld(const interface::CameraData& camera, float shadow_distance)
+struct CameraFrustumPlanes {
+    std::array<glm::vec3, 4> near_corners{};
+    std::array<glm::vec3, 4> far_corners{};
+    bool perspective{true};
+    float near_distance{0.1f};
+    float far_distance{100.0f};
+};
+
+CameraFrustumPlanes cameraFrustumPlanesView(const glm::mat4& projection)
 {
-    const auto invViewProjection = glm::inverse(camera.projection * camera.view);
-    const std::array<glm::vec3, 8> ndcCorners = {
-        glm::vec3{-1.0f, -1.0f, -1.0f},
-        glm::vec3{1.0f, -1.0f, -1.0f},
-        glm::vec3{-1.0f, 1.0f, -1.0f},
-        glm::vec3{1.0f, 1.0f, -1.0f},
-        glm::vec3{-1.0f, -1.0f, 1.0f},
-        glm::vec3{1.0f, -1.0f, 1.0f},
-        glm::vec3{-1.0f, 1.0f, 1.0f},
-        glm::vec3{1.0f, 1.0f, 1.0f},
+    const auto invProjection = glm::inverse(projection);
+    const std::array<glm::vec2, 4> ndcCorners = {
+        glm::vec2{-1.0f, -1.0f},
+        glm::vec2{1.0f, -1.0f},
+        glm::vec2{-1.0f, 1.0f},
+        glm::vec2{1.0f, 1.0f},
     };
 
-    std::array<glm::vec3, 8> corners{};
+    CameraFrustumPlanes planes;
+    planes.perspective = std::abs(projection[3][3]) <= 0.0001f;
     for (size_t i = 0; i < ndcCorners.size(); ++i) {
-        const auto clip = glm::vec4{ndcCorners[i], 1.0f};
-        const auto world = invViewProjection * clip;
-        corners[i] = glm::vec3{world} / world.w;
+        const auto nearClip = glm::vec4{ndcCorners[i], -1.0f, 1.0f};
+        const auto farClip = glm::vec4{ndcCorners[i], 1.0f, 1.0f};
+        const auto nearView = invProjection * nearClip;
+        const auto farView = invProjection * farClip;
+        planes.near_corners[i] = glm::vec3{nearView} / nearView.w;
+        planes.far_corners[i] = glm::vec3{farView} / farView.w;
     }
 
-    for (size_t i = 4; i < corners.size(); ++i) {
-        const auto fromCamera = corners[i] - camera.position;
-        const auto distance = glm::length(fromCamera);
-        if (distance > shadow_distance) {
-            corners[i] = camera.position + safeNormalize(fromCamera, glm::vec3{0.0f, 0.0f, -1.0f}) * shadow_distance;
+    planes.near_distance = std::numeric_limits<float>::max();
+    planes.far_distance = 0.0f;
+    for (size_t i = 0; i < ndcCorners.size(); ++i) {
+        const auto nearDistance = std::max(-planes.near_corners[i].z, 0.0001f);
+        const auto farDistance = std::max(-planes.far_corners[i].z, nearDistance + 0.0001f);
+        planes.near_distance = std::min(planes.near_distance, nearDistance);
+        planes.far_distance = std::max(planes.far_distance, farDistance);
+    }
+
+    return planes;
+}
+
+std::array<glm::vec3, 8> cameraFrustumSliceCornersWorld(const interface::CameraData& camera,
+                                                        const CameraFrustumPlanes& planes,
+                                                        float near_distance,
+                                                        float far_distance)
+{
+    const auto invView = glm::inverse(camera.view);
+    std::array<glm::vec3, 8> corners{};
+    for (size_t i = 0; i < planes.near_corners.size(); ++i) {
+        glm::vec3 nearView;
+        glm::vec3 farView;
+        if (planes.perspective) {
+            const auto ray = planes.far_corners[i] / std::max(-planes.far_corners[i].z, 0.0001f);
+            nearView = ray * near_distance;
+            farView = ray * far_distance;
+        } else {
+            nearView = glm::vec3{planes.near_corners[i].x, planes.near_corners[i].y, -near_distance};
+            farView = glm::vec3{planes.far_corners[i].x, planes.far_corners[i].y, -far_distance};
         }
+
+        corners[i] = glm::vec3{invView * glm::vec4{nearView, 1.0f}};
+        corners[i + 4] = glm::vec3{invView * glm::vec4{farView, 1.0f}};
     }
 
     return corners;
@@ -80,21 +115,19 @@ auto snapProjectionToShadowTexels(glm::mat4 light_projection, const glm::mat4& l
     return light_projection;
 }
 
-glm::mat4 directionalShadowLightViewProjection(const interface::CameraData& camera,
-                                               const interface::RenderDirectionalLight& light,
+glm::mat4 directionalShadowLightViewProjection(const std::array<glm::vec3, 8>& corners,
+                                               const glm::vec3& light_direction,
+                                               float cascade_far_distance,
                                                uint32_t shadow_map_size)
 {
-    const auto lightDir = safeNormalize(light.direction, glm::vec3{0.0f, -1.0f, 0.0f});
-    const auto shadowDistance = std::max(light.shadow.max_distance, 1.0f);
-    const auto corners = cameraFrustumCornersWorld(camera, shadowDistance);
-
     glm::vec3 center{0.0f};
     for (const auto& corner : corners) {
         center += corner;
     }
     center /= static_cast<float>(corners.size());
 
-    const auto lightPosition = center - lightDir * shadowDistance;
+    const auto lightDir = safeNormalize(light_direction, glm::vec3{0.0f, -1.0f, 0.0f});
+    const auto lightPosition = center - lightDir * std::max(cascade_far_distance, 1.0f);
     auto up = glm::vec3{0.0f, 1.0f, 0.0f};
     if (std::abs(glm::dot(up, lightDir)) > 0.95f) {
         up = glm::vec3{1.0f, 0.0f, 0.0f};
@@ -118,13 +151,47 @@ glm::mat4 directionalShadowLightViewProjection(const interface::CameraData& came
     return lightProjection * lightView;
 }
 
+ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
+                                            const interface::RenderDirectionalLight& light,
+                                            uint32_t shadow_map_size,
+                                            uint32_t cascade_count)
+{
+    ShadowCascadeData cascadeData;
+    cascadeData.count = std::clamp(cascade_count, 1u, MaxShadowCascades);
+
+    const auto planes = cameraFrustumPlanesView(camera.projection);
+    const auto nearDistance = std::max(planes.near_distance, 0.0001f);
+    const auto farDistance =
+        std::max(std::min(planes.far_distance, std::max(light.shadow.max_distance, 1.0f)), nearDistance + 0.0001f);
+    const auto splitLambda = std::clamp(light.shadow.cascade_split_lambda, 0.0f, 1.0f);
+
+    float previousSplit = nearDistance;
+    for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeData.count; ++cascadeIndex) {
+        const auto splitFraction = static_cast<float>(cascadeIndex + 1u) / static_cast<float>(cascadeData.count);
+        const auto uniformSplit = nearDistance + (farDistance - nearDistance) * splitFraction;
+        const auto logarithmicSplit = nearDistance * std::pow(farDistance / nearDistance, splitFraction);
+        const auto splitDistance = cascadeIndex + 1u == cascadeData.count
+                                       ? farDistance
+                                       : glm::mix(uniformSplit, logarithmicSplit, splitLambda);
+        const auto corners = cameraFrustumSliceCornersWorld(camera, planes, previousSplit, splitDistance);
+
+        auto& cascade = cascadeData.cascades[cascadeIndex];
+        cascade.light_view_projection =
+            directionalShadowLightViewProjection(corners, light.direction, splitDistance, shadow_map_size);
+        cascade.split_depth = splitDistance;
+        previousSplit = splitDistance;
+    }
+
+    return cascadeData;
+}
+
 bool shouldRenderShadowMap(const interface::FrameRenderData& frame)
 {
     return frame.lighting.directional_light_count > 0 && frame.lighting.directional_light.shadow.enabled &&
            !frame.meshes.empty();
 }
 
-ShadowLightingUniforms makeShadowLightingUniforms(const glm::mat4& light_view_projection,
+ShadowLightingUniforms makeShadowLightingUniforms(const ShadowCascadeData& cascade_data,
                                                   const interface::RenderShadowSettings& settings,
                                                   uint32_t shadow_map_size,
                                                   bool enabled)
@@ -134,11 +201,21 @@ ShadowLightingUniforms makeShadowLightingUniforms(const glm::mat4& light_view_pr
     const auto texelSize = 1.0f / static_cast<float>(safeShadowMapSize);
 
     ShadowLightingUniforms uniforms;
-    uniforms.lightViewProjection = light_view_projection;
+    const auto cascadeCount = std::min(cascade_data.count, MaxShadowCascades);
+    const auto uniformCascadeCount = std::max(cascadeCount, 1u);
+    for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
+        uniforms.lightViewProjections[cascadeIndex] = cascade_data.cascades[cascadeIndex].light_view_projection;
+        uniforms.cascadeSplits[cascadeIndex] = cascade_data.cascades[cascadeIndex].split_depth;
+    }
     uniforms.texelSizeBiasNormalBias =
         glm::vec4{texelSize, texelSize, std::max(settings.bias, 0.0f), std::max(settings.normal_bias, 0.0f)};
-    uniforms.enabledPcfRadiusPadding =
-        glm::uvec4{enabled ? 1u : 0u, std::min(settings.pcf_radius, maxPcfRadius), 0u, 0u};
+    uniforms.cascadeBlendPadding = glm::vec4{std::max(settings.cascade_seam_blend, 0.0f), 0.0f, 0.0f, 0.0f};
+    uniforms.enabledPcfRadiusCascadeCountPadding = glm::uvec4{
+        enabled ? 1u : 0u,
+        std::min(settings.pcf_radius, maxPcfRadius),
+        uniformCascadeCount,
+        0u,
+    };
     return uniforms;
 }
 
@@ -246,8 +323,8 @@ void Renderer::beginFrame()
     LUNA_ASSERT(m_environment_map_cache->bindGroup(), "Environment bind group is not initialized.");
     LUNA_ASSERT(m_shadow_map->lightingBindGroup(), "Shadow lighting bind group is not initialized.");
 
-    m_shadow_map->updateLightingUniforms(
-        makeShadowLightingUniforms(glm::mat4{1.0f}, interface::RenderShadowSettings{}, m_shadow_map->size(), false));
+    m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
+        ShadowCascadeData{}, interface::RenderShadowSettings{}, m_shadow_map->size(), false));
     m_cmd->begin();
     m_geometry_pass_recorded_this_frame = false;
 }
@@ -285,14 +362,14 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
 
     if (shouldRenderShadowMap(frame)) {
         m_shadow_map->ensure(frame.lighting.directional_light.shadow);
-        const auto lightViewProjection =
-            directionalShadowLightViewProjection(frame.camera, frame.lighting.directional_light, m_shadow_map->size());
-        m_shadow_pass->execute(*m_shadow_map, lightViewProjection, frame.meshes);
+        const auto cascadeData = directionalShadowCascades(
+            frame.camera, frame.lighting.directional_light, m_shadow_map->size(), m_shadow_map->cascadeCount());
+        m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
-            lightViewProjection, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));
+            cascadeData, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));
     } else {
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
-            glm::mat4{1.0f}, frame.lighting.directional_light.shadow, m_shadow_map->size(), false));
+            ShadowCascadeData{}, frame.lighting.directional_light.shadow, m_shadow_map->size(), false));
     }
 
     const auto& gbuffer = m_gbuffer->get();

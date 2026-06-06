@@ -17,7 +17,7 @@ ShadowMapResource::ShadowMapResource(rhi::Device& device, rhi::BindGroupLayoutHa
     });
     LUNA_ASSERT(m_lighting_uniform_buffer, "Failed to create shadow lighting uniform buffer.");
 
-    createTexture(1, rhi::ResourceState::ShaderRead);
+    createTexture(1, 1, rhi::ResourceState::ShaderRead);
 
     ShadowLightingUniforms disabledUniforms;
     disabledUniforms.texelSizeBiasNormalBias = glm::vec4{1.0f, 1.0f, 0.0f, 0.0f};
@@ -32,11 +32,13 @@ ShadowMapResource::~ShadowMapResource()
 void ShadowMapResource::ensure(const interface::RenderShadowSettings& settings)
 {
     const auto requestedSize = std::max(settings.map_size, 1u);
-    if (m_texture && m_view && m_sampler && m_lighting_bind_group && m_size == requestedSize) {
+    const auto requestedCascadeCount = std::clamp(settings.cascade_count, 1u, MaxShadowCascades);
+    if (m_texture && m_view && m_sampler && m_lighting_bind_group && m_size == requestedSize &&
+        m_cascade_count == requestedCascadeCount) {
         return;
     }
 
-    createTexture(requestedSize, rhi::ResourceState::DepthStencilWrite);
+    createTexture(requestedSize, requestedCascadeCount, rhi::ResourceState::DepthStencilWrite);
 }
 
 void ShadowMapResource::updateLightingUniforms(const ShadowLightingUniforms& uniforms)
@@ -45,24 +47,40 @@ void ShadowMapResource::updateLightingUniforms(const ShadowLightingUniforms& uni
     m_device->updateBuffer(m_lighting_uniform_buffer, 0, &uniforms, sizeof(ShadowLightingUniforms));
 }
 
-void ShadowMapResource::createTexture(uint32_t size, rhi::ResourceState initial_state)
+void ShadowMapResource::createTexture(uint32_t size, uint32_t cascade_count, rhi::ResourceState initial_state)
 {
     destroyLightingBindGroup();
     destroyTexture();
 
     m_size = std::max(size, 1u);
+    m_cascade_count = std::clamp(cascade_count, 1u, MaxShadowCascades);
+    m_layer_count = std::max(m_cascade_count, 2u);
     m_texture = m_device->createTexture(rhi::TextureDesc{
         .width = m_size,
         .height = m_size,
+        .dimension = rhi::TextureDimension::Texture2D,
         .format = rhi::TextureFormat::Depth32F,
         .usage = rhi::TextureUsage::DepthStencil | rhi::TextureUsage::Sampled,
+        .array_layers = m_layer_count,
         .initial_state = initial_state,
     });
     m_view = m_device->createTextureView(rhi::TextureViewDesc{
         .texture = m_texture,
+        .view_dimension = rhi::TextureViewDimension::Texture2DArray,
         .format = rhi::TextureFormat::Depth32F,
         .aspect = rhi::TextureAspect::Depth,
+        .array_layer_count = m_layer_count,
     });
+    for (uint32_t cascadeIndex = 0; cascadeIndex < m_cascade_count; ++cascadeIndex) {
+        m_layer_views[cascadeIndex] = m_device->createTextureView(rhi::TextureViewDesc{
+            .texture = m_texture,
+            .view_dimension = rhi::TextureViewDimension::Texture2D,
+            .format = rhi::TextureFormat::Depth32F,
+            .aspect = rhi::TextureAspect::Depth,
+            .base_array_layer = cascadeIndex,
+            .array_layer_count = 1,
+        });
+    }
     if (!m_sampler) {
         m_sampler = m_device->createSampler(rhi::SamplerDesc{
             .min_filter = rhi::FilterMode::Linear,
@@ -75,10 +93,13 @@ void ShadowMapResource::createTexture(uint32_t size, rhi::ResourceState initial_
     }
 
     LUNA_ASSERT(m_texture, "Failed to create shadow map texture.");
-    LUNA_ASSERT(m_view, "Failed to create shadow map view.");
+    LUNA_ASSERT(m_view, "Failed to create shadow map array view.");
+    for (uint32_t cascadeIndex = 0; cascadeIndex < m_cascade_count; ++cascadeIndex) {
+        LUNA_ASSERT(m_layer_views[cascadeIndex], "Failed to create shadow map layer view.");
+    }
     LUNA_ASSERT(m_sampler, "Failed to create shadow map sampler.");
     createLightingBindGroup();
-    LUNA_CORE_DEBUG("Created shadow map resource ({}x{})", m_size, m_size);
+    LUNA_CORE_DEBUG("Created shadow map resource ({}x{}x{})", m_size, m_size, m_cascade_count);
 }
 
 void ShadowMapResource::createLightingBindGroup()
@@ -118,6 +139,12 @@ void ShadowMapResource::destroyLightingBindGroup()
 
 void ShadowMapResource::destroyTexture()
 {
+    for (auto& layerView : m_layer_views) {
+        if (layerView) {
+            m_device->destroyTextureView(layerView);
+            layerView = {};
+        }
+    }
     if (m_view) {
         m_device->destroyTextureView(m_view);
         m_view = {};
@@ -127,6 +154,8 @@ void ShadowMapResource::destroyTexture()
         m_texture = {};
     }
     m_size = 0;
+    m_cascade_count = 0;
+    m_layer_count = 0;
 }
 
 void ShadowMapResource::destroy()

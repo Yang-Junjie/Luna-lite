@@ -262,10 +262,8 @@ void InspectorPanel::onImGuiRender()
                 if (ImGui::SmallButton("Delete")) {
                     materialToDelete = static_cast<int>(materialIndex);
                 }
-                drawAssetHandleControl("Material",
-                                       asset::AssetType::Material,
-                                       meshRenderer.materials[materialIndex],
-                                       builtinMaterials);
+                drawAssetHandleControl(
+                    "Material", asset::AssetType::Material, meshRenderer.materials[materialIndex], builtinMaterials);
                 ImGui::PopID();
             }
 
@@ -384,6 +382,9 @@ void InspectorPanel::onImGuiRender()
 
                 ImGui::DragFloat("Cascade Split Lambda", &light.shadow.cascade_split_lambda, 0.01f, 0.0f, 1.0f, "%.3f");
                 light.shadow.cascade_split_lambda = std::clamp(light.shadow.cascade_split_lambda, 0.0f, 1.0f);
+
+                ImGui::DragFloat("Cascade Seam Blend", &light.shadow.cascade_seam_blend, 0.1f, 0.0f, 1000.0f, "%.2f");
+                light.shadow.cascade_seam_blend = std::max(light.shadow.cascade_seam_blend, 0.0f);
 
                 ImGui::TreePop();
             }

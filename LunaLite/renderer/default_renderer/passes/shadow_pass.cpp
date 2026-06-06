@@ -88,36 +88,44 @@ ShadowPass::~ShadowPass()
 }
 
 void ShadowPass::execute(const ShadowMapResource& shadow_map,
-                         const glm::mat4& light_view_projection,
+                         const ShadowCascadeData& cascade_data,
                          const std::vector<interface::MeshDrawCommand>& mesh_commands)
 {
-    if (!shadow_map.view() || shadow_map.size() == 0 || mesh_commands.empty()) {
+    const auto cascadeCount = std::min(cascade_data.count, shadow_map.cascadeCount());
+    if (!shadow_map.view() || shadow_map.size() == 0 || cascadeCount == 0 || mesh_commands.empty()) {
         return;
     }
 
-    m_frame_uniforms.lightViewProjection = light_view_projection;
-    m_device->updateBuffer(m_shadow_frame_uniform_buffer, 0, &m_frame_uniforms, sizeof(ShadowFrameUniforms));
+    for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
+        const auto layerView = shadow_map.layerView(cascadeIndex);
+        if (!layerView) {
+            continue;
+        }
 
-    rhi::RenderPassBeginInfo pass;
-    pass.has_depth_stencil_attachment = true;
-    pass.depth_stencil_attachment = rhi::DepthStencilAttachmentDesc{
-        .view = shadow_map.view(),
-        .depth_load_op = rhi::LoadOp::Clear,
-        .depth_store_op = rhi::StoreOp::Store,
-        .clear_depth = 1.0f,
-    };
-    pass.width = shadow_map.size();
-    pass.height = shadow_map.size();
+        m_frame_uniforms.lightViewProjection = cascade_data.cascades[cascadeIndex].light_view_projection;
+        m_device->updateBuffer(m_shadow_frame_uniform_buffer, 0, &m_frame_uniforms, sizeof(ShadowFrameUniforms));
 
-    m_cmd->beginRenderPass(pass);
-    m_cmd->setPipeline(m_shadow_pipeline);
-    m_cmd->setBindGroup(0, m_shadow_bind_group);
+        rhi::RenderPassBeginInfo pass;
+        pass.has_depth_stencil_attachment = true;
+        pass.depth_stencil_attachment = rhi::DepthStencilAttachmentDesc{
+            .view = layerView,
+            .depth_load_op = rhi::LoadOp::Clear,
+            .depth_store_op = rhi::StoreOp::Store,
+            .clear_depth = 1.0f,
+        };
+        pass.width = shadow_map.size();
+        pass.height = shadow_map.size();
 
-    for (const auto& meshCommand : mesh_commands) {
-        renderMesh(meshCommand);
+        m_cmd->beginRenderPass(pass);
+        m_cmd->setPipeline(m_shadow_pipeline);
+        m_cmd->setBindGroup(0, m_shadow_bind_group);
+
+        for (const auto& meshCommand : mesh_commands) {
+            renderMesh(meshCommand);
+        }
+
+        m_cmd->endRenderPass();
     }
-
-    m_cmd->endRenderPass();
 }
 
 void ShadowPass::renderMesh(const interface::MeshDrawCommand& mesh_command)

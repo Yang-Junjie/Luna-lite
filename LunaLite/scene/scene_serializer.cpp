@@ -206,6 +206,7 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
             shadowNode["PCFRadius"] = light.shadow.pcf_radius;
             shadowNode["CascadeCount"] = light.shadow.cascade_count;
             shadowNode["CascadeSplitLambda"] = light.shadow.cascade_split_lambda;
+            shadowNode["CascadeSeamBlend"] = light.shadow.cascade_seam_blend;
             node["Shadow"] = shadowNode;
             serializedEntity["DirectionalLightComponent"] = node;
         }
@@ -354,6 +355,8 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                         std::clamp(shadowNode["CascadeCount"].as<uint32_t>(light.shadow.cascade_count), 1u, 4u);
                     light.shadow.cascade_split_lambda = std::clamp(
                         shadowNode["CascadeSplitLambda"].as<float>(light.shadow.cascade_split_lambda), 0.0f, 1.0f);
+                    light.shadow.cascade_seam_blend =
+                        std::max(shadowNode["CascadeSeamBlend"].as<float>(light.shadow.cascade_seam_blend), 0.0f);
                 }
             }
 

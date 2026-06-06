@@ -67,6 +67,7 @@ renderer::interface::RenderShadowSettings toRenderShadowSettings(const ShadowSet
         .pcf_radius = shadow.pcf_radius,
         .cascade_count = std::clamp(shadow.cascade_count, 1u, 4u),
         .cascade_split_lambda = std::clamp(shadow.cascade_split_lambda, 0.0f, 1.0f),
+        .cascade_seam_blend = std::max(shadow.cascade_seam_blend, 0.0f),
     };
 }
 } // namespace

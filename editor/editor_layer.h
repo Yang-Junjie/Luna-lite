@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../LunaLite/core/layer.h"
-#include "../LunaLite/renderer/interface/renderer.h"
 #include "../LunaLite/scene/scene.h"
 #include "editor_camera.h"
 #include "panels/content_browser_panel.h"

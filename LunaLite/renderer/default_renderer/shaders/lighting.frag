@@ -32,12 +32,14 @@ layout(binding = 19) uniform sampler2D uBrdfLut;
 
 layout(std140, binding = 32) uniform ShadowLightingUniforms
 {
-    mat4 shadowLightViewProjection;
+    mat4 shadowLightViewProjections[4];
+    vec4 shadowCascadeSplits;
     vec4 shadowTexelSizeBiasNormalBias;
-    uvec4 shadowEnabledPcfRadius;
+    vec4 shadowCascadeBlendPadding;
+    uvec4 shadowEnabledPcfRadiusCascadeCount;
 };
 
-layout(binding = 33) uniform sampler2D uShadowMap;
+layout(binding = 33) uniform sampler2DArray uShadowMap;
 
 in vec2 vUV;
 out vec4 outColor;
@@ -57,16 +59,22 @@ vec3 reconstructWorldPosition(vec2 uv, float depth)
     return worldPosition.xyz * invW;
 }
 
-float directionalShadowFactor(vec3 worldPos, vec3 N, vec3 L)
+uint selectShadowCascade(float viewDepth)
 {
-    if (shadowEnabledPcfRadius.x == 0u) {
-        return 1.0;
+    uint cascadeCount = clamp(shadowEnabledPcfRadiusCascadeCount.z, 1u, 4u);
+    uint cascadeIndex = 0u;
+    for (uint i = 0u; i + 1u < cascadeCount; ++i) {
+        if (viewDepth > shadowCascadeSplits[i]) {
+            cascadeIndex = i + 1u;
+        }
     }
 
-    float NoL = saturate(dot(N, L));
-    float normalOffset = shadowTexelSizeBiasNormalBias.w * (1.0 - NoL);
-    vec3 shadowWorldPos = worldPos + N * normalOffset;
-    vec4 lightClip = shadowLightViewProjection * vec4(shadowWorldPos, 1.0);
+    return cascadeIndex;
+}
+
+float sampleDirectionalShadowCascade(vec3 shadowWorldPos, uint cascadeIndex)
+{
+    vec4 lightClip = shadowLightViewProjections[cascadeIndex] * vec4(shadowWorldPos, 1.0);
     if (abs(lightClip.w) <= 1e-6) {
         return 1.0;
     }
@@ -80,19 +88,46 @@ float directionalShadowFactor(vec3 worldPos, vec3 N, vec3 L)
 
     vec2 texelSize = shadowTexelSizeBiasNormalBias.xy;
     float receiverDepth = shadowCoord.z - shadowTexelSizeBiasNormalBias.z;
-    int radius = int(min(shadowEnabledPcfRadius.y, 4u));
+    int radius = int(min(shadowEnabledPcfRadiusCascadeCount.y, 4u));
     float lit = 0.0;
     float samples = 0.0;
     for (int y = -radius; y <= radius; ++y) {
         for (int x = -radius; x <= radius; ++x) {
             vec2 offset = vec2(float(x), float(y)) * texelSize;
-            float closestDepth = texture(uShadowMap, shadowCoord.xy + offset).r;
+            float closestDepth = texture(uShadowMap, vec3(shadowCoord.xy + offset, float(cascadeIndex))).r;
             lit += receiverDepth <= closestDepth ? 1.0 : 0.0;
             samples += 1.0;
         }
     }
 
     return samples > 0.0 ? lit / samples : 1.0;
+}
+
+float directionalShadowFactor(vec3 worldPos, vec3 N, vec3 L, float viewDepth)
+{
+    if (shadowEnabledPcfRadiusCascadeCount.x == 0u || shadowEnabledPcfRadiusCascadeCount.z == 0u) {
+        return 1.0;
+    }
+
+    uint cascadeCount = clamp(shadowEnabledPcfRadiusCascadeCount.z, 1u, 4u);
+    uint cascadeIndex = selectShadowCascade(viewDepth);
+    float NoL = saturate(dot(N, L));
+    float normalOffset = shadowTexelSizeBiasNormalBias.w * (1.0 - NoL);
+    vec3 shadowWorldPos = worldPos + N * normalOffset;
+    float shadow = sampleDirectionalShadowCascade(shadowWorldPos, cascadeIndex);
+
+    float blendDistance = max(shadowCascadeBlendPadding.x, 0.0);
+    if (blendDistance > 0.0 && cascadeIndex + 1u < cascadeCount) {
+        float splitDistance = shadowCascadeSplits[cascadeIndex];
+        float blendStart = splitDistance - blendDistance;
+        float blendWeight = saturate((viewDepth - blendStart) / blendDistance);
+        if (blendWeight > 0.0) {
+            float nextShadow = sampleDirectionalShadowCascade(shadowWorldPos, cascadeIndex + 1u);
+            shadow = mix(shadow, nextShadow, blendWeight);
+        }
+    }
+
+    return shadow;
 }
 
 float distributionGGX(float NoH, float roughness)
@@ -152,6 +187,7 @@ void main()
     }
 
     vec3 worldPos = reconstructWorldPosition(vUV, depth);
+    float viewDepth = max(-(view * vec4(worldPos, 1.0)).z, 0.0);
     vec3 V = normalize(cameraPos - worldPos);
     float NoV = saturate(dot(N, V));
 
@@ -192,7 +228,7 @@ void main()
 
         vec3 directDiffuse = diffuseBRDF * lightRadiance;
         vec3 directSpecular = specularBRDF * lightRadiance;
-        float shadowFactor = directionalShadowFactor(worldPos, N, L);
+        float shadowFactor = directionalShadowFactor(worldPos, N, L, viewDepth);
         color += (directDiffuse + directSpecular) * NoL * shadowFactor;
     }
 

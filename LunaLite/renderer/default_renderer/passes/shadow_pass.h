@@ -27,7 +27,7 @@ public:
     ShadowPass& operator=(const ShadowPass&) = delete;
 
     void execute(const ShadowMapResource& shadow_map,
-                 const glm::mat4& light_view_projection,
+                 const ShadowCascadeData& cascade_data,
                  const std::vector<interface::MeshDrawCommand>& mesh_commands);
 
 private:

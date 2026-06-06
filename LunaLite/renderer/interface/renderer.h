@@ -1,10 +1,11 @@
 #pragma once
-#include "frame_image.h"
-#include "frame_render_data.h"
 
 #include <cstdint>
 
 namespace lunalite::renderer::interface {
+struct FrameImage;
+struct FrameRenderData;
+
 class Renderer {
 public:
     Renderer() = default;

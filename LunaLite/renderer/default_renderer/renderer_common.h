@@ -14,6 +14,8 @@
 
 namespace lunalite::renderer {
 
+constexpr uint32_t MaxShadowCascades = 4;
+
 struct LineVertex {
     glm::vec3 position{0.0f};
     glm::vec3 color{1.0f};
@@ -63,9 +65,26 @@ struct alignas(16) ShadowObjectUniforms {
 };
 
 struct alignas(16) ShadowLightingUniforms {
-    glm::mat4 lightViewProjection{1.0f};
+    std::array<glm::mat4, MaxShadowCascades> lightViewProjections{
+        glm::mat4{1.0f},
+        glm::mat4{1.0f},
+        glm::mat4{1.0f},
+        glm::mat4{1.0f},
+    };
+    glm::vec4 cascadeSplits{0.0f};
     glm::vec4 texelSizeBiasNormalBias{0.0f};
-    glm::uvec4 enabledPcfRadiusPadding{0u};
+    glm::vec4 cascadeBlendPadding{0.0f};
+    glm::uvec4 enabledPcfRadiusCascadeCountPadding{0u};
+};
+
+struct ShadowCascade {
+    glm::mat4 light_view_projection{1.0f};
+    float split_depth{0.0f};
+};
+
+struct ShadowCascadeData {
+    std::array<ShadowCascade, MaxShadowCascades> cascades{};
+    uint32_t count{0};
 };
 
 struct MeshGpuData {
