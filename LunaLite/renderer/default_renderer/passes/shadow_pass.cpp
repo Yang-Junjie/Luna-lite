@@ -87,15 +87,16 @@ ShadowPass::~ShadowPass()
     }
 }
 
-void ShadowPass::execute(const ShadowMapResource& shadow_map,
-                         const ShadowCascadeData& cascade_data,
-                         const std::vector<interface::MeshDrawCommand>& mesh_commands)
+uint32_t ShadowPass::execute(const ShadowMapResource& shadow_map,
+                             const ShadowCascadeData& cascade_data,
+                             const std::vector<interface::MeshDrawCommand>& mesh_commands)
 {
     const auto cascadeCount = std::min(cascade_data.count, shadow_map.cascadeCount());
     if (!shadow_map.view() || shadow_map.size() == 0 || cascadeCount == 0 || mesh_commands.empty()) {
-        return;
+        return 0;
     }
 
+    uint32_t drawCalls = 0;
     for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
         const auto layerView = shadow_map.layerView(cascadeIndex);
         if (!layerView) {
@@ -121,28 +122,30 @@ void ShadowPass::execute(const ShadowMapResource& shadow_map,
         m_cmd->setBindGroup(0, m_shadow_bind_group);
 
         for (const auto& meshCommand : mesh_commands) {
-            renderMesh(meshCommand);
+            drawCalls += renderMesh(meshCommand);
         }
 
         m_cmd->endRenderPass();
     }
+
+    return drawCalls;
 }
 
-void ShadowPass::renderMesh(const interface::MeshDrawCommand& mesh_command)
+uint32_t ShadowPass::renderMesh(const interface::MeshDrawCommand& mesh_command)
 {
     if (!mesh_command.mesh.isValid()) {
-        return;
+        return 0;
     }
 
     const auto* mesh = asset::AssetDatabase::get().get<interface::Mesh>(mesh_command.mesh);
     if (mesh == nullptr) {
         LUNA_CORE_ERROR("Mesh instance {} has a null mesh asset", static_cast<uint64_t>(mesh_command.mesh));
-        return;
+        return 0;
     }
 
     const auto& submeshes = mesh->getSubMeshes();
     if (mesh_command.submesh_start >= submeshes.size()) {
-        return;
+        return 0;
     }
 
     const auto submeshStart = static_cast<size_t>(mesh_command.submesh_start);
@@ -151,20 +154,25 @@ void ShadowPass::renderMesh(const interface::MeshDrawCommand& mesh_command)
                                         ? availableSubmeshes
                                         : static_cast<size_t>(mesh_command.submesh_count);
     const auto submeshEnd = submeshStart + std::min(availableSubmeshes, requestedSubmeshes);
+    uint32_t drawCalls = 0;
 
     for (size_t submeshIndex = submeshStart; submeshIndex < submeshEnd; ++submeshIndex) {
-        drawSubMesh(*mesh, submeshIndex, submeshes[submeshIndex], mesh_command.transform);
+        if (drawSubMesh(*mesh, submeshIndex, submeshes[submeshIndex], mesh_command.transform)) {
+            drawCalls += 1;
+        }
     }
+
+    return drawCalls;
 }
 
-void ShadowPass::drawSubMesh(const interface::Mesh& mesh,
+bool ShadowPass::drawSubMesh(const interface::Mesh& mesh,
                              size_t submesh_index,
                              const interface::SubMesh& submesh,
                              const glm::mat4& transform)
 {
     auto* gpu_mesh = getOrCreateSubMeshGpuData(mesh, submesh_index, submesh);
     if (gpu_mesh == nullptr || !gpu_mesh->vertex_buffer || gpu_mesh->vertex_count == 0) {
-        return;
+        return false;
     }
 
     m_object_uniforms.model = transform;
@@ -177,6 +185,7 @@ void ShadowPass::drawSubMesh(const interface::Mesh& mesh,
     } else {
         m_cmd->draw(gpu_mesh->vertex_count);
     }
+    return true;
 }
 
 MeshGpuData* ShadowPass::getOrCreateSubMeshGpuData(const interface::Mesh& mesh,

@@ -8,6 +8,7 @@
 #include "panels/hierarchy_panel.h"
 #include "panels/inspector_panel.h"
 #include "panels/material_editor_panel.h"
+#include "panels/render_stats_panel.h"
 #include "panels/scene_panel.h"
 
 #include <filesystem>
@@ -56,6 +57,7 @@ private:
     InspectorPanel m_inspector_panel;
     ScenePanel m_scene_panel;
     MaterialEditorPanel m_material_editor_panel;
+    RenderStatsPanel m_render_stats_panel;
     ContentBrowserPanel m_content_browser_panel;
     SceneState m_scene_state{SceneState::Edit};
     bool m_viewport_hovered{false};

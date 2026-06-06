@@ -7,7 +7,7 @@ LightingPass::LightingPass(rhi::CommandList& commands, rhi::PipelineHandle light
       m_lighting_pipeline(lighting_pipeline)
 {}
 
-void LightingPass::execute(const GBuffer& gbuffer,
+bool LightingPass::execute(const GBuffer& gbuffer,
                            rhi::BindGroupHandle environment_bind_group,
                            rhi::BindGroupHandle shadow_lighting_bind_group,
                            rhi::TextureHandle shadow_map)
@@ -60,6 +60,7 @@ void LightingPass::execute(const GBuffer& gbuffer,
     m_cmd->setBindGroup(2, shadow_lighting_bind_group);
     m_cmd->draw(3);
     m_cmd->endRenderPass();
+    return true;
 }
 
 void LightingPass::transitionFinalColorForSampling(const GBuffer& gbuffer)

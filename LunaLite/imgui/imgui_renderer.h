@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../diagnostics/stats.h"
 #include "../renderer/interface/frame_image.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/instance.h"
@@ -38,6 +39,7 @@ public:
     void render(ImDrawData* draw_data, rhi::CommandList& commands);
     ImTextureID textureId(const renderer::interface::FrameImage& image);
     ImTextureID textureId(rhi::TextureViewHandle view);
+    const diagnostics::ImGuiStats& getStats() const;
 
 private:
     bool createStaticResources();
@@ -95,6 +97,7 @@ private:
     std::unordered_map<uint32_t, rhi::BindGroupHandle> m_texture_bind_groups;
     std::vector<ImDrawVert> m_vertex_upload;
     std::vector<ImDrawIdx> m_index_upload;
+    diagnostics::ImGuiStats m_stats;
 };
 
 } // namespace lunalite::imgui

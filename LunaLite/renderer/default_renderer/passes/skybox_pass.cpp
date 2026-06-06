@@ -10,7 +10,7 @@ SkyboxPass::SkyboxPass(rhi::CommandList& commands,
       m_geometry_bind_group(geometry_bind_group)
 {}
 
-void SkyboxPass::execute(const GBuffer& gbuffer, rhi::BindGroupHandle environment_bind_group)
+bool SkyboxPass::execute(const GBuffer& gbuffer, rhi::BindGroupHandle environment_bind_group)
 {
     const rhi::TextureTransition depthAttachmentBarrier{
         .texture = gbuffer.depth_texture,
@@ -39,6 +39,7 @@ void SkyboxPass::execute(const GBuffer& gbuffer, rhi::BindGroupHandle environmen
     m_cmd->setBindGroup(1, environment_bind_group);
     m_cmd->draw(3);
     m_cmd->endRenderPass();
+    return true;
 }
 
 } // namespace lunalite::renderer

@@ -91,7 +91,7 @@ void GeometryPass::end()
     m_cmd->endRenderPass();
 }
 
-void GeometryPass::renderMesh(const interface::MeshDrawCommand& mesh_instance)
+uint32_t GeometryPass::renderMesh(const interface::MeshDrawCommand& mesh_instance)
 {
     const interface::Material* fallbackMaterial = nullptr;
     bool fallbackMaterialResolved = false;
@@ -105,18 +105,18 @@ void GeometryPass::renderMesh(const interface::MeshDrawCommand& mesh_instance)
     };
 
     if (!mesh_instance.mesh.isValid()) {
-        return;
+        return 0;
     }
 
     const auto* mesh = asset::AssetDatabase::get().get<interface::Mesh>(mesh_instance.mesh);
     if (mesh == nullptr) {
         LUNA_CORE_ERROR("Mesh instance {} has a null mesh asset", static_cast<uint64_t>(mesh_instance.mesh));
-        return;
+        return 0;
     }
 
     const auto& submeshes = mesh->getSubMeshes();
     if (mesh_instance.submesh_start >= submeshes.size()) {
-        return;
+        return 0;
     }
 
     const auto submeshStart = static_cast<size_t>(mesh_instance.submesh_start);
@@ -125,6 +125,7 @@ void GeometryPass::renderMesh(const interface::MeshDrawCommand& mesh_instance)
                                         ? availableSubmeshes
                                         : static_cast<size_t>(mesh_instance.submesh_count);
     const auto submeshEnd = submeshStart + std::min(availableSubmeshes, requestedSubmeshes);
+    uint32_t drawCalls = 0;
 
     for (size_t submeshIndex = submeshStart; submeshIndex < submeshEnd; ++submeshIndex) {
         const auto& submesh = submeshes[submeshIndex];
@@ -144,12 +145,16 @@ void GeometryPass::renderMesh(const interface::MeshDrawCommand& mesh_instance)
         }
 
         if (material != nullptr) {
-            drawSubMesh(*mesh, submeshIndex, submesh, *material, mesh_instance.transform);
+            if (drawSubMesh(*mesh, submeshIndex, submesh, *material, mesh_instance.transform)) {
+                drawCalls += 1;
+            }
         }
     }
+
+    return drawCalls;
 }
 
-void GeometryPass::drawSubMesh(const interface::Mesh& mesh,
+bool GeometryPass::drawSubMesh(const interface::Mesh& mesh,
                                size_t submesh_index,
                                const interface::SubMesh& submesh,
                                const interface::Material& material,
@@ -157,7 +162,7 @@ void GeometryPass::drawSubMesh(const interface::Mesh& mesh,
 {
     auto* gpu_mesh = getOrCreateSubMeshGpuData(mesh, submesh_index, submesh);
     if (gpu_mesh == nullptr || !gpu_mesh->vertex_buffer || gpu_mesh->vertex_count == 0) {
-        return;
+        return false;
     }
 
     flushFrameUniforms();
@@ -189,6 +194,7 @@ void GeometryPass::drawSubMesh(const interface::Mesh& mesh,
     } else {
         m_cmd->draw(gpu_mesh->vertex_count);
     }
+    return true;
 }
 
 void GeometryPass::flushFrameUniforms()

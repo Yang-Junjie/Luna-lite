@@ -10,7 +10,7 @@ public:
                rhi::PipelineHandle skybox_pipeline,
                rhi::BindGroupHandle geometry_bind_group);
 
-    void execute(const GBuffer& gbuffer, rhi::BindGroupHandle environment_bind_group);
+    bool execute(const GBuffer& gbuffer, rhi::BindGroupHandle environment_bind_group);
 
 private:
     rhi::CommandList* m_cmd{nullptr};

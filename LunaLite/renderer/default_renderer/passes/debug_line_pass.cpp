@@ -40,7 +40,7 @@ DebugLinePass::~DebugLinePass()
     }
 }
 
-void DebugLinePass::renderLine(const interface::LineDrawCommand& line_command)
+bool DebugLinePass::renderLine(const interface::LineDrawCommand& line_command)
 {
     const LineVertex vertices[] = {
         LineVertex{.position = line_command.start, .color = glm::vec3{line_command.color}},
@@ -59,6 +59,7 @@ void DebugLinePass::renderLine(const interface::LineDrawCommand& line_command)
     m_cmd->setVertexBuffer(0, m_line_vertex_buffer);
     m_cmd->draw(2);
     m_cmd->setPipeline(m_geometry_pipeline);
+    return true;
 }
 
 void DebugLinePass::flushFrameUniforms()

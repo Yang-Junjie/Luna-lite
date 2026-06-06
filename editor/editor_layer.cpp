@@ -83,6 +83,7 @@ void EditorLayer::onImGuiRender()
     m_scene_panel.onImGuiRender();
     m_material_editor_panel.onImGuiRender();
     m_editor_setting_panel.onImGuiRender();
+    m_render_stats_panel.onImGuiRender();
     m_content_browser_panel.onImGuiRender();
     drawViewport();
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include "../../diagnostics/stats.h"
 
 #include <cstdint>
 
@@ -17,5 +18,6 @@ public:
     virtual void renderFrame(const FrameRenderData& frame) = 0;
 
     virtual const FrameImage& getFrameImage() const = 0;
+    virtual const diagnostics::RenderStats& getStats() const = 0;
 };
 } // namespace lunalite::renderer::interface

@@ -34,6 +34,7 @@ public:
     void resize(uint32_t width, uint32_t height) override;
     void renderFrame(const interface::FrameRenderData& frame) override;
     const interface::FrameImage& getFrameImage() const override;
+    const diagnostics::RenderStats& getStats() const override;
 
 private:
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos, float exposure);
@@ -59,6 +60,7 @@ private:
     std::unique_ptr<LightingPass> m_lighting_pass;
     std::unique_ptr<SkyboxPass> m_skybox_pass;
     FrameUniforms m_frameUniforms;
+    diagnostics::RenderStats m_stats;
     bool m_frame_uniforms_dirty{true};
     bool m_geometry_pass_recorded_this_frame{false};
 };

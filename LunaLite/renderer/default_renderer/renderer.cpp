@@ -345,6 +345,7 @@ Renderer::~Renderer()
 
 void Renderer::beginFrame()
 {
+    m_stats = diagnostics::RenderStats{};
     m_gbuffer->ensure(m_swapchain->getWidth(), m_swapchain->getHeight());
     const auto& gbuffer = m_gbuffer->get();
     LUNA_ASSERT(gbuffer.lighting_bind_group, "GBuffer is not initialized.");
@@ -365,12 +366,21 @@ void Renderer::endFrame()
         m_geometry_pass_recorded_this_frame = false;
     }
 
-    m_lighting_pass->execute(
-        gbuffer, m_environment_map_cache->bindGroup(), m_shadow_map->lightingBindGroup(), m_shadow_map->texture());
+    if (m_lighting_pass->execute(gbuffer,
+                                 m_environment_map_cache->bindGroup(),
+                                 m_shadow_map->lightingBindGroup(),
+                                 m_shadow_map->texture())) {
+        m_stats.lighting_draw_calls += 1;
+    }
 
     if (m_frameUniforms.environmentIntensity > 0.0f) {
-        m_skybox_pass->execute(gbuffer, m_environment_map_cache->bindGroup());
+        if (m_skybox_pass->execute(gbuffer, m_environment_map_cache->bindGroup())) {
+            m_stats.skybox_draw_calls += 1;
+        }
     }
+
+    m_stats.draw_calls_total = m_stats.geometry_draw_calls + m_stats.shadow_draw_calls + m_stats.debug_line_draw_calls +
+                               m_stats.lighting_draw_calls + m_stats.skybox_draw_calls;
 
     m_lighting_pass->transitionFinalColorForSampling(gbuffer);
 
@@ -385,6 +395,11 @@ void Renderer::resize(uint32_t width, uint32_t height)
 
 void Renderer::renderFrame(const interface::FrameRenderData& frame)
 {
+    m_stats.mesh_commands =
+        static_cast<uint32_t>(std::min<size_t>(frame.meshes.size(), std::numeric_limits<uint32_t>::max()));
+    m_stats.debug_lines =
+        static_cast<uint32_t>(std::min<size_t>(frame.debug_lines.size(), std::numeric_limits<uint32_t>::max()));
+
     setLighting(frame.lighting);
     setViewProjection(frame.camera.view, frame.camera.projection, frame.camera.position, frame.camera.exposure);
 
@@ -395,7 +410,7 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
                                                            m_shadow_map->size(),
                                                            m_shadow_map->cascadeCount(),
                                                            frame.meshes);
-        m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
+        m_stats.shadow_draw_calls += m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
             cascadeData, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));
     } else {
@@ -408,17 +423,24 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
     m_geometry_pass_recorded_this_frame = true;
 
     for (const auto& meshCommand : frame.meshes) {
-        m_geometry_pass->renderMesh(meshCommand);
+        m_stats.geometry_draw_calls += m_geometry_pass->renderMesh(meshCommand);
     }
 
     for (const auto& lineCommand : frame.debug_lines) {
-        m_debug_line_pass->renderLine(lineCommand);
+        if (m_debug_line_pass->renderLine(lineCommand)) {
+            m_stats.debug_line_draw_calls += 1;
+        }
     }
 }
 
 const interface::FrameImage& Renderer::getFrameImage() const
 {
     return m_gbuffer->getFrameImage();
+}
+
+const diagnostics::RenderStats& Renderer::getStats() const
+{
+    return m_stats;
 }
 
 void Renderer::setViewProjection(const glm::mat4& view,

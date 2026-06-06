@@ -79,6 +79,7 @@ void Application::run()
         const auto currentFrameTime = std::chrono::steady_clock::now();
         const std::chrono::duration<float> deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
+        m_stats.updateFrame(deltaTime.count());
 
         m_frame_render_data.clear();
         m_scene_renderer->beginFrame(m_frame_render_data);
@@ -100,6 +101,7 @@ void Application::run()
         m_renderer_controller->getRenderer().beginFrame();
         m_renderer_controller->getRenderer().renderFrame(m_frame_render_data);
         m_renderer_controller->getRenderer().endFrame();
+        m_stats.setRenderStats(m_renderer_controller->getRenderer().getStats());
 
         if (m_imgui_renderer) {
             rhi::SwapchainFrame frame{};
@@ -120,7 +122,9 @@ void Application::run()
             m_imgui_renderer->endFrame(m_present_scene_to_swapchain ? imgui::ImGuiRenderMode::OverlaySwapchain
                                                                     : imgui::ImGuiRenderMode::ClearSwapchain,
                                        frame);
+            m_stats.setImGuiStats(m_imgui_renderer->getStats());
         } else {
+            m_stats.clearImGuiStats();
             m_frame_presenter->present(m_renderer_controller->getFrameImage());
         }
     }
@@ -175,6 +179,11 @@ imgui::ImGuiRenderer& Application::getImGuiRenderer()
 {
     LUNA_ASSERT(m_imgui_renderer, "ImGui renderer is null.");
     return *m_imgui_renderer;
+}
+
+const diagnostics::RuntimeStats& Application::getStats() const
+{
+    return m_stats;
 }
 
 void Application::initialize(const ApplicationCreateInfo& info)

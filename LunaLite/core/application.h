@@ -1,4 +1,5 @@
 #pragma once
+#include "../diagnostics/stats.h"
 #include "../renderer/interface/frame_render_data.h"
 #include "../renderer/interface/renderer_kind.h"
 #include "application_event.h"
@@ -68,6 +69,7 @@ public:
     renderer::DebugRenderer& getDebugRenderer();
     imgui::ImGuiRenderer& getImGuiRenderer();
     const renderer::interface::FrameImage& getFrameImage() const;
+    const diagnostics::RuntimeStats& getStats() const;
 
 private:
     void initialize(const ApplicationCreateInfo& info);
@@ -99,6 +101,7 @@ private:
     std::unique_ptr<imgui::ImGuiRenderer> m_imgui_renderer;
     bool m_present_scene_to_swapchain{true};
 
+    diagnostics::RuntimeStats m_stats;
     renderer::interface::FrameRenderData m_frame_render_data;
     LayerStack m_layer_stack;
 };

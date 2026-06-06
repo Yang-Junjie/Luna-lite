@@ -22,7 +22,7 @@ public:
     DebugLinePass(const DebugLinePass&) = delete;
     DebugLinePass& operator=(const DebugLinePass&) = delete;
 
-    void renderLine(const interface::LineDrawCommand& line_command);
+    bool renderLine(const interface::LineDrawCommand& line_command);
 
 private:
     void flushFrameUniforms();

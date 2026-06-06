@@ -26,13 +26,13 @@ public:
     ShadowPass(const ShadowPass&) = delete;
     ShadowPass& operator=(const ShadowPass&) = delete;
 
-    void execute(const ShadowMapResource& shadow_map,
-                 const ShadowCascadeData& cascade_data,
-                 const std::vector<interface::MeshDrawCommand>& mesh_commands);
+    uint32_t execute(const ShadowMapResource& shadow_map,
+                     const ShadowCascadeData& cascade_data,
+                     const std::vector<interface::MeshDrawCommand>& mesh_commands);
 
 private:
-    void renderMesh(const interface::MeshDrawCommand& mesh_command);
-    void drawSubMesh(const interface::Mesh& mesh,
+    uint32_t renderMesh(const interface::MeshDrawCommand& mesh_command);
+    bool drawSubMesh(const interface::Mesh& mesh,
                      size_t submesh_index,
                      const interface::SubMesh& submesh,
                      const glm::mat4& transform);

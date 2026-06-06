@@ -8,7 +8,7 @@ class LightingPass {
 public:
     LightingPass(rhi::CommandList& commands, rhi::PipelineHandle lighting_pipeline);
 
-    void execute(const GBuffer& gbuffer,
+    bool execute(const GBuffer& gbuffer,
                  rhi::BindGroupHandle environment_bind_group,
                  rhi::BindGroupHandle shadow_lighting_bind_group,
                  rhi::TextureHandle shadow_map);

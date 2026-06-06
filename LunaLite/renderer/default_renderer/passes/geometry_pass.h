@@ -32,10 +32,10 @@ public:
 
     void begin(const GBuffer& gbuffer);
     void end();
-    void renderMesh(const interface::MeshDrawCommand& mesh_command);
+    uint32_t renderMesh(const interface::MeshDrawCommand& mesh_command);
 
 private:
-    void drawSubMesh(const interface::Mesh& mesh,
+    bool drawSubMesh(const interface::Mesh& mesh,
                      size_t submesh_index,
                      const interface::SubMesh& submesh,
                      const interface::Material& material,

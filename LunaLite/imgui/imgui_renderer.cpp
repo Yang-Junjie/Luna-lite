@@ -163,6 +163,7 @@ void ImGuiRenderer::setPlatform(ImGuiPlatform& platform)
 
 void ImGuiRenderer::beginFrame()
 {
+    m_stats = diagnostics::ImGuiStats{};
     if (m_platform == nullptr) {
         return;
     }
@@ -282,6 +283,9 @@ void ImGuiRenderer::render(ImDrawData* draw_data, CommandList& commands)
         return;
     }
 
+    m_stats.vertices += static_cast<uint32_t>(std::min(draw_data->TotalVtxCount, std::numeric_limits<int>::max()));
+    m_stats.indices += static_cast<uint32_t>(std::min(draw_data->TotalIdxCount, std::numeric_limits<int>::max()));
+
     m_vertex_upload.resize(static_cast<size_t>(draw_data->TotalVtxCount));
     m_index_upload.resize(static_cast<size_t>(draw_data->TotalIdxCount));
 
@@ -368,11 +372,17 @@ void ImGuiRenderer::render(ImDrawData* draw_data, CommandList& commands)
             commands.drawIndexed(drawCommand->ElemCount,
                                  drawCommand->IdxOffset + globalIndexOffset,
                                  static_cast<int32_t>(drawCommand->VtxOffset) + globalVertexOffset);
+            m_stats.draw_calls += 1;
         }
 
         globalIndexOffset += static_cast<uint32_t>(commandList->IdxBuffer.Size);
         globalVertexOffset += commandList->VtxBuffer.Size;
     }
+}
+
+const diagnostics::ImGuiStats& ImGuiRenderer::getStats() const
+{
+    return m_stats;
 }
 
 ImTextureID ImGuiRenderer::textureId(const renderer::interface::FrameImage& image)
