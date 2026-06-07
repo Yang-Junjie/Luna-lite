@@ -22,6 +22,10 @@ public:
                  const glm::mat4& transform,
                  const glm::vec4& color,
                  bool depth_test = true);
+    void drawFrustum(const glm::mat4& inverse_view_projection,
+                     const glm::vec4& color,
+                     bool depth_test = true,
+                     float display_depth_scale = 1.0f);
     void drawTransformAxes(const glm::mat4& transform, float size = 1.0f, bool depth_test = true);
 
 private:

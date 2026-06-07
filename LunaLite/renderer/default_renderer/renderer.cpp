@@ -1,5 +1,6 @@
 #include "../../core/log.h"
 #include "../interface/frame_render_data.h"
+#include "../interface/frustum.h"
 #include "environment_map_cache.h"
 #include "gbuffer_resource.h"
 #include "material_gpu_cache.h"
@@ -476,7 +477,14 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
     m_geometry_pass->begin(gbuffer);
     m_geometry_pass_recorded_this_frame = true;
 
+    const auto cameraFrustum = interface::Frustum::fromViewProjection(frame.camera.view_projection);
     for (const auto& meshCommand : frame.meshes) {
+        if (!cameraFrustum.intersects(meshCommand.world_aabb)) {
+            m_stats.geometry_culled_meshes += 1;
+            continue;
+        }
+
+        m_stats.geometry_visible_meshes += 1;
         m_stats.geometry_draw_calls += m_geometry_pass->renderMesh(meshCommand);
     }
 }

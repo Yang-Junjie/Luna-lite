@@ -34,6 +34,15 @@ target_link_libraries(DebugRendererTest
         LunaLite
 )
 
+add_executable(FrustumTest
+    frustum_test.cpp
+)
+
+target_link_libraries(FrustumTest
+    PRIVATE
+        LunaLite
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )

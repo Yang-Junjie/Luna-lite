@@ -22,6 +22,8 @@ void RenderStatsPanel::onImGuiRender()
     ImGui::Separator();
     ImGui::TextUnformatted("Scene");
     ImGui::Text("Mesh Commands %u", render.mesh_commands);
+    ImGui::Text("Geometry Visible %u", render.geometry_visible_meshes);
+    ImGui::Text("Geometry Culled %u", render.geometry_culled_meshes);
     ImGui::Text("Debug Lines %u", render.debug_lines);
 
     ImGui::Separator();

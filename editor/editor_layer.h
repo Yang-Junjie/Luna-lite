@@ -13,6 +13,7 @@
 #include "panels/scene_panel.h"
 
 #include <filesystem>
+#include <glm/glm.hpp>
 
 namespace lunalite::editor {
 
@@ -31,9 +32,18 @@ public:
     void onImGuiRender() override;
 
 private:
+    struct DebugCameraSnapshot {
+        glm::mat4 view{1.0f};
+        glm::mat4 projection{1.0f};
+        glm::mat4 view_projection{1.0f};
+        glm::mat4 inverse_view_projection{1.0f};
+        bool valid{false};
+    };
+
     void drawMenuBar();
     void drawViewport();
     void drawDebugOverlays();
+    DebugCameraSnapshot makeEditorCameraSnapshot() const;
     void createProject();
     void openProject();
     void saveProject();
@@ -63,7 +73,10 @@ private:
     ContentBrowserPanel m_content_browser_panel;
     DebugPanel m_debug_panel;
     SceneState m_scene_state{SceneState::Edit};
+    uint32_t m_viewport_width{1};
+    uint32_t m_viewport_height{1};
     bool m_viewport_hovered{false};
+    DebugCameraSnapshot m_frozen_culling_frustum;
     std::filesystem::path m_current_scene_path;
 };
 

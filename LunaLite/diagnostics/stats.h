@@ -27,6 +27,8 @@ struct ShadowCascadeStats {
 
 struct RenderStats {
     uint32_t mesh_commands{0};
+    uint32_t geometry_visible_meshes{0};
+    uint32_t geometry_culled_meshes{0};
     uint32_t debug_lines{0};
 
     uint32_t draw_calls_total{0};

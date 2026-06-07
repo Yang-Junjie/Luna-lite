@@ -4,6 +4,7 @@
 #include "../LunaLite/platform/common/file_dialogs.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/debug_renderer.h"
+#include "../LunaLite/renderer/interface/frustum.h"
 #include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
@@ -13,7 +14,9 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <imgui.h>
+#include <optional>
 
 namespace lunalite::editor {
 namespace {
@@ -42,29 +45,24 @@ scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle m
     return entity;
 }
 
-void drawMeshRendererAABB(scene::Scene& scene,
-                          scene::Entity entity,
-                          renderer::DebugRenderer& debugRenderer,
-                          const glm::vec4& color,
-                          bool depthTest)
+std::optional<renderer::interface::AABB> meshRendererWorldAABB(scene::Scene& scene, scene::Entity entity)
 {
     if (!scene.isValidEntity(entity) || !scene.hasComponent<scene::MeshRendererComponent>(entity)) {
-        return;
+        return std::nullopt;
     }
 
     const auto& meshRenderer = scene.getComponent<scene::MeshRendererComponent>(entity);
     if (!meshRenderer.mesh.isValid()) {
-        return;
+        return std::nullopt;
     }
 
     const auto* mesh = asset::AssetManager::get().getAsset<renderer::interface::Mesh>(meshRenderer.mesh);
     if (mesh == nullptr) {
-        return;
+        return std::nullopt;
     }
 
     const auto localAabb = mesh->getLocalAABB(meshRenderer.submesh_start, meshRenderer.submesh_count);
-    const auto worldAabb = localAabb.transformed(scene.getWorldTransform(entity));
-    debugRenderer.drawAABB(worldAabb, color, depthTest);
+    return localAabb.transformed(scene.getWorldTransform(entity));
 }
 } // namespace
 
@@ -165,24 +163,72 @@ void EditorLayer::drawMenuBar()
 void EditorLayer::drawDebugOverlays()
 {
     const auto& settings = m_debug_panel.overlaySettings();
-    if (!settings.mesh_aabb && !settings.selected_aabb) {
+    const auto activeCamera = makeEditorCameraSnapshot();
+    if (m_debug_panel.consumeCaptureCullingFrustumRequest()) {
+        m_frozen_culling_frustum = activeCamera;
+        m_debug_panel.setFrozenCullingFrustumValid(true);
+    }
+
+    if (!settings.mesh_aabb && !settings.geometry_culling_aabb && !settings.selected_aabb &&
+        !settings.show_culling_frustum) {
         return;
     }
 
     auto& debugRenderer = core::Application::get().getDebugRenderer();
-    if (settings.mesh_aabb) {
+    const DebugCameraSnapshot* cullingCamera = &activeCamera;
+    if (settings.culling_source == DebugFrustumSource::FrozenEditorCamera && m_frozen_culling_frustum.valid) {
+        cullingCamera = &m_frozen_culling_frustum;
+    }
+    const auto cullingFrustum = renderer::interface::Frustum::fromViewProjection(cullingCamera->view_projection);
+
+    if (settings.show_culling_frustum) {
+        const bool frozen =
+            settings.culling_source == DebugFrustumSource::FrozenEditorCamera && m_frozen_culling_frustum.valid;
+        const auto color = frozen ? glm::vec4{1.0f, 0.55f, 0.1f, 1.0f} : glm::vec4{0.1f, 0.85f, 1.0f, 1.0f};
+        debugRenderer.drawFrustum(
+            cullingCamera->inverse_view_projection, color, settings.depth_test, settings.culling_frustum_display_depth);
+    }
+
+    if (settings.mesh_aabb || settings.geometry_culling_aabb) {
         const auto meshView =
             m_scene.getRegistry().view<const scene::TransformComponent, const scene::MeshRendererComponent>();
         for (const auto entity : meshView) {
-            drawMeshRendererAABB(
-                m_scene, scene::Entity{entity}, debugRenderer, glm::vec4{0.1f, 0.85f, 1.0f, 1.0f}, settings.depth_test);
+            const auto worldAabb = meshRendererWorldAABB(m_scene, scene::Entity{entity});
+            if (!worldAabb) {
+                continue;
+            }
+
+            auto color = glm::vec4{0.1f, 0.85f, 1.0f, 1.0f};
+            if (settings.geometry_culling_aabb) {
+                color = cullingFrustum.intersects(*worldAabb) ? glm::vec4{0.2f, 1.0f, 0.25f, 1.0f}
+                                                              : glm::vec4{1.0f, 0.15f, 0.1f, 1.0f};
+            }
+            debugRenderer.drawAABB(*worldAabb, color, settings.depth_test);
         }
     }
 
     if (settings.selected_aabb) {
-        drawMeshRendererAABB(
-            m_scene, m_selected_entity, debugRenderer, glm::vec4{1.0f, 0.9f, 0.1f, 1.0f}, settings.depth_test);
+        const auto selectedAabb = meshRendererWorldAABB(m_scene, m_selected_entity);
+        if (selectedAabb) {
+            debugRenderer.drawAABB(*selectedAabb, glm::vec4{1.0f, 0.9f, 0.1f, 1.0f}, settings.depth_test);
+        }
     }
+}
+
+EditorLayer::DebugCameraSnapshot EditorLayer::makeEditorCameraSnapshot() const
+{
+    const auto aspectRatio =
+        m_viewport_height > 0 ? static_cast<float>(m_viewport_width) / static_cast<float>(m_viewport_height) : 1.0f;
+    const auto view = m_editor_camera.getView();
+    const auto projection = m_editor_camera.getProjection(aspectRatio);
+    const auto viewProjection = projection * view;
+    return DebugCameraSnapshot{
+        .view = view,
+        .projection = projection,
+        .view_projection = viewProjection,
+        .inverse_view_projection = glm::inverse(viewProjection),
+        .valid = true,
+    };
 }
 
 void EditorLayer::createProject()
@@ -389,8 +435,9 @@ void EditorLayer::drawViewport()
     const ImVec2 available = ImGui::GetContentRegionAvail();
     if (texture != ImTextureID_Invalid && frame_image.width > 0 && frame_image.height > 0 && available.x > 1.0f &&
         available.y > 1.0f) {
-        core::Application::get().getSceneRenderer().setViewportSize(static_cast<uint32_t>(available.x),
-                                                                    static_cast<uint32_t>(available.y));
+        m_viewport_width = static_cast<uint32_t>(available.x);
+        m_viewport_height = static_cast<uint32_t>(available.y);
+        core::Application::get().getSceneRenderer().setViewportSize(m_viewport_width, m_viewport_height);
         ImGui::Image(texture, available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         m_viewport_hovered = ImGui::IsItemHovered();
         if (ImGui::BeginDragDropTarget()) {

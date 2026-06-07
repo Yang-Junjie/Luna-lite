@@ -1,8 +1,10 @@
 #include "../core/log.h"
 #include "debug_renderer.h"
 
+#include <cmath>
 #include <cstddef>
 
+#include <algorithm>
 #include <array>
 #include <glm/gtc/matrix_inverse.hpp>
 
@@ -107,6 +109,57 @@ void DebugRenderer::drawOBB(const interface::AABB& local_aabb,
 
     for (const auto& edge : edges) {
         drawLine(transformedCorners[edge[0]], transformedCorners[edge[1]], color, depth_test);
+    }
+}
+
+void DebugRenderer::drawFrustum(const glm::mat4& inverse_view_projection,
+                                const glm::vec4& color,
+                                bool depth_test,
+                                float display_depth_scale)
+{
+    static const std::array<glm::vec3, 8> ndcCorners = {
+        glm::vec3{-1.0f, -1.0f, -1.0f},
+        glm::vec3{1.0f, -1.0f, -1.0f},
+        glm::vec3{-1.0f, 1.0f, -1.0f},
+        glm::vec3{1.0f, 1.0f, -1.0f},
+        glm::vec3{-1.0f, -1.0f, 1.0f},
+        glm::vec3{1.0f, -1.0f, 1.0f},
+        glm::vec3{-1.0f, 1.0f, 1.0f},
+        glm::vec3{1.0f, 1.0f, 1.0f},
+    };
+    static constexpr uint32_t edges[][2] = {
+        {0, 1},
+        {1, 3},
+        {3, 2},
+        {2, 0},
+        {4, 5},
+        {5, 7},
+        {7, 6},
+        {6, 4},
+        {0, 4},
+        {1, 5},
+        {2, 6},
+        {3, 7},
+    };
+
+    std::array<glm::vec3, 8> worldCorners{};
+    for (size_t cornerIndex = 0; cornerIndex < ndcCorners.size(); ++cornerIndex) {
+        const auto world = inverse_view_projection * glm::vec4{ndcCorners[cornerIndex], 1.0f};
+        if (std::abs(world.w) <= 0.000001f) {
+            return;
+        }
+        worldCorners[cornerIndex] = glm::vec3{world} / world.w;
+    }
+
+    const float depthScale = std::clamp(display_depth_scale, 0.0f, 1.0f);
+    for (size_t cornerIndex = 0; cornerIndex < 4; ++cornerIndex) {
+        const size_t farCornerIndex = cornerIndex + 4;
+        worldCorners[farCornerIndex] =
+            worldCorners[cornerIndex] + (worldCorners[farCornerIndex] - worldCorners[cornerIndex]) * depthScale;
+    }
+
+    for (const auto& edge : edges) {
+        drawLine(worldCorners[edge[0]], worldCorners[edge[1]], color, depth_test);
     }
 }
 

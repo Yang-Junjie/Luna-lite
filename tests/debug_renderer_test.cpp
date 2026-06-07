@@ -41,6 +41,26 @@ int main()
     }
 
     frame.debug_lines.clear();
+    debugRenderer.drawFrustum(glm::mat4{1.0f}, glm::vec4{0.8f, 0.5f, 0.2f, 1.0f}, false);
+    if (frame.debug_lines.size() != 12) {
+        std::cerr << "Frustum should emit 12 debug lines.\n";
+        return 1;
+    }
+    for (const auto& line : frame.debug_lines) {
+        if (line.color != glm::vec4{0.8f, 0.5f, 0.2f, 1.0f} || line.depth_test) {
+            std::cerr << "Frustum line attributes were not preserved.\n";
+            return 1;
+        }
+    }
+
+    frame.debug_lines.clear();
+    debugRenderer.drawFrustum(glm::mat4{1.0f}, glm::vec4{1.0f}, true, 0.5f);
+    if (frame.debug_lines.size() != 12 || frame.debug_lines[4].start.z != 0.0f || frame.debug_lines[4].end.z != 0.0f) {
+        std::cerr << "Frustum display depth should scale the far plane toward the near plane.\n";
+        return 1;
+    }
+
+    frame.debug_lines.clear();
     debugRenderer.drawTransformAxes(glm::mat4{1.0f}, 1.0f, false);
     if (frame.debug_lines.size() != 3) {
         std::cerr << "Transform axes should emit 3 debug lines.\n";
@@ -48,6 +68,6 @@ int main()
     }
 
     debugRenderer.endFrame();
-    std::cout << "DebugRenderer records line and AABB commands.\n";
+    std::cout << "DebugRenderer records line, AABB, and frustum commands.\n";
     return 0;
 }
