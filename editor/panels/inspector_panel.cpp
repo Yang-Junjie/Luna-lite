@@ -250,6 +250,8 @@ void InspectorPanel::onImGuiRender()
                 ImGui::TextDisabled("Submeshes: %zu", meshAsset->getSubMeshes().size());
             }
 
+            ImGui::Checkbox("Cast Shadow", &meshRenderer.cast_shadow);
+
             if (ImGui::Button("Add Material")) {
                 meshRenderer.materials.push_back(asset::builtin::defaultMaterialHandle());
             }

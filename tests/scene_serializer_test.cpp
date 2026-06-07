@@ -55,6 +55,7 @@ int main()
         auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
         meshRenderer.mesh = asset::AssetHandle{42};
         meshRenderer.materials.push_back(asset::AssetHandle{84});
+        meshRenderer.cast_shadow = false;
 
         auto& script = scene.addComponent<scene::ScriptComponent>(entity);
         script.scripts.push_back({asset::AssetHandle{84}, true});
@@ -125,7 +126,7 @@ int main()
     const auto& loadedMeshRenderer =
         transformMeshView.get<const scene::MeshRendererComponent>(*transformMeshView.begin());
     if (loadedMeshRenderer.mesh != asset::AssetHandle{42} || loadedMeshRenderer.materials.size() != 1 ||
-        loadedMeshRenderer.materials.front() != asset::AssetHandle{84}) {
+        loadedMeshRenderer.materials.front() != asset::AssetHandle{84} || loadedMeshRenderer.cast_shadow) {
         std::cerr << "Unexpected mesh renderer component data.\n";
         return 1;
     }

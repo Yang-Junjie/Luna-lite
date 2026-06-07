@@ -131,7 +131,8 @@ glm::mat4 directionalShadowLightViewProjection(const std::array<glm::vec3, 8>& c
                                                float cascade_far_distance,
                                                uint32_t shadow_map_size,
                                                const std::vector<interface::MeshDrawCommand>& mesh_commands,
-                                               float caster_depth_padding)
+                                               float caster_depth_padding,
+                                               std::vector<uint32_t>& caster_mesh_indices)
 {
     glm::vec3 center{0.0f};
     for (const auto& corner : corners) {
@@ -155,12 +156,24 @@ glm::mat4 directionalShadowLightViewProjection(const std::array<glm::vec3, 8>& c
 
     auto minBounds = receiverBounds.min;
     auto maxBounds = receiverBounds.max;
-    for (const auto& meshCommand : mesh_commands) {
+    caster_mesh_indices.clear();
+    for (size_t meshIndex = 0; meshIndex < mesh_commands.size(); ++meshIndex) {
+        const auto& meshCommand = mesh_commands[meshIndex];
+        if (!meshCommand.cast_shadow) {
+            continue;
+        }
+
         const auto casterBounds = meshCommand.world_aabb.transformed(lightView);
+        if (!casterBounds.valid) {
+            caster_mesh_indices.push_back(static_cast<uint32_t>(meshIndex));
+            continue;
+        }
+
         if (!overlapsLightSpaceXY(casterBounds, receiverBounds)) {
             continue;
         }
 
+        caster_mesh_indices.push_back(static_cast<uint32_t>(meshIndex));
         minBounds.z = std::min(minBounds.z, casterBounds.min.z);
         maxBounds.z = std::max(maxBounds.z, casterBounds.max.z);
     }
@@ -205,7 +218,8 @@ ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
                                                                              splitDistance,
                                                                              shadow_map_size,
                                                                              mesh_commands,
-                                                                             light.shadow.cascade_caster_depth_padding);
+                                                                             light.shadow.cascade_caster_depth_padding,
+                                                                             cascade.caster_mesh_indices);
         cascade.split_depth = splitDistance;
         previousSplit = splitDistance;
     }
@@ -216,7 +230,25 @@ ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
 bool shouldRenderShadowMap(const interface::FrameRenderData& frame)
 {
     return frame.lighting.directional_light_count > 0 && frame.lighting.directional_light.shadow.enabled &&
-           !frame.meshes.empty();
+           std::ranges::any_of(frame.meshes, [](const auto& mesh) {
+               return mesh.cast_shadow;
+           });
+}
+
+void populateShadowSettingsStats(diagnostics::RenderStats& stats,
+                                 const interface::RenderShadowSettings& settings,
+                                 bool enabled)
+{
+    stats.shadow_enabled = enabled;
+    stats.shadow_map_size = std::max(settings.map_size, 1u);
+    stats.shadow_cascade_count = std::clamp(settings.cascade_count, 1u, MaxShadowCascades);
+    stats.shadow_max_distance = std::max(settings.max_distance, 0.0f);
+    stats.shadow_bias = std::max(settings.bias, 0.0f);
+    stats.shadow_normal_bias = std::max(settings.normal_bias, 0.0f);
+    stats.shadow_pcf_radius = settings.pcf_radius;
+    stats.shadow_cascade_split_lambda = std::clamp(settings.cascade_split_lambda, 0.0f, 1.0f);
+    stats.shadow_cascade_seam_blend = std::max(settings.cascade_seam_blend, 0.0f);
+    stats.shadow_cascade_caster_depth_padding = std::max(settings.cascade_caster_depth_padding, 0.0f);
 }
 
 ShadowLightingUniforms makeShadowLightingUniforms(const ShadowCascadeData& cascade_data,
@@ -402,6 +434,10 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
 
     setLighting(frame.lighting);
     setViewProjection(frame.camera.view, frame.camera.projection, frame.camera.position, frame.camera.exposure);
+    populateShadowSettingsStats(m_stats,
+                                frame.lighting.directional_light.shadow,
+                                frame.lighting.directional_light_count > 0 &&
+                                    frame.lighting.directional_light.shadow.enabled);
 
     if (shouldRenderShadowMap(frame)) {
         m_shadow_map->ensure(frame.lighting.directional_light.shadow);
@@ -410,7 +446,18 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
                                                            m_shadow_map->size(),
                                                            m_shadow_map->cascadeCount(),
                                                            frame.meshes);
-        m_stats.shadow_draw_calls += m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
+        const auto shadowDrawCalls = m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
+        const auto cascadeCount = std::min(cascadeData.count, diagnostics::MaxShadowCascadeStats);
+        for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
+            const auto& cascade = cascadeData.cascades[cascadeIndex];
+            auto& cascadeStats = m_stats.shadow_cascades[cascadeIndex];
+            cascadeStats.active = true;
+            cascadeStats.split_depth = cascade.split_depth;
+            cascadeStats.caster_meshes = static_cast<uint32_t>(
+                std::min<size_t>(cascade.caster_mesh_indices.size(), std::numeric_limits<uint32_t>::max()));
+            cascadeStats.draw_calls = shadowDrawCalls[cascadeIndex];
+            m_stats.shadow_draw_calls += cascadeStats.draw_calls;
+        }
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
             cascadeData, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));
     } else {

@@ -160,6 +160,9 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
                 }
                 node["Materials"] = materials;
             }
+            if (!meshRenderer.cast_shadow) {
+                node["CastShadow"] = false;
+            }
             if (meshRenderer.submesh_start != 0) {
                 node["SubMeshStart"] = meshRenderer.submesh_start;
             }
@@ -308,6 +311,7 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                         meshRenderer.materials.push_back(asset::AssetHandle{materialNode.as<uint64_t>(0)});
                     }
                 }
+                meshRenderer.cast_shadow = meshNode["CastShadow"].as<bool>(true);
                 meshRenderer.submesh_start = meshNode["SubMeshStart"].as<uint32_t>(0);
                 meshRenderer.submesh_count =
                     meshNode["SubMeshCount"].as<uint32_t>(std::numeric_limits<uint32_t>::max());

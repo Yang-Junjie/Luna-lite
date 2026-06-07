@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
@@ -26,9 +27,9 @@ public:
     ShadowPass(const ShadowPass&) = delete;
     ShadowPass& operator=(const ShadowPass&) = delete;
 
-    uint32_t execute(const ShadowMapResource& shadow_map,
-                     const ShadowCascadeData& cascade_data,
-                     const std::vector<interface::MeshDrawCommand>& mesh_commands);
+    std::array<uint32_t, MaxShadowCascades> execute(const ShadowMapResource& shadow_map,
+                                                    const ShadowCascadeData& cascade_data,
+                                                    const std::vector<interface::MeshDrawCommand>& mesh_commands);
 
 private:
     uint32_t renderMesh(const interface::MeshDrawCommand& mesh_command);

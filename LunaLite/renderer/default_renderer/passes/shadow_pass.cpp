@@ -87,16 +87,17 @@ ShadowPass::~ShadowPass()
     }
 }
 
-uint32_t ShadowPass::execute(const ShadowMapResource& shadow_map,
-                             const ShadowCascadeData& cascade_data,
-                             const std::vector<interface::MeshDrawCommand>& mesh_commands)
+std::array<uint32_t, MaxShadowCascades>
+    ShadowPass::execute(const ShadowMapResource& shadow_map,
+                        const ShadowCascadeData& cascade_data,
+                        const std::vector<interface::MeshDrawCommand>& mesh_commands)
 {
+    std::array<uint32_t, MaxShadowCascades> drawCalls{};
     const auto cascadeCount = std::min(cascade_data.count, shadow_map.cascadeCount());
     if (!shadow_map.view() || shadow_map.size() == 0 || cascadeCount == 0 || mesh_commands.empty()) {
-        return 0;
+        return drawCalls;
     }
 
-    uint32_t drawCalls = 0;
     for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
         const auto layerView = shadow_map.layerView(cascadeIndex);
         if (!layerView) {
@@ -121,8 +122,12 @@ uint32_t ShadowPass::execute(const ShadowMapResource& shadow_map,
         m_cmd->setPipeline(m_shadow_pipeline);
         m_cmd->setBindGroup(0, m_shadow_bind_group);
 
-        for (const auto& meshCommand : mesh_commands) {
-            drawCalls += renderMesh(meshCommand);
+        for (const auto meshIndex : cascade_data.cascades[cascadeIndex].caster_mesh_indices) {
+            if (meshIndex >= mesh_commands.size()) {
+                continue;
+            }
+
+            drawCalls[cascadeIndex] += renderMesh(mesh_commands[meshIndex]);
         }
 
         m_cmd->endRenderPass();

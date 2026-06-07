@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
 
 namespace lunalite::diagnostics {
 
@@ -15,6 +16,15 @@ struct FrameStats {
     float average_fps{0.0f};
 };
 
+constexpr uint32_t MaxShadowCascadeStats = 4;
+
+struct ShadowCascadeStats {
+    bool active{false};
+    float split_depth{0.0f};
+    uint32_t caster_meshes{0};
+    uint32_t draw_calls{0};
+};
+
 struct RenderStats {
     uint32_t mesh_commands{0};
     uint32_t debug_lines{0};
@@ -25,6 +35,18 @@ struct RenderStats {
     uint32_t debug_line_draw_calls{0};
     uint32_t lighting_draw_calls{0};
     uint32_t skybox_draw_calls{0};
+
+    bool shadow_enabled{false};
+    uint32_t shadow_map_size{0};
+    uint32_t shadow_cascade_count{0};
+    float shadow_max_distance{0.0f};
+    float shadow_bias{0.0f};
+    float shadow_normal_bias{0.0f};
+    uint32_t shadow_pcf_radius{0};
+    float shadow_cascade_split_lambda{0.0f};
+    float shadow_cascade_seam_blend{0.0f};
+    float shadow_cascade_caster_depth_padding{0.0f};
+    std::array<ShadowCascadeStats, MaxShadowCascadeStats> shadow_cascades{};
 };
 
 struct ImGuiStats {

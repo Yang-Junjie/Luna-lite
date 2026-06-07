@@ -210,6 +210,7 @@ void SceneRenderer::renderScene(const Scene& scene,
         meshCommand.transform = scene.getWorldTransform(Entity{entity});
         meshCommand.local_aabb = mesh->getLocalAABB(meshRenderer.submesh_start, meshRenderer.submesh_count);
         meshCommand.world_aabb = meshCommand.local_aabb.transformed(meshCommand.transform);
+        meshCommand.cast_shadow = meshRenderer.cast_shadow;
         meshCommand.submesh_start = meshRenderer.submesh_start;
         meshCommand.submesh_count = meshRenderer.submesh_count;
         frame.meshes.push_back(std::move(meshCommand));

@@ -80,6 +80,7 @@ struct alignas(16) ShadowLightingUniforms {
 struct ShadowCascade {
     glm::mat4 light_view_projection{1.0f};
     float split_depth{0.0f};
+    std::vector<uint32_t> caster_mesh_indices;
 };
 
 struct ShadowCascadeData {

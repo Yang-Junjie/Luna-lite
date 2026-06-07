@@ -34,6 +34,35 @@ void RenderStatsPanel::onImGuiRender()
     ImGui::Text("Skybox %u", render.skybox_draw_calls);
 
     ImGui::Separator();
+    ImGui::TextUnformatted("Shadow");
+    ImGui::Text("Enabled %s", render.shadow_enabled ? "true" : "false");
+    ImGui::Text("Map Size %u", render.shadow_map_size);
+    ImGui::Text("Cascade Count %u", render.shadow_cascade_count);
+    ImGui::Text("Max Distance %.2f", render.shadow_max_distance);
+    ImGui::Text("Bias %.6f / Normal %.4f", render.shadow_bias, render.shadow_normal_bias);
+    ImGui::Text("PCF Radius %u", render.shadow_pcf_radius);
+    ImGui::Text("Split Lambda %.3f", render.shadow_cascade_split_lambda);
+    ImGui::Text("Seam Blend %.2f", render.shadow_cascade_seam_blend);
+    ImGui::Text("Caster Padding %.2f", render.shadow_cascade_caster_depth_padding);
+
+    if (ImGui::TreeNodeEx("Cascade Stats", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (uint32_t cascadeIndex = 0; cascadeIndex < render.shadow_cascades.size(); ++cascadeIndex) {
+            const auto& cascade = render.shadow_cascades[cascadeIndex];
+            if (!cascade.active) {
+                ImGui::Text("Cascade %u: inactive", cascadeIndex);
+                continue;
+            }
+
+            ImGui::Text("Cascade %u: split %.2f, casters %u, draws %u",
+                        cascadeIndex,
+                        cascade.split_depth,
+                        cascade.caster_meshes,
+                        cascade.draw_calls);
+        }
+        ImGui::TreePop();
+    }
+
+    ImGui::Separator();
     ImGui::TextUnformatted("ImGui");
     ImGui::Text("Draw Calls %u", imgui.draw_calls);
     ImGui::Text("Vertices %u", imgui.vertices);

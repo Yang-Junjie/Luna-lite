@@ -26,6 +26,7 @@ struct MeshDrawCommand {
     glm::mat4 transform{1.0f};
     AABB local_aabb;
     AABB world_aabb;
+    bool cast_shadow{true};
     uint32_t submesh_start{0};
     uint32_t submesh_count{std::numeric_limits<uint32_t>::max()};
 };
