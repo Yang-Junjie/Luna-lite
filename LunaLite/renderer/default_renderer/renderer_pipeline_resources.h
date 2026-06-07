@@ -16,6 +16,11 @@ public:
         return m_material_texture_bind_group_layout;
     }
 
+    rhi::BindGroupLayoutHandle spriteTextureBindGroupLayout() const
+    {
+        return m_sprite_texture_bind_group_layout;
+    }
+
     rhi::BindGroupLayoutHandle lightingBindGroupLayout() const
     {
         return m_lighting_bind_group_layout;
@@ -54,6 +59,16 @@ public:
     rhi::PipelineHandle lineOverlayPipeline() const
     {
         return m_line_overlay_pipeline;
+    }
+
+    rhi::PipelineHandle spriteDepthPipeline() const
+    {
+        return m_sprite_depth_pipeline;
+    }
+
+    rhi::PipelineHandle spriteOverlayPipeline() const
+    {
+        return m_sprite_overlay_pipeline;
     }
 
     rhi::PipelineHandle lightingPipeline() const
@@ -121,6 +136,8 @@ private:
     rhi::ShaderHandle m_geometry_fragment_shader{};
     rhi::ShaderHandle m_line_vertex_shader{};
     rhi::ShaderHandle m_line_fragment_shader{};
+    rhi::ShaderHandle m_sprite_vertex_shader{};
+    rhi::ShaderHandle m_sprite_fragment_shader{};
     rhi::ShaderHandle m_lighting_vertex_shader{};
     rhi::ShaderHandle m_lighting_fragment_shader{};
     rhi::ShaderHandle m_skybox_vertex_shader{};
@@ -133,6 +150,7 @@ private:
 
     rhi::BindGroupLayoutHandle m_geometry_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_material_texture_bind_group_layout{};
+    rhi::BindGroupLayoutHandle m_sprite_texture_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_lighting_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_environment_bind_group_layout{};
     rhi::BindGroupLayoutHandle m_environment_compute_bind_group_layout{};
@@ -140,6 +158,7 @@ private:
     rhi::BindGroupLayoutHandle m_shadow_lighting_bind_group_layout{};
 
     rhi::PipelineLayoutHandle m_geometry_pipeline_layout{};
+    rhi::PipelineLayoutHandle m_sprite_pipeline_layout{};
     rhi::PipelineLayoutHandle m_lighting_pipeline_layout{};
     rhi::PipelineLayoutHandle m_skybox_pipeline_layout{};
     rhi::PipelineLayoutHandle m_environment_compute_pipeline_layout{};
@@ -148,6 +167,8 @@ private:
     rhi::PipelineHandle m_geometry_pipeline{};
     rhi::PipelineHandle m_line_depth_pipeline{};
     rhi::PipelineHandle m_line_overlay_pipeline{};
+    rhi::PipelineHandle m_sprite_depth_pipeline{};
+    rhi::PipelineHandle m_sprite_overlay_pipeline{};
     rhi::PipelineHandle m_lighting_pipeline{};
     rhi::PipelineHandle m_skybox_pipeline{};
     rhi::PipelineHandle m_environment_cubemap_pipeline{};

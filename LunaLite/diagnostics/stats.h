@@ -34,11 +34,13 @@ struct GpuProfilerStats {
     float geometry_ms{0.0f};
     float lighting_ms{0.0f};
     float skybox_ms{0.0f};
+    float sprites_ms{0.0f};
     float debug_lines_ms{0.0f};
 };
 
 struct RenderStats {
     uint32_t mesh_commands{0};
+    uint32_t sprite_commands{0};
     uint32_t geometry_visible_meshes{0};
     uint32_t geometry_culled_meshes{0};
     uint32_t debug_lines{0};
@@ -49,6 +51,7 @@ struct RenderStats {
     uint32_t debug_line_draw_calls{0};
     uint32_t lighting_draw_calls{0};
     uint32_t skybox_draw_calls{0};
+    uint32_t sprite_draw_calls{0};
 
     bool shadow_enabled{false};
     uint32_t shadow_map_size{0};

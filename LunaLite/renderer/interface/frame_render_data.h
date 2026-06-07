@@ -38,10 +38,21 @@ struct LineDrawCommand {
     bool depth_test{true};
 };
 
+struct SpriteDrawCommand {
+    asset::AssetHandle texture{0};
+    glm::mat4 transform{1.0f};
+    glm::vec4 color{1.0f};
+    glm::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
+    int32_t sorting_layer{0};
+    int32_t order_in_layer{0};
+    bool depth_test{false};
+};
+
 struct FrameRenderData {
     CameraData camera;
     RenderLighting lighting;
     std::vector<MeshDrawCommand> meshes;
+    std::vector<SpriteDrawCommand> sprites;
     std::vector<LineDrawCommand> debug_lines;
 
     void clear()
@@ -49,6 +60,7 @@ struct FrameRenderData {
         camera = CameraData{};
         lighting = RenderLighting{};
         meshes.clear();
+        sprites.clear();
         debug_lines.clear();
     }
 };

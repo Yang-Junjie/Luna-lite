@@ -22,6 +22,7 @@ void RenderStatsPanel::onImGuiRender()
     ImGui::Separator();
     ImGui::TextUnformatted("Scene");
     ImGui::Text("Mesh Commands %u", render.mesh_commands);
+    ImGui::Text("Sprite Commands %u", render.sprite_commands);
     ImGui::Text("Geometry Visible %u", render.geometry_visible_meshes);
     ImGui::Text("Geometry Culled %u", render.geometry_culled_meshes);
     ImGui::Text("Debug Lines %u", render.debug_lines);
@@ -34,6 +35,7 @@ void RenderStatsPanel::onImGuiRender()
     ImGui::Text("Debug Lines %u", render.debug_line_draw_calls);
     ImGui::Text("Lighting %u", render.lighting_draw_calls);
     ImGui::Text("Skybox %u", render.skybox_draw_calls);
+    ImGui::Text("Sprites %u", render.sprite_draw_calls);
 
     ImGui::Separator();
     ImGui::TextUnformatted("GPU");
@@ -53,6 +55,7 @@ void RenderStatsPanel::onImGuiRender()
         ImGui::Text("Geometry %.3f ms", render.gpu_profiler.geometry_ms);
         ImGui::Text("Lighting %.3f ms", render.gpu_profiler.lighting_ms);
         ImGui::Text("Skybox %.3f ms", render.gpu_profiler.skybox_ms);
+        ImGui::Text("Sprites %.3f ms", render.gpu_profiler.sprites_ms);
         ImGui::Text("Debug Lines %.3f ms", render.gpu_profiler.debug_lines_ms);
     }
 

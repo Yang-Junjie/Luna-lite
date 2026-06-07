@@ -145,6 +145,8 @@ void GpuProfiler::collectFrame(uint32_t slot)
                                             m_timestamps[queryIndex(Pass::Lighting, true)]);
     stats.skybox_ms = elapsedMilliseconds(m_timestamps[queryIndex(Pass::Skybox, false)],
                                           m_timestamps[queryIndex(Pass::Skybox, true)]);
+    stats.sprites_ms = elapsedMilliseconds(m_timestamps[queryIndex(Pass::Sprites, false)],
+                                           m_timestamps[queryIndex(Pass::Sprites, true)]);
     stats.debug_lines_ms = elapsedMilliseconds(m_timestamps[queryIndex(Pass::DebugLines, false)],
                                                m_timestamps[queryIndex(Pass::DebugLines, true)]);
 

@@ -172,6 +172,11 @@ void InspectorPanel::onImGuiRender()
             m_scene.addComponent<scene::MeshRendererComponent>(m_selected_entity);
         }
 
+        if (!m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity) &&
+            ImGui::MenuItem("Sprite Renderer")) {
+            m_scene.addComponent<scene::SpriteRendererComponent>(m_selected_entity);
+        }
+
         if (!m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity) && ImGui::MenuItem("Script")) {
             m_scene.addComponent<scene::ScriptComponent>(m_selected_entity);
         }
@@ -272,6 +277,34 @@ void InspectorPanel::onImGuiRender()
             if (materialToDelete >= 0) {
                 meshRenderer.materials.erase(meshRenderer.materials.begin() + materialToDelete);
             }
+        }
+    }
+
+    if (m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity)) {
+        const bool open = ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen);
+        if (ImGui::BeginPopupContextItem("SpriteRendererPopup")) {
+            if (ImGui::MenuItem("Delete Component")) {
+                m_scene.removeComponent<scene::SpriteRendererComponent>(m_selected_entity);
+            }
+            ImGui::EndPopup();
+        }
+        if (open && m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity)) {
+            auto& spriteRenderer = m_scene.getComponent<scene::SpriteRendererComponent>(m_selected_entity);
+            drawAssetHandleControl("Texture", asset::AssetType::Texture, spriteRenderer.texture, {});
+            ImGui::ColorEdit4("Color", &spriteRenderer.color.x);
+            ImGui::DragFloat4("UV Rect", &spriteRenderer.uv_rect.x, 0.01f, -10.0f, 10.0f, "%.3f");
+
+            int sortingLayer = spriteRenderer.sorting_layer;
+            if (ImGui::DragInt("Sorting Layer", &sortingLayer, 1.0f)) {
+                spriteRenderer.sorting_layer = sortingLayer;
+            }
+
+            int orderInLayer = spriteRenderer.order_in_layer;
+            if (ImGui::DragInt("Order In Layer", &orderInLayer, 1.0f)) {
+                spriteRenderer.order_in_layer = orderInLayer;
+            }
+
+            ImGui::Checkbox("Depth Test", &spriteRenderer.depth_test);
         }
     }
 

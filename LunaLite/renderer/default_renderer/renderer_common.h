@@ -21,6 +21,12 @@ struct LineVertex {
     glm::vec3 color{1.0f};
 };
 
+struct SpriteVertex {
+    glm::vec3 position{0.0f};
+    glm::vec2 uv{0.0f};
+    glm::vec4 color{1.0f};
+};
+
 struct alignas(16) FrameUniforms {
     glm::mat4 view{1.0f};
     glm::mat4 projection{1.0f};

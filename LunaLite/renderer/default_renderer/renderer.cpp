@@ -10,6 +10,7 @@
 #include "passes/lighting_pass.h"
 #include "passes/shadow_pass.h"
 #include "passes/skybox_pass.h"
+#include "passes/sprite_pass.h"
 #include "renderer.h"
 #include "renderer_pipeline_resources.h"
 #include "shadow_map_resource.h"
@@ -346,6 +347,16 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
     m_lighting_pass = std::make_unique<LightingPass>(*m_cmd, m_pipeline_resources->lightingPipeline());
     m_skybox_pass = std::make_unique<SkyboxPass>(
         *m_cmd, m_pipeline_resources->skyboxPipeline(), m_pipeline_resources->geometryBindGroup());
+    m_sprite_pass = std::make_unique<SpritePass>(*m_device,
+                                                 *m_cmd,
+                                                 m_pipeline_resources->spriteDepthPipeline(),
+                                                 m_pipeline_resources->spriteOverlayPipeline(),
+                                                 m_pipeline_resources->spriteTextureBindGroupLayout(),
+                                                 m_pipeline_resources->geometryBindGroup(),
+                                                 m_pipeline_resources->frameUniformBuffer(),
+                                                 *m_texture_gpu_cache,
+                                                 m_frameUniforms,
+                                                 m_frame_uniforms_dirty);
 
     LUNA_ASSERT(m_environment_map_cache->bindGroup(), "Failed to create environment bind group.");
     LUNA_CORE_DEBUG("Default renderer initialized");
@@ -353,6 +364,7 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
 
 Renderer::~Renderer()
 {
+    m_sprite_pass.reset();
     m_skybox_pass.reset();
     m_lighting_pass.reset();
     m_debug_line_pass.reset();
@@ -397,6 +409,7 @@ void Renderer::beginFrame()
     m_stats.gpu_profiler = m_gpu_profiler->beginFrame(*m_cmd);
     m_geometry_pass_recorded_this_frame = false;
     m_pending_debug_lines.clear();
+    m_pending_sprites.clear();
 }
 
 void Renderer::endFrame()
@@ -425,12 +438,16 @@ void Renderer::endFrame()
     }
     m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::Skybox);
 
+    m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::Sprites);
+    m_stats.sprite_draw_calls += m_sprite_pass->execute(gbuffer, m_pending_sprites);
+    m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::Sprites);
+
     m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::DebugLines);
     m_stats.debug_line_draw_calls += m_debug_line_pass->execute(gbuffer, m_pending_debug_lines);
     m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::DebugLines);
 
     m_stats.draw_calls_total = m_stats.geometry_draw_calls + m_stats.shadow_draw_calls + m_stats.debug_line_draw_calls +
-                               m_stats.lighting_draw_calls + m_stats.skybox_draw_calls;
+                               m_stats.lighting_draw_calls + m_stats.skybox_draw_calls + m_stats.sprite_draw_calls;
 
     m_lighting_pass->transitionFinalColorForSampling(gbuffer);
 
@@ -448,8 +465,11 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
 {
     m_stats.mesh_commands =
         static_cast<uint32_t>(std::min<size_t>(frame.meshes.size(), std::numeric_limits<uint32_t>::max()));
+    m_stats.sprite_commands =
+        static_cast<uint32_t>(std::min<size_t>(frame.sprites.size(), std::numeric_limits<uint32_t>::max()));
     m_stats.debug_lines =
         static_cast<uint32_t>(std::min<size_t>(frame.debug_lines.size(), std::numeric_limits<uint32_t>::max()));
+    m_pending_sprites = frame.sprites;
     m_pending_debug_lines = frame.debug_lines;
 
     setLighting(frame.lighting);

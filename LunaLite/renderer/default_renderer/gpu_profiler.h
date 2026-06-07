@@ -25,6 +25,7 @@ public:
         Geometry,
         Lighting,
         Skybox,
+        Sprites,
         DebugLines,
         Count
     };

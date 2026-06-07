@@ -1,0 +1,16 @@
+Asset:
+  Handle: 11523767637006159073
+  Type: Texture
+  Name: YuzurihaInori
+  FilePath: Assets/Sprites/YuzurihaInori.jpg
+  MemoryOnly: false
+  Config:
+    GenerateMipmaps: true
+    ColorSpace: SRGB
+    Sampler:
+      MinFilter: Linear
+      MagFilter: Linear
+      MipFilter: Linear
+      AddressU: Repeat
+      AddressV: Repeat
+      AddressW: Repeat

@@ -57,6 +57,14 @@ int main()
         meshRenderer.materials.push_back(asset::AssetHandle{84});
         meshRenderer.cast_shadow = false;
 
+        auto& spriteRenderer = scene.addComponent<scene::SpriteRendererComponent>(entity);
+        spriteRenderer.texture = asset::AssetHandle{21};
+        spriteRenderer.color = {0.25f, 0.5f, 0.75f, 0.8f};
+        spriteRenderer.uv_rect = {0.1f, 0.2f, 0.3f, 0.4f};
+        spriteRenderer.sorting_layer = 2;
+        spriteRenderer.order_in_layer = 7;
+        spriteRenderer.depth_test = true;
+
         auto& script = scene.addComponent<scene::ScriptComponent>(entity);
         script.scripts.push_back({asset::AssetHandle{84}, true});
     }
@@ -105,6 +113,22 @@ int main()
         return 1;
     }
 
+    lunalite::scene::Scene copiedScene;
+    copiedScene.copyFrom(scene);
+    const auto copiedSpriteView = copiedScene.getRegistry().view<const lunalite::scene::SpriteRendererComponent>();
+    if (countView(copiedSpriteView) != 1) {
+        std::cerr << "Scene copy lost sprite renderer component.\n";
+        return 1;
+    }
+    const auto& copiedSprite =
+        copiedSpriteView.get<const lunalite::scene::SpriteRendererComponent>(*copiedSpriteView.begin());
+    if (copiedSprite.texture != asset::AssetHandle{21} || copiedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
+        copiedSprite.uv_rect != glm::vec4{0.1f, 0.2f, 0.3f, 0.4f} || copiedSprite.sorting_layer != 2 ||
+        copiedSprite.order_in_layer != 7 || !copiedSprite.depth_test) {
+        std::cerr << "Scene copy changed sprite renderer component data.\n";
+        return 1;
+    }
+
     const auto scenePath = std::filesystem::current_path() / "build" / "scene_serializer_test.lunascene";
     if (!scene::SceneSerializer::serialize(scene, scenePath)) {
         std::cerr << "Failed to serialize scene.\n";
@@ -128,6 +152,19 @@ int main()
     if (loadedMeshRenderer.mesh != asset::AssetHandle{42} || loadedMeshRenderer.materials.size() != 1 ||
         loadedMeshRenderer.materials.front() != asset::AssetHandle{84} || loadedMeshRenderer.cast_shadow) {
         std::cerr << "Unexpected mesh renderer component data.\n";
+        return 1;
+    }
+
+    const auto spriteView = loadedScene.getRegistry().view<const scene::SpriteRendererComponent>();
+    if (countView(spriteView) != 1) {
+        std::cerr << "Unexpected sprite renderer entity count.\n";
+        return 1;
+    }
+    const auto& loadedSprite = spriteView.get<const scene::SpriteRendererComponent>(*spriteView.begin());
+    if (loadedSprite.texture != asset::AssetHandle{21} || loadedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
+        loadedSprite.uv_rect != glm::vec4{0.1f, 0.2f, 0.3f, 0.4f} || loadedSprite.sorting_layer != 2 ||
+        loadedSprite.order_in_layer != 7 || !loadedSprite.depth_test) {
+        std::cerr << "Unexpected sprite renderer component data.\n";
         return 1;
     }
 

@@ -13,6 +13,7 @@ add_library(LunaLiteRenderer
     renderer/default_renderer/passes/lighting_pass.cpp
     renderer/default_renderer/passes/shadow_pass.cpp
     renderer/default_renderer/passes/skybox_pass.cpp
+    renderer/default_renderer/passes/sprite_pass.cpp
     renderer/default_renderer/renderer.cpp
     renderer/default_renderer/renderer_common.cpp
     renderer/default_renderer/renderer_pipeline_resources.cpp

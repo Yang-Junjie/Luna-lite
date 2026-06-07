@@ -24,6 +24,16 @@ YAML::Node writeVec3(const glm::vec3& value)
     return node;
 }
 
+YAML::Node writeVec4(const glm::vec4& value)
+{
+    YAML::Node node;
+    node.push_back(value.x);
+    node.push_back(value.y);
+    node.push_back(value.z);
+    node.push_back(value.w);
+    return node;
+}
+
 YAML::Node writeQuat(const glm::quat& value)
 {
     YAML::Node node;
@@ -44,6 +54,20 @@ glm::vec3 readVec3(const YAML::Node& node, const glm::vec3& fallback = glm::vec3
         node[0].as<float>(),
         node[1].as<float>(),
         node[2].as<float>(),
+    };
+}
+
+glm::vec4 readVec4(const YAML::Node& node, const glm::vec4& fallback = glm::vec4{0.0f})
+{
+    if (!node || !node.IsSequence() || node.size() != 4) {
+        return fallback;
+    }
+
+    return {
+        node[0].as<float>(),
+        node[1].as<float>(),
+        node[2].as<float>(),
+        node[3].as<float>(),
     };
 }
 
@@ -116,6 +140,9 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     for (const auto entity : registry.view<const MeshRendererComponent>()) {
         addEntity(entity);
     }
+    for (const auto entity : registry.view<const SpriteRendererComponent>()) {
+        addEntity(entity);
+    }
     for (const auto entity : registry.view<const ScriptComponent>()) {
         addEntity(entity);
     }
@@ -170,6 +197,18 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
                 node["SubMeshCount"] = meshRenderer.submesh_count;
             }
             serializedEntity["MeshRendererComponent"] = node;
+        }
+
+        if (registry.all_of<SpriteRendererComponent>(entity)) {
+            const auto& spriteRenderer = registry.get<SpriteRendererComponent>(entity);
+            YAML::Node node;
+            node["Texture"] = static_cast<uint64_t>(spriteRenderer.texture);
+            node["Color"] = writeVec4(spriteRenderer.color);
+            node["UVRect"] = writeVec4(spriteRenderer.uv_rect);
+            node["SortingLayer"] = spriteRenderer.sorting_layer;
+            node["OrderInLayer"] = spriteRenderer.order_in_layer;
+            node["DepthTest"] = spriteRenderer.depth_test;
+            serializedEntity["SpriteRendererComponent"] = node;
         }
 
         if (registry.all_of<ScriptComponent>(entity)) {
@@ -315,6 +354,16 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
                 meshRenderer.submesh_start = meshNode["SubMeshStart"].as<uint32_t>(0);
                 meshRenderer.submesh_count =
                     meshNode["SubMeshCount"].as<uint32_t>(std::numeric_limits<uint32_t>::max());
+            }
+
+            if (const auto spriteNode = serializedEntity["SpriteRendererComponent"]) {
+                auto& spriteRenderer = scene.addComponent<SpriteRendererComponent>(entity);
+                spriteRenderer.texture = asset::AssetHandle{spriteNode["Texture"].as<uint64_t>(0)};
+                spriteRenderer.color = readVec4(spriteNode["Color"], glm::vec4{1.0f});
+                spriteRenderer.uv_rect = readVec4(spriteNode["UVRect"], glm::vec4{0.0f, 0.0f, 1.0f, 1.0f});
+                spriteRenderer.sorting_layer = spriteNode["SortingLayer"].as<int32_t>(0);
+                spriteRenderer.order_in_layer = spriteNode["OrderInLayer"].as<int32_t>(0);
+                spriteRenderer.depth_test = spriteNode["DepthTest"].as<bool>(false);
             }
 
             if (const auto scriptNode = serializedEntity["ScriptComponent"]) {

@@ -262,6 +262,11 @@ void Scene::copyFrom(const Scene& other)
             addComponent<MeshRendererComponent>(targetEntity) = other.getComponent<MeshRendererComponent>(sourceEntity);
         }
 
+        if (other.hasComponent<SpriteRendererComponent>(sourceEntity)) {
+            addComponent<SpriteRendererComponent>(targetEntity) =
+                other.getComponent<SpriteRendererComponent>(sourceEntity);
+        }
+
         if (other.hasComponent<ScriptComponent>(sourceEntity)) {
             addComponent<ScriptComponent>(targetEntity) = other.getComponent<ScriptComponent>(sourceEntity);
         }

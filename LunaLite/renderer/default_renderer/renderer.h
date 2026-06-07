@@ -26,6 +26,7 @@ class RendererPipelineResources;
 class ShadowMapResource;
 class ShadowPass;
 class SkyboxPass;
+class SpritePass;
 class TextureGpuCache;
 
 class Renderer : public interface::Renderer {
@@ -63,9 +64,11 @@ private:
     std::unique_ptr<DebugLinePass> m_debug_line_pass;
     std::unique_ptr<LightingPass> m_lighting_pass;
     std::unique_ptr<SkyboxPass> m_skybox_pass;
+    std::unique_ptr<SpritePass> m_sprite_pass;
     FrameUniforms m_frameUniforms;
     diagnostics::RenderStats m_stats;
     std::vector<interface::LineDrawCommand> m_pending_debug_lines;
+    std::vector<interface::SpriteDrawCommand> m_pending_sprites;
     bool m_frame_uniforms_dirty{true};
     bool m_geometry_pass_recorded_this_frame{false};
 };

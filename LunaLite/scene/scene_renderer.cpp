@@ -215,5 +215,20 @@ void SceneRenderer::renderScene(const Scene& scene,
         meshCommand.submesh_count = meshRenderer.submesh_count;
         frame.meshes.push_back(std::move(meshCommand));
     }
+
+    const auto spriteView = scene.getRegistry().view<const TransformComponent, const SpriteRendererComponent>();
+    for (const auto entity : spriteView) {
+        const auto& spriteRenderer = spriteView.get<const SpriteRendererComponent>(entity);
+
+        renderer::interface::SpriteDrawCommand spriteCommand;
+        spriteCommand.texture = spriteRenderer.texture;
+        spriteCommand.transform = scene.getWorldTransform(Entity{entity});
+        spriteCommand.color = spriteRenderer.color;
+        spriteCommand.uv_rect = spriteRenderer.uv_rect;
+        spriteCommand.sorting_layer = spriteRenderer.sorting_layer;
+        spriteCommand.order_in_layer = spriteRenderer.order_in_layer;
+        spriteCommand.depth_test = spriteRenderer.depth_test;
+        frame.sprites.push_back(std::move(spriteCommand));
+    }
 }
 } // namespace lunalite::scene

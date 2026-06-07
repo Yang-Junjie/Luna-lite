@@ -2,6 +2,8 @@
 #include "../asset/asset.h"
 #include "../renderer/interface/camera.h"
 
+#include <cstdint>
+
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -42,6 +44,15 @@ struct MeshRendererComponent {
     bool cast_shadow{true};
     uint32_t submesh_start{0};
     uint32_t submesh_count{std::numeric_limits<uint32_t>::max()};
+};
+
+struct SpriteRendererComponent {
+    asset::AssetHandle texture{0};
+    glm::vec4 color{1.0f};
+    glm::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
+    int32_t sorting_layer{0};
+    int32_t order_in_layer{0};
+    bool depth_test{false};
 };
 
 struct ParentComponent {
