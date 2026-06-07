@@ -94,7 +94,14 @@ float sampleDirectionalShadowCascade(vec3 shadowWorldPos, uint cascadeIndex)
     for (int y = -radius; y <= radius; ++y) {
         for (int x = -radius; x <= radius; ++x) {
             vec2 offset = vec2(float(x), float(y)) * texelSize;
-            float closestDepth = texture(uShadowMap, vec3(shadowCoord.xy + offset, float(cascadeIndex))).r;
+            vec2 sampleUV = shadowCoord.xy + offset;
+            if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0) {
+                lit += 1.0;
+                samples += 1.0;
+                continue;
+            }
+
+            float closestDepth = texture(uShadowMap, vec3(sampleUV, float(cascadeIndex))).r;
             lit += receiverDepth <= closestDepth ? 1.0 : 0.0;
             samples += 1.0;
         }

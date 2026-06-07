@@ -201,6 +201,7 @@ ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
     const auto farDistance =
         std::max(std::min(planes.far_distance, std::max(light.shadow.max_distance, 1.0f)), nearDistance + 0.0001f);
     const auto splitLambda = std::clamp(light.shadow.cascade_split_lambda, 0.0f, 1.0f);
+    const auto cascadeBlendDistance = std::max(light.shadow.cascade_seam_blend, 0.0f);
 
     float previousSplit = nearDistance;
     for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeData.count; ++cascadeIndex) {
@@ -210,7 +211,9 @@ ShadowCascadeData directionalShadowCascades(const interface::CameraData& camera,
         const auto splitDistance = cascadeIndex + 1u == cascadeData.count
                                        ? farDistance
                                        : glm::mix(uniformSplit, logarithmicSplit, splitLambda);
-        const auto corners = cameraFrustumSliceCornersWorld(camera, planes, previousSplit, splitDistance);
+        const auto cascadeNearDistance =
+            cascadeIndex == 0u ? previousSplit : std::max(nearDistance, previousSplit - cascadeBlendDistance);
+        const auto corners = cameraFrustumSliceCornersWorld(camera, planes, cascadeNearDistance, splitDistance);
 
         auto& cascade = cascadeData.cascades[cascadeIndex];
         cascade.light_view_projection = directionalShadowLightViewProjection(corners,
