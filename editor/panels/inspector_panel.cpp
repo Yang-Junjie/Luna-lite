@@ -290,9 +290,8 @@ void InspectorPanel::onImGuiRender()
         }
         if (open && m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity)) {
             auto& spriteRenderer = m_scene.getComponent<scene::SpriteRendererComponent>(m_selected_entity);
-            drawAssetHandleControl("Texture", asset::AssetType::Texture, spriteRenderer.texture, {});
+            drawAssetHandleControl("Sprite", asset::AssetType::Sprite, spriteRenderer.sprite, {});
             ImGui::ColorEdit4("Color", &spriteRenderer.color.x);
-            ImGui::DragFloat4("UV Rect", &spriteRenderer.uv_rect.x, 0.01f, -10.0f, 10.0f, "%.3f");
 
             int sortingLayer = spriteRenderer.sorting_layer;
             if (ImGui::DragInt("Sorting Layer", &sortingLayer, 1.0f)) {

@@ -4,6 +4,7 @@
 #include "texture_gpu_cache.h"
 
 #include <array>
+#include <functional>
 
 namespace lunalite::renderer {
 
@@ -23,13 +24,44 @@ TextureGpuCache::~TextureGpuCache()
     destroyTextureGpuResource(*m_device, m_flat_normal_fallback_texture);
 }
 
+size_t TextureGpuCache::TextureCacheKeyHash::operator()(const TextureCacheKey& key) const noexcept
+{
+    size_t seed = std::hash<asset::AssetHandle>{}(key.handle);
+    seed ^= std::hash<int>{}(static_cast<int>(key.color_space)) + 0x9E'37'79'B9u + (seed << 6) + (seed >> 2);
+    return seed;
+}
+
 const TextureGpuResource& TextureGpuCache::getOrCreate(asset::AssetHandle handle, FallbackTexture fallback)
 {
     if (!handle.isValid()) {
         return getOrCreateFallback(fallback);
     }
 
-    if (const auto it = m_texture_gpu_cache.find(handle); it != m_texture_gpu_cache.end()) {
+    const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
+    if (texture == nullptr) {
+        return getOrCreateFallback(fallback);
+    }
+
+    return getOrCreateInternal(handle, fallback, texture->getImportSettings().color_space);
+}
+
+const TextureGpuResource& TextureGpuCache::getOrCreate(asset::AssetHandle handle,
+                                                       FallbackTexture fallback,
+                                                       interface::TextureColorSpace color_space)
+{
+    return getOrCreateInternal(handle, fallback, color_space);
+}
+
+const TextureGpuResource& TextureGpuCache::getOrCreateInternal(asset::AssetHandle handle,
+                                                               FallbackTexture fallback,
+                                                               interface::TextureColorSpace color_space)
+{
+    if (!handle.isValid()) {
+        return getOrCreateFallback(fallback);
+    }
+
+    const TextureCacheKey cacheKey{.handle = handle, .color_space = color_space};
+    if (const auto it = m_texture_gpu_cache.find(cacheKey); it != m_texture_gpu_cache.end()) {
         return it->second;
     }
 
@@ -38,7 +70,8 @@ const TextureGpuResource& TextureGpuCache::getOrCreate(asset::AssetHandle handle
         return getOrCreateFallback(fallback);
     }
 
-    const auto& settings = texture->getImportSettings();
+    auto settings = texture->getImportSettings();
+    settings.color_space = color_space;
     const auto rhiFormat = toRHITextureFormat(texture->getFormat(), settings);
     const auto mipLevels = settings.generate_mipmaps ? fullMipLevelCount(texture->getWidth(), texture->getHeight()) : 1;
 
@@ -96,12 +129,27 @@ const TextureGpuResource& TextureGpuCache::getOrCreate(asset::AssetHandle handle
                     texture->getWidth(),
                     texture->getHeight(),
                     mipLevels);
-    return m_texture_gpu_cache.emplace(handle, resource).first->second;
+    return m_texture_gpu_cache.emplace(cacheKey, resource).first->second;
 }
 
 const TextureGpuResource* TextureGpuCache::find(asset::AssetHandle handle) const
 {
-    const auto it = m_texture_gpu_cache.find(handle);
+    if (!handle.isValid()) {
+        return nullptr;
+    }
+
+    const auto* texture = asset::AssetDatabase::get().get<interface::Texture>(handle);
+    if (texture == nullptr) {
+        return nullptr;
+    }
+
+    return find(handle, texture->getImportSettings().color_space);
+}
+
+const TextureGpuResource* TextureGpuCache::find(asset::AssetHandle handle,
+                                                interface::TextureColorSpace color_space) const
+{
+    const auto it = m_texture_gpu_cache.find(TextureCacheKey{.handle = handle, .color_space = color_space});
     return it != m_texture_gpu_cache.end() ? &it->second : nullptr;
 }
 

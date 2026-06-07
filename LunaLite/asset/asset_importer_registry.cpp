@@ -4,6 +4,7 @@
 #include "importers/mesh/mesh_asset_importer.h"
 #include "importers/prefab_asset_importer.h"
 #include "importers/script_asset_importer.h"
+#include "importers/sprite_asset_importer.h"
 #include "importers/texture_asset_importer.h"
 #include "metadata/asset_metadata_store.h"
 
@@ -22,6 +23,7 @@ void AssetImporterRegistry::registerDefaults()
     m_importers.push_back(std::make_unique<PrefabAssetImporter>());
     m_importers.push_back(std::make_unique<ScriptAssetImporter>());
     m_importers.push_back(std::make_unique<TextureAssetImporter>());
+    m_importers.push_back(std::make_unique<SpriteAssetImporter>());
 }
 
 Importer* AssetImporterRegistry::findImporter(const std::filesystem::path& assetPath) const
@@ -35,27 +37,38 @@ Importer* AssetImporterRegistry::findImporter(const std::filesystem::path& asset
     return nullptr;
 }
 
+std::optional<std::vector<AssetMetadata>> AssetImporterRegistry::importAsset(const std::filesystem::path& assetPath,
+                                                                             AssetMetadataStore& metadataStore) const
+{
+    auto metadataList = importOrReuseMetadata(assetPath, metadataStore);
+    if (metadataList.empty()) {
+        LUNA_CORE_ERROR("Failed to import asset '{}': no metadata was produced", assetPath.string());
+        return std::nullopt;
+    }
+
+    for (const auto& metadata : metadataList) {
+        LUNA_CORE_DEBUG("Asset import result: '{}' -> '{}' ({}, handle {})",
+                        assetPath.string(),
+                        metadata.FilePath.string(),
+                        assetTypeToString(metadata.Type),
+                        metadata.Handle.toString());
+    }
+
+    return metadataList;
+}
+
 std::optional<std::vector<AssetMetadata>>
     AssetImporterRegistry::importAll(const std::vector<std::filesystem::path>& assetPaths,
                                      AssetMetadataStore& metadataStore) const
 {
     std::vector<AssetMetadata> importedMetadata;
     for (const auto& assetPath : assetPaths) {
-        auto metadataList = importOrReuseMetadata(assetPath, metadataStore);
-        if (metadataList.empty()) {
-            LUNA_CORE_ERROR("Failed to import asset '{}': no metadata was produced", assetPath.string());
+        auto metadataList = importAsset(assetPath, metadataStore);
+        if (!metadataList) {
             return std::nullopt;
         }
 
-        for (const auto& metadata : metadataList) {
-            LUNA_CORE_DEBUG("Asset import result: '{}' -> '{}' ({}, handle {})",
-                            assetPath.string(),
-                            metadata.FilePath.string(),
-                            assetTypeToString(metadata.Type),
-                            metadata.Handle.toString());
-        }
-
-        importedMetadata.insert(importedMetadata.end(), metadataList.begin(), metadataList.end());
+        importedMetadata.insert(importedMetadata.end(), metadataList->begin(), metadataList->end());
     }
 
     LUNA_CORE_DEBUG(

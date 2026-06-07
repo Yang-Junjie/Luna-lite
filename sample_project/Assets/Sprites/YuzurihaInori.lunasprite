@@ -1,0 +1,13 @@
+Sprite:
+  Texture: 11523767637006159073
+  SourceRect:
+    X: 0
+    Y: 0
+    Width: 830
+    Height: 781
+  Pivot:
+    X: 0.5
+    Y: 0.5
+  PixelsPerUnit: 100
+  FlipY: true
+  ColorSpace: SRGB

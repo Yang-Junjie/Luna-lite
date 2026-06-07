@@ -6,6 +6,7 @@
 #include "metadata/asset_metadata_store.h"
 
 #include <filesystem>
+#include <optional>
 #include <unordered_map>
 
 namespace lunalite::asset {
@@ -24,6 +25,7 @@ public:
     AssetManager& operator=(AssetManager&&) = delete;
 
     bool loadProjectAssets();
+    std::optional<AssetHandle> importAndLoadAsset(const std::filesystem::path& assetPath);
     void clear();
 
     AssetHandle getHandleByRelativePath(const std::filesystem::path& assetPath) const;

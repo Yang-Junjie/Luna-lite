@@ -15,6 +15,8 @@ public:
     void registerDefaults();
 
     Importer* findImporter(const std::filesystem::path& assetPath) const;
+    std::optional<std::vector<AssetMetadata>> importAsset(const std::filesystem::path& assetPath,
+                                                          AssetMetadataStore& metadataStore) const;
     std::optional<std::vector<AssetMetadata>> importAll(const std::vector<std::filesystem::path>& assetPaths,
                                                         AssetMetadataStore& metadataStore) const;
 

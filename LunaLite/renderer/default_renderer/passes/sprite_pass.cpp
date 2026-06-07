@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <limits>
 
 namespace lunalite::renderer {
@@ -24,17 +25,23 @@ void appendSpriteGeometry(const interface::SpriteDrawCommand& sprite,
     const auto u1 = sprite.uv_rect.x + sprite.uv_rect.z;
     const auto v1 = sprite.uv_rect.y + sprite.uv_rect.w;
 
+    const float left = -sprite.pivot.x * sprite.size.x;
+    const float right = (1.0f - sprite.pivot.x) * sprite.size.x;
+    const float bottom = -sprite.pivot.y * sprite.size.y;
+    const float top = (1.0f - sprite.pivot.y) * sprite.size.y;
     const std::array<glm::vec3, 4> positions = {
-        glm::vec3{-0.5f, -0.5f, 0.0f},
-        glm::vec3{0.5f, -0.5f, 0.0f},
-        glm::vec3{0.5f, 0.5f, 0.0f},
-        glm::vec3{-0.5f, 0.5f, 0.0f},
+        glm::vec3{left, bottom, 0.0f},
+        glm::vec3{right, bottom, 0.0f},
+        glm::vec3{right, top, 0.0f},
+        glm::vec3{left, top, 0.0f},
     };
+    const float vBottom = sprite.flip_y ? v1 : v0;
+    const float vTop = sprite.flip_y ? v0 : v1;
     const std::array<glm::vec2, 4> uvs = {
-        glm::vec2{u0, v1},
-        glm::vec2{u1, v1},
-        glm::vec2{u1, v0},
-        glm::vec2{u0, v0},
+        glm::vec2{u0, vBottom},
+        glm::vec2{u1, vBottom},
+        glm::vec2{u1, vTop},
+        glm::vec2{u0, vTop},
     };
 
     for (size_t i = 0; i < positions.size(); ++i) {
@@ -113,6 +120,13 @@ SpritePass::~SpritePass()
     }
 }
 
+size_t SpritePass::SpriteTextureKeyHash::operator()(const SpriteTextureKey& key) const noexcept
+{
+    size_t seed = std::hash<asset::AssetHandle>{}(key.texture);
+    seed ^= std::hash<int>{}(static_cast<int>(key.color_space)) + 0x9E'37'79'B9u + (seed << 6) + (seed >> 2);
+    return seed;
+}
+
 uint32_t SpritePass::execute(const GBuffer& gbuffer, std::span<const interface::SpriteDrawCommand> sprite_commands)
 {
     if (sprite_commands.empty() || gbuffer.width == 0 || gbuffer.height == 0 || !gbuffer.final_color_view) {
@@ -139,6 +153,9 @@ uint32_t SpritePass::execute(const GBuffer& gbuffer, std::span<const interface::
         }
         if (a.texture != b.texture) {
             return static_cast<uint64_t>(a.texture) < static_cast<uint64_t>(b.texture);
+        }
+        if (a.color_space != b.color_space) {
+            return static_cast<int>(a.color_space) < static_cast<int>(b.color_space);
         }
         return lhs.original_index < rhs.original_index;
     });
@@ -213,11 +230,13 @@ void SpritePass::ensureBuffers(size_t vertex_count, size_t index_count)
     }
 }
 
-rhi::BindGroupHandle SpritePass::textureBindGroup(asset::AssetHandle texture)
+rhi::BindGroupHandle SpritePass::textureBindGroup(const interface::SpriteDrawCommand& sprite)
 {
-    const auto& resource = m_texture_cache->getOrCreate(texture, FallbackTexture::White);
+    const auto& resource = m_texture_cache->getOrCreate(sprite.texture, FallbackTexture::White, sprite.color_space);
     const auto cacheKey =
-        texture.isValid() && m_texture_cache->find(texture) != nullptr ? texture : asset::AssetHandle{0};
+        sprite.texture.isValid() && m_texture_cache->find(sprite.texture, sprite.color_space) != nullptr
+            ? SpriteTextureKey{.texture = sprite.texture, .color_space = sprite.color_space}
+            : SpriteTextureKey{};
     if (const auto it = m_texture_bind_groups.find(cacheKey); it != m_texture_bind_groups.end()) {
         return it->second;
     }
@@ -240,9 +259,10 @@ uint32_t
     uint32_t drawCalls = 0;
     size_t batchBegin = 0;
     while (batchBegin < sprites.size()) {
-        const auto texture = sprites[batchBegin].command->texture;
+        const auto& firstSprite = *sprites[batchBegin].command;
         size_t batchEnd = batchBegin + 1;
-        while (batchEnd < sprites.size() && sprites[batchEnd].command->texture == texture) {
+        while (batchEnd < sprites.size() && sprites[batchEnd].command->texture == firstSprite.texture &&
+               sprites[batchEnd].command->color_space == firstSprite.color_space) {
             ++batchEnd;
         }
 
@@ -312,7 +332,7 @@ uint32_t SpritePass::renderTextureBatch(const GBuffer& gbuffer,
     m_cmd->beginRenderPass(pass);
     m_cmd->setPipeline(pipeline);
     m_cmd->setBindGroup(0, m_geometry_bind_group);
-    m_cmd->setBindGroup(1, textureBindGroup(sprites.front().command->texture));
+    m_cmd->setBindGroup(1, textureBindGroup(*sprites.front().command));
     m_cmd->setVertexBuffer(0, m_sprite_vertex_buffer);
     m_cmd->setIndexBuffer(m_sprite_index_buffer, rhi::IndexFormat::UInt32);
     m_cmd->drawIndexed(static_cast<uint32_t>(m_indices.size()));

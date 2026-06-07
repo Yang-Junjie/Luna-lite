@@ -2,6 +2,7 @@
 #include "../../asset/asset.h"
 #include "aabb.h"
 #include "render_lighting.h"
+#include "texture.h"
 
 #include <cstdint>
 
@@ -40,9 +41,13 @@ struct LineDrawCommand {
 
 struct SpriteDrawCommand {
     asset::AssetHandle texture{0};
+    TextureColorSpace color_space{TextureColorSpace::SRGB};
     glm::mat4 transform{1.0f};
+    glm::vec2 size{1.0f};
+    glm::vec2 pivot{0.5f, 0.5f};
     glm::vec4 color{1.0f};
     glm::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
+    bool flip_y{true};
     int32_t sorting_layer{0};
     int32_t order_in_layer{0};
     bool depth_test{false};

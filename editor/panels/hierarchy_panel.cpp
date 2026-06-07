@@ -59,6 +59,19 @@ scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle m
     return entity;
 }
 
+scene::Entity
+    createSpriteRendererEntity(scene::Scene& scene, asset::AssetHandle spriteHandle, scene::Entity parent = {})
+{
+    auto entity = scene.createEntity();
+    auto& spriteRenderer = scene.addComponent<scene::SpriteRendererComponent>(entity);
+    spriteRenderer.sprite = spriteHandle;
+    if (parent) {
+        scene.setParent(entity, parent, false);
+    }
+    setEntityTagFromAsset(scene, entity, spriteHandle);
+    return entity;
+}
+
 void createEntityFromAsset(scene::Scene& scene,
                            scene::Entity& selectedEntity,
                            const AssetDragDropPayload& payload,
@@ -89,6 +102,13 @@ void createEntityFromAsset(scene::Scene& scene,
 
         auto entity =
             createMeshRendererEntity(scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
+        selectedEntity = entity;
+        return;
+    }
+
+    if (payload.type == asset::AssetType::Sprite) {
+        auto entity = createSpriteRendererEntity(
+            scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
         selectedEntity = entity;
         return;
     }

@@ -136,7 +136,7 @@ Entities:
         - 1
   - Entity: 7
     TagComponent:
-      Tag: Directional Light
+      Tag: Directional Ligh
     TransformComponent:
       Translation:
         - 0
@@ -310,27 +310,22 @@ Entities:
     TransformComponent:
       Translation:
         - 0
-        - 0
+        - 5.2
         - 1.5
       Rotation:
         - 1
-        - -4.37722e-08
-        - 8.841487e-08
-        - 6.0596726e-08
+        - -4.3772186e-08
+        - 1.4901161e-08
+        - 6.059671e-08
       Scale:
-        - 1
-        - 1
-        - 1
+        - 0.5
+        - 0.5
+        - 0.5
     SpriteRendererComponent:
-      Texture: 11523767637006159073
+      Sprite: 11523767637006159074
       Color:
         - 1
         - 1
-        - 1
-        - 1
-      UVRect:
-        - 0
-        - 0
         - 1
         - 1
       SortingLayer: 0

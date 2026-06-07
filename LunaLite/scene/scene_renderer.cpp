@@ -1,6 +1,8 @@
 #include "../asset/asset_database.h"
+#include "../asset/sprite.h"
 #include "../core/log.h"
 #include "../renderer/interface/mesh.h"
+#include "../renderer/interface/texture.h"
 #include "components.h"
 #include "scene_renderer.h"
 
@@ -70,6 +72,69 @@ renderer::interface::RenderShadowSettings toRenderShadowSettings(const ShadowSet
         .cascade_seam_blend = std::max(shadow.cascade_seam_blend, 0.0f),
         .cascade_caster_depth_padding = std::max(shadow.cascade_caster_depth_padding, 0.0f),
     };
+}
+
+renderer::interface::TextureColorSpace toTextureColorSpace(asset::SpriteColorSpace color_space)
+{
+    switch (color_space) {
+        case asset::SpriteColorSpace::Linear:
+            return renderer::interface::TextureColorSpace::Linear;
+        case asset::SpriteColorSpace::SRGB:
+        default:
+            return renderer::interface::TextureColorSpace::SRGB;
+    }
+}
+
+renderer::interface::SpriteDrawCommand makeSpriteDrawCommand(const SpriteRendererComponent& spriteRenderer,
+                                                             const glm::mat4& transform)
+{
+    renderer::interface::SpriteDrawCommand command;
+    command.transform = transform;
+    command.color = spriteRenderer.color;
+    command.sorting_layer = spriteRenderer.sorting_layer;
+    command.order_in_layer = spriteRenderer.order_in_layer;
+    command.depth_test = spriteRenderer.depth_test;
+
+    const auto* sprite = asset::AssetDatabase::get().get<asset::Sprite>(spriteRenderer.sprite);
+    if (sprite == nullptr) {
+        LUNA_CORE_ERROR("Sprite renderer has a null sprite asset {}", spriteRenderer.sprite.toString());
+        return command;
+    }
+
+    const auto* texture = asset::AssetDatabase::get().get<renderer::interface::Texture>(sprite->texture);
+    if (texture == nullptr || texture->getWidth() == 0 || texture->getHeight() == 0) {
+        LUNA_CORE_ERROR(
+            "Sprite asset {} references an invalid texture {}", sprite->handle.toString(), sprite->texture.toString());
+        return command;
+    }
+
+    const auto textureWidth = texture->getWidth();
+    const auto textureHeight = texture->getHeight();
+    const auto sourceX = std::min(sprite->source_rect.x, textureWidth);
+    const auto sourceY = std::min(sprite->source_rect.y, textureHeight);
+    const auto sourceWidth = std::min(
+        sprite->source_rect.width == 0 ? textureWidth - sourceX : sprite->source_rect.width, textureWidth - sourceX);
+    const auto sourceHeight =
+        std::min(sprite->source_rect.height == 0 ? textureHeight - sourceY : sprite->source_rect.height,
+                 textureHeight - sourceY);
+    if (sourceWidth == 0 || sourceHeight == 0) {
+        LUNA_CORE_ERROR("Sprite asset {} has an empty source rect", sprite->handle.toString());
+        return command;
+    }
+
+    command.texture = sprite->texture;
+    command.color_space = toTextureColorSpace(sprite->color_space);
+    command.size =
+        glm::vec2{static_cast<float>(sourceWidth), static_cast<float>(sourceHeight)} / sprite->pixels_per_unit;
+    command.pivot = sprite->pivot;
+    command.uv_rect = glm::vec4{
+        static_cast<float>(sourceX) / static_cast<float>(textureWidth),
+        static_cast<float>(sourceY) / static_cast<float>(textureHeight),
+        static_cast<float>(sourceWidth) / static_cast<float>(textureWidth),
+        static_cast<float>(sourceHeight) / static_cast<float>(textureHeight),
+    };
+    command.flip_y = sprite->flip_y;
+    return command;
 }
 } // namespace
 
@@ -219,15 +284,14 @@ void SceneRenderer::renderScene(const Scene& scene,
     const auto spriteView = scene.getRegistry().view<const TransformComponent, const SpriteRendererComponent>();
     for (const auto entity : spriteView) {
         const auto& spriteRenderer = spriteView.get<const SpriteRendererComponent>(entity);
+        if (!spriteRenderer.sprite.isValid()) {
+            continue;
+        }
 
-        renderer::interface::SpriteDrawCommand spriteCommand;
-        spriteCommand.texture = spriteRenderer.texture;
-        spriteCommand.transform = scene.getWorldTransform(Entity{entity});
-        spriteCommand.color = spriteRenderer.color;
-        spriteCommand.uv_rect = spriteRenderer.uv_rect;
-        spriteCommand.sorting_layer = spriteRenderer.sorting_layer;
-        spriteCommand.order_in_layer = spriteRenderer.order_in_layer;
-        spriteCommand.depth_test = spriteRenderer.depth_test;
+        auto spriteCommand = makeSpriteDrawCommand(spriteRenderer, scene.getWorldTransform(Entity{entity}));
+        if (!spriteCommand.texture.isValid()) {
+            continue;
+        }
         frame.sprites.push_back(std::move(spriteCommand));
     }
 }

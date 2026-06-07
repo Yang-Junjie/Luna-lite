@@ -58,9 +58,8 @@ int main()
         meshRenderer.cast_shadow = false;
 
         auto& spriteRenderer = scene.addComponent<scene::SpriteRendererComponent>(entity);
-        spriteRenderer.texture = asset::AssetHandle{21};
+        spriteRenderer.sprite = asset::AssetHandle{21};
         spriteRenderer.color = {0.25f, 0.5f, 0.75f, 0.8f};
-        spriteRenderer.uv_rect = {0.1f, 0.2f, 0.3f, 0.4f};
         spriteRenderer.sorting_layer = 2;
         spriteRenderer.order_in_layer = 7;
         spriteRenderer.depth_test = true;
@@ -122,9 +121,8 @@ int main()
     }
     const auto& copiedSprite =
         copiedSpriteView.get<const lunalite::scene::SpriteRendererComponent>(*copiedSpriteView.begin());
-    if (copiedSprite.texture != asset::AssetHandle{21} || copiedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
-        copiedSprite.uv_rect != glm::vec4{0.1f, 0.2f, 0.3f, 0.4f} || copiedSprite.sorting_layer != 2 ||
-        copiedSprite.order_in_layer != 7 || !copiedSprite.depth_test) {
+    if (copiedSprite.sprite != asset::AssetHandle{21} || copiedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
+        copiedSprite.sorting_layer != 2 || copiedSprite.order_in_layer != 7 || !copiedSprite.depth_test) {
         std::cerr << "Scene copy changed sprite renderer component data.\n";
         return 1;
     }
@@ -161,9 +159,8 @@ int main()
         return 1;
     }
     const auto& loadedSprite = spriteView.get<const scene::SpriteRendererComponent>(*spriteView.begin());
-    if (loadedSprite.texture != asset::AssetHandle{21} || loadedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
-        loadedSprite.uv_rect != glm::vec4{0.1f, 0.2f, 0.3f, 0.4f} || loadedSprite.sorting_layer != 2 ||
-        loadedSprite.order_in_layer != 7 || !loadedSprite.depth_test) {
+    if (loadedSprite.sprite != asset::AssetHandle{21} || loadedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
+        loadedSprite.sorting_layer != 2 || loadedSprite.order_in_layer != 7 || !loadedSprite.depth_test) {
         std::cerr << "Unexpected sprite renderer component data.\n";
         return 1;
     }

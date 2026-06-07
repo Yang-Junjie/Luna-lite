@@ -21,6 +21,22 @@ AssetMetadata
     metadata.MemoryOnly = true;
     return metadata;
 }
+
+bool isPathInsideDirectory(const std::filesystem::path& path, const std::filesystem::path& directory)
+{
+    const auto relative = path.lexically_relative(directory);
+    if (relative.empty() || relative.is_absolute()) {
+        return false;
+    }
+
+    for (const auto& part : relative) {
+        if (part == "..") {
+            return false;
+        }
+    }
+
+    return true;
+}
 } // namespace
 
 bool AssetManager::loadProjectAssets()
@@ -81,6 +97,58 @@ bool AssetManager::loadProjectAssets()
     LUNA_CORE_INFO(
         "Loaded project assets ({} source files, {} metadata entries)", assetPaths->size(), m_metadata.all().size());
     return true;
+}
+
+std::optional<AssetHandle> AssetManager::importAndLoadAsset(const std::filesystem::path& assetPath)
+{
+    m_importers.registerDefaults();
+    m_loaders.registerDefaults();
+
+    const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
+    const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
+    if (!projectRoot || !projectInfo) {
+        LUNA_CORE_ERROR("Failed to import asset '{}': no project is loaded", assetPath.string());
+        return std::nullopt;
+    }
+    if (projectInfo->assets_path.is_absolute()) {
+        LUNA_CORE_ERROR("Failed to import asset '{}': assets path must be relative to the project root",
+                        assetPath.string());
+        return std::nullopt;
+    }
+
+    const auto absoluteAssetPath = (assetPath.is_absolute() ? assetPath : *projectRoot / assetPath).lexically_normal();
+    const auto assetsRoot = (*projectRoot / projectInfo->assets_path).lexically_normal();
+    if (!std::filesystem::exists(absoluteAssetPath) || !std::filesystem::is_regular_file(absoluteAssetPath)) {
+        LUNA_CORE_ERROR("Failed to import asset '{}': file does not exist", absoluteAssetPath.string());
+        return std::nullopt;
+    }
+    if (!isPathInsideDirectory(absoluteAssetPath, assetsRoot)) {
+        LUNA_CORE_ERROR("Failed to import asset '{}': asset is outside the configured assets directory '{}'",
+                        absoluteAssetPath.string(),
+                        assetsRoot.string());
+        return std::nullopt;
+    }
+
+    auto importedMetadata = m_importers.importAsset(absoluteAssetPath, m_metadata);
+    if (!importedMetadata || importedMetadata->empty()) {
+        LUNA_CORE_ERROR("Failed to import asset '{}'", absoluteAssetPath.string());
+        return std::nullopt;
+    }
+
+    if (!m_metadata.registerAll(*importedMetadata)) {
+        LUNA_CORE_ERROR("Failed to import asset '{}': metadata registration failed", absoluteAssetPath.string());
+        return std::nullopt;
+    }
+
+    for (const auto& metadata : *importedMetadata) {
+        if (!m_loaders.loadAsset(metadata)) {
+            LUNA_CORE_ERROR("Failed to import asset '{}': asset loading failed", absoluteAssetPath.string());
+            return std::nullopt;
+        }
+    }
+
+    LUNA_CORE_INFO("Imported and loaded asset '{}'", absoluteAssetPath.string());
+    return importedMetadata->front().Handle;
 }
 
 void AssetManager::clear()

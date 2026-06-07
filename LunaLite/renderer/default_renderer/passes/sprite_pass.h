@@ -36,9 +36,23 @@ private:
         size_t original_index{0};
     };
 
+    struct SpriteTextureKey {
+        asset::AssetHandle texture{0};
+        interface::TextureColorSpace color_space{interface::TextureColorSpace::SRGB};
+
+        bool operator==(const SpriteTextureKey& other) const
+        {
+            return texture == other.texture && color_space == other.color_space;
+        }
+    };
+
+    struct SpriteTextureKeyHash {
+        size_t operator()(const SpriteTextureKey& key) const noexcept;
+    };
+
     void flushFrameUniforms();
     void ensureBuffers(size_t vertex_count, size_t index_count);
-    rhi::BindGroupHandle textureBindGroup(asset::AssetHandle texture);
+    rhi::BindGroupHandle textureBindGroup(const interface::SpriteDrawCommand& sprite);
     uint32_t renderDepthModeBatch(const GBuffer& gbuffer, std::span<const SortedSprite> sprites, bool depth_test);
     uint32_t renderTextureBatch(const GBuffer& gbuffer,
                                 rhi::PipelineHandle pipeline,
@@ -62,7 +76,7 @@ private:
     std::vector<SortedSprite> m_sorted_sprites;
     std::vector<SpriteVertex> m_vertices;
     std::vector<uint32_t> m_indices;
-    std::unordered_map<asset::AssetHandle, rhi::BindGroupHandle> m_texture_bind_groups;
+    std::unordered_map<SpriteTextureKey, rhi::BindGroupHandle, SpriteTextureKeyHash> m_texture_bind_groups;
 };
 
 } // namespace lunalite::renderer

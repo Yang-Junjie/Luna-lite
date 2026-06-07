@@ -45,6 +45,20 @@ scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle m
     return entity;
 }
 
+scene::Entity createSpriteRendererEntity(scene::Scene& scene, asset::AssetHandle spriteHandle)
+{
+    auto entity = scene.createEntity();
+    auto& spriteRenderer = scene.addComponent<scene::SpriteRendererComponent>(entity);
+    spriteRenderer.sprite = spriteHandle;
+
+    if (const auto* metadata = asset::AssetManager::get().getMetadata(spriteHandle)) {
+        auto& tag = scene.getComponent<scene::TagComponent>(entity);
+        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    }
+
+    return entity;
+}
+
 std::optional<renderer::interface::AABB> meshRendererWorldAABB(scene::Scene& scene, scene::Entity entity)
 {
     if (!scene.isValidEntity(entity) || !scene.hasComponent<scene::MeshRendererComponent>(entity)) {
@@ -396,6 +410,11 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
         }
 
         m_selected_entity = createMeshRendererEntity(m_scene, handle);
+        return;
+    }
+
+    if (payload.type == asset::AssetType::Sprite) {
+        m_selected_entity = createSpriteRendererEntity(m_scene, handle);
         return;
     }
 

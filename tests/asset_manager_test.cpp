@@ -1,6 +1,8 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
+#include "../LunaLite/asset/factory/asset_factory_manager.h"
 #include "../LunaLite/asset/prefab.h"
+#include "../LunaLite/asset/sprite.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/mesh.h"
@@ -271,6 +273,24 @@ int main()
         textureMetadata << "      AddressW: Repeat\n";
     }
 
+    const auto spriteAssetPath = projectRoot / info.assets_path / "texture.lunasprite";
+    {
+        std::ofstream sprite(spriteAssetPath);
+        sprite << "Sprite:\n";
+        sprite << "  Texture: " << static_cast<uint64_t>(textureHandle) << "\n";
+        sprite << "  SourceRect:\n";
+        sprite << "    X: 0\n";
+        sprite << "    Y: 0\n";
+        sprite << "    Width: 2\n";
+        sprite << "    Height: 2\n";
+        sprite << "  Pivot:\n";
+        sprite << "    X: 0.25\n";
+        sprite << "    Y: 0.75\n";
+        sprite << "  PixelsPerUnit: 64\n";
+        sprite << "  FlipY: false\n";
+        sprite << "  ColorSpace: Linear\n";
+    }
+
     const auto targetHdrTexture = projectRoot / info.assets_path / "environment.hdr";
     const auto expectedHdrTextureHandle = asset::AssetHandle{987'654'321ull};
     const float hdrPixels[] = {
@@ -417,6 +437,57 @@ int main()
         textureSettings.sampler.address_v != renderer::interface::TextureAddressMode::MirroredRepeat ||
         textureSettings.sampler.address_w != renderer::interface::TextureAddressMode::Repeat) {
         std::cerr << "Failed to load texture config through AssetManager.\n";
+        return 1;
+    }
+
+    const auto spriteHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/texture.lunasprite");
+    const auto* sprite = asset::AssetManager::get().getAsset<asset::Sprite>(spriteHandle);
+    if (sprite == nullptr || sprite->texture != textureHandle || sprite->source_rect.x != 0 ||
+        sprite->source_rect.y != 0 || sprite->source_rect.width != 2 || sprite->source_rect.height != 2 ||
+        !nearlyEqual(sprite->pivot.x, 0.25f) || !nearlyEqual(sprite->pivot.y, 0.75f) ||
+        !nearlyEqual(sprite->pixels_per_unit, 64.0f) || sprite->flip_y ||
+        sprite->color_space != asset::SpriteColorSpace::Linear) {
+        std::cerr << "Failed to load sprite asset through AssetManager.\n";
+        return 1;
+    }
+    const auto* spriteMetadata = asset::AssetManager::get().getMetadata(spriteHandle);
+    if (spriteMetadata == nullptr || spriteMetadata->Type != asset::AssetType::Sprite) {
+        std::cerr << "Failed to register sprite asset metadata.\n";
+        return 1;
+    }
+
+    const auto* textureMetadata = asset::AssetManager::get().getMetadata(textureHandle);
+    if (textureMetadata == nullptr) {
+        std::cerr << "Failed to resolve texture metadata for sprite factory.\n";
+        return 1;
+    }
+    const asset::AssetFactoryContext spriteFactoryContext{
+        .source = textureMetadata,
+        .target_directory = textureMetadata->FilePath.parent_path(),
+    };
+    const auto spriteFactories = asset::AssetFactoryManager::get().factoriesFor(spriteFactoryContext);
+    bool hasSpriteFactory = false;
+    for (const auto* factory : spriteFactories) {
+        if (factory->id() == "SpriteFromTexture") {
+            hasSpriteFactory = true;
+            break;
+        }
+    }
+    if (!hasSpriteFactory) {
+        std::cerr << "Failed to expose sprite factory for texture assets.\n";
+        return 1;
+    }
+
+    const auto generatedSprite = asset::AssetFactoryManager::get().create("SpriteFromTexture", spriteFactoryContext);
+    const auto* generatedSpriteAsset = asset::AssetManager::get().getAsset<asset::Sprite>(generatedSprite.handle);
+    if (!generatedSprite.handle.isValid() || generatedSpriteAsset == nullptr ||
+        generatedSpriteAsset->texture != textureHandle || generatedSpriteAsset->source_rect.width != 2 ||
+        generatedSpriteAsset->source_rect.height != 2 || !nearlyEqual(generatedSpriteAsset->pivot.x, 0.5f) ||
+        !nearlyEqual(generatedSpriteAsset->pivot.y, 0.5f) ||
+        !nearlyEqual(generatedSpriteAsset->pixels_per_unit, 100.0f) || !generatedSpriteAsset->flip_y ||
+        generatedSpriteAsset->color_space != asset::SpriteColorSpace::SRGB ||
+        !std::filesystem::exists(generatedSprite.path)) {
+        std::cerr << "Failed to create sprite asset through AssetFactoryManager.\n";
         return 1;
     }
 
@@ -590,6 +661,6 @@ int main()
         return 1;
     }
 
-    std::cout << "AssetManager imported and loaded mesh, prefab, material, and texture assets.\n";
+    std::cout << "AssetManager imported and loaded mesh, prefab, material, texture, and sprite assets.\n";
     return 0;
 }

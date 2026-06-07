@@ -202,9 +202,8 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
         if (registry.all_of<SpriteRendererComponent>(entity)) {
             const auto& spriteRenderer = registry.get<SpriteRendererComponent>(entity);
             YAML::Node node;
-            node["Texture"] = static_cast<uint64_t>(spriteRenderer.texture);
+            node["Sprite"] = static_cast<uint64_t>(spriteRenderer.sprite);
             node["Color"] = writeVec4(spriteRenderer.color);
-            node["UVRect"] = writeVec4(spriteRenderer.uv_rect);
             node["SortingLayer"] = spriteRenderer.sorting_layer;
             node["OrderInLayer"] = spriteRenderer.order_in_layer;
             node["DepthTest"] = spriteRenderer.depth_test;
@@ -358,9 +357,8 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
 
             if (const auto spriteNode = serializedEntity["SpriteRendererComponent"]) {
                 auto& spriteRenderer = scene.addComponent<SpriteRendererComponent>(entity);
-                spriteRenderer.texture = asset::AssetHandle{spriteNode["Texture"].as<uint64_t>(0)};
+                spriteRenderer.sprite = asset::AssetHandle{spriteNode["Sprite"].as<uint64_t>(0)};
                 spriteRenderer.color = readVec4(spriteNode["Color"], glm::vec4{1.0f});
-                spriteRenderer.uv_rect = readVec4(spriteNode["UVRect"], glm::vec4{0.0f, 0.0f, 1.0f, 1.0f});
                 spriteRenderer.sorting_layer = spriteNode["SortingLayer"].as<int32_t>(0);
                 spriteRenderer.order_in_layer = spriteNode["OrderInLayer"].as<int32_t>(0);
                 spriteRenderer.depth_test = spriteNode["DepthTest"].as<bool>(false);

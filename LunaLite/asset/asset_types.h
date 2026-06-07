@@ -9,6 +9,7 @@ enum class AssetType {
     Prefab,
     Script,
     Texture,
+    Sprite,
 };
 
 inline std::string assetTypeToString(AssetType type)
@@ -26,6 +27,8 @@ inline std::string assetTypeToString(AssetType type)
             return "Script";
         case AssetType::Texture:
             return "Texture";
+        case AssetType::Sprite:
+            return "Sprite";
         default:
             return "Unknown";
     }
@@ -47,6 +50,9 @@ inline AssetType stringToAssetType(const std::string& type)
     }
     if (type == "Texture") {
         return AssetType::Texture;
+    }
+    if (type == "Sprite") {
+        return AssetType::Sprite;
     }
     return AssetType::None;
 }

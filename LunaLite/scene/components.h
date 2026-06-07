@@ -47,9 +47,8 @@ struct MeshRendererComponent {
 };
 
 struct SpriteRendererComponent {
-    asset::AssetHandle texture{0};
+    asset::AssetHandle sprite{0};
     glm::vec4 color{1.0f};
-    glm::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
     int32_t sorting_layer{0};
     int32_t order_in_layer{0};
     bool depth_test{false};
