@@ -60,10 +60,6 @@ struct alignas(16) ShadowFrameUniforms {
     glm::mat4 lightViewProjection{1.0f};
 };
 
-struct alignas(16) ShadowObjectUniforms {
-    glm::mat4 model{1.0f};
-};
-
 struct alignas(16) ShadowLightingUniforms {
     std::array<glm::mat4, MaxShadowCascades> lightViewProjections{
         glm::mat4{1.0f},

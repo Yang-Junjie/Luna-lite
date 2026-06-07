@@ -36,6 +36,27 @@ void RenderStatsPanel::onImGuiRender()
     ImGui::Text("Skybox %u", render.skybox_draw_calls);
 
     ImGui::Separator();
+    ImGui::TextUnformatted("GPU");
+    if (!render.gpu_profiler.supported) {
+        ImGui::TextDisabled("Timestamp unavailable");
+    } else if (!render.gpu_profiler.valid) {
+        ImGui::TextDisabled("Profiler warming up");
+    } else {
+        ImGui::Text("Frame %.3f ms", render.gpu_profiler.frame_ms);
+        ImGui::Text("Shadow %.3f ms", render.gpu_profiler.shadow_ms);
+        for (uint32_t cascadeIndex = 0; cascadeIndex < render.gpu_profiler.shadow_cascade_ms.size(); ++cascadeIndex) {
+            if (cascadeIndex >= render.shadow_cascade_count) {
+                continue;
+            }
+            ImGui::Text("  Cascade %u %.3f ms", cascadeIndex, render.gpu_profiler.shadow_cascade_ms[cascadeIndex]);
+        }
+        ImGui::Text("Geometry %.3f ms", render.gpu_profiler.geometry_ms);
+        ImGui::Text("Lighting %.3f ms", render.gpu_profiler.lighting_ms);
+        ImGui::Text("Skybox %.3f ms", render.gpu_profiler.skybox_ms);
+        ImGui::Text("Debug Lines %.3f ms", render.gpu_profiler.debug_lines_ms);
+    }
+
+    ImGui::Separator();
     ImGui::TextUnformatted("Shadow");
     ImGui::Text("Enabled %s", render.shadow_enabled ? "true" : "false");
     ImGui::Text("Map Size %u", render.shadow_map_size);
@@ -55,11 +76,20 @@ void RenderStatsPanel::onImGuiRender()
                 continue;
             }
 
-            ImGui::Text("Cascade %u: split %.2f, casters %u, draws %u",
-                        cascadeIndex,
-                        cascade.split_depth,
-                        cascade.caster_meshes,
-                        cascade.draw_calls);
+            if (render.gpu_profiler.valid) {
+                ImGui::Text("Cascade %u: split %.2f, casters %u, draws %u, gpu %.3f ms",
+                            cascadeIndex,
+                            cascade.split_depth,
+                            cascade.caster_meshes,
+                            cascade.draw_calls,
+                            render.gpu_profiler.shadow_cascade_ms[cascadeIndex]);
+            } else {
+                ImGui::Text("Cascade %u: split %.2f, casters %u, draws %u",
+                            cascadeIndex,
+                            cascade.split_depth,
+                            cascade.caster_meshes,
+                            cascade.draw_calls);
+            }
         }
         ImGui::TreePop();
     }

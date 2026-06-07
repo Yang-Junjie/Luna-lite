@@ -18,6 +18,7 @@ namespace lunalite::renderer {
 class DebugLinePass;
 class EnvironmentMapCache;
 class GBufferResource;
+class GpuProfiler;
 class GeometryPass;
 class LightingPass;
 class MaterialGpuCache;
@@ -56,6 +57,7 @@ private:
     std::unique_ptr<MaterialGpuCache> m_material_gpu_cache;
     std::unique_ptr<EnvironmentMapCache> m_environment_map_cache;
     std::unique_ptr<ShadowMapResource> m_shadow_map;
+    std::unique_ptr<GpuProfiler> m_gpu_profiler;
     std::unique_ptr<GeometryPass> m_geometry_pass;
     std::unique_ptr<ShadowPass> m_shadow_pass;
     std::unique_ptr<DebugLinePass> m_debug_line_pass;

@@ -236,11 +236,6 @@ void RendererPipelineResources::createBindGroupLayouts()
                     .type = rhi::BindingType::UniformBuffer,
                     .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex),
                 },
-                rhi::BindGroupLayoutEntry{
-                    .binding = 1,
-                    .type = rhi::BindingType::UniformBuffer,
-                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex),
-                },
             },
     });
 
@@ -287,6 +282,14 @@ void RendererPipelineResources::createPipelineLayouts()
     });
     m_shadow_pipeline_layout = m_device->createPipelineLayout(rhi::PipelineLayoutDesc{
         .bind_group_layouts = {m_shadow_bind_group_layout},
+        .push_constants =
+            {
+                rhi::PushConstantRange{
+                    .stages = rhi::shaderStageFlag(rhi::ShaderStage::Vertex),
+                    .offset = 0,
+                    .size = sizeof(glm::mat4),
+                },
+            },
     });
 }
 

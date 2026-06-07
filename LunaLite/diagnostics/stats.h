@@ -25,6 +25,18 @@ struct ShadowCascadeStats {
     uint32_t draw_calls{0};
 };
 
+struct GpuProfilerStats {
+    bool supported{false};
+    bool valid{false};
+    float frame_ms{0.0f};
+    float shadow_ms{0.0f};
+    std::array<float, MaxShadowCascadeStats> shadow_cascade_ms{};
+    float geometry_ms{0.0f};
+    float lighting_ms{0.0f};
+    float skybox_ms{0.0f};
+    float debug_lines_ms{0.0f};
+};
+
 struct RenderStats {
     uint32_t mesh_commands{0};
     uint32_t geometry_visible_meshes{0};
@@ -49,6 +61,7 @@ struct RenderStats {
     float shadow_cascade_seam_blend{0.0f};
     float shadow_cascade_caster_depth_padding{0.0f};
     std::array<ShadowCascadeStats, MaxShadowCascadeStats> shadow_cascades{};
+    GpuProfilerStats gpu_profiler{};
 };
 
 struct ImGuiStats {

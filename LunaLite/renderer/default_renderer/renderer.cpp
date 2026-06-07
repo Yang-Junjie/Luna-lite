@@ -3,6 +3,7 @@
 #include "../interface/frustum.h"
 #include "environment_map_cache.h"
 #include "gbuffer_resource.h"
+#include "gpu_profiler.h"
 #include "material_gpu_cache.h"
 #include "passes/debug_line_pass.h"
 #include "passes/geometry_pass.h"
@@ -320,6 +321,7 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
                                               *m_texture_gpu_cache);
     m_shadow_map =
         std::make_unique<ShadowMapResource>(*m_device, m_pipeline_resources->shadowLightingBindGroupLayout());
+    m_gpu_profiler = std::make_unique<GpuProfiler>(*m_device);
 
     m_geometry_pass = std::make_unique<GeometryPass>(*m_device,
                                                      *m_cmd,
@@ -356,6 +358,7 @@ Renderer::~Renderer()
     m_debug_line_pass.reset();
     m_shadow_pass.reset();
     m_geometry_pass.reset();
+    m_gpu_profiler.reset();
     m_environment_map_cache.reset();
     m_shadow_map.reset();
     m_gbuffer.reset();
@@ -391,6 +394,7 @@ void Renderer::beginFrame()
     m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
         ShadowCascadeData{}, interface::RenderShadowSettings{}, m_shadow_map->size(), false));
     m_cmd->begin();
+    m_stats.gpu_profiler = m_gpu_profiler->beginFrame(*m_cmd);
     m_geometry_pass_recorded_this_frame = false;
     m_pending_debug_lines.clear();
 }
@@ -400,29 +404,37 @@ void Renderer::endFrame()
     const auto& gbuffer = m_gbuffer->get();
     if (m_geometry_pass_recorded_this_frame) {
         m_geometry_pass->end();
+        m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::Geometry);
         m_geometry_pass_recorded_this_frame = false;
     }
 
+    m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::Lighting);
     if (m_lighting_pass->execute(gbuffer,
                                  m_environment_map_cache->bindGroup(),
                                  m_shadow_map->lightingBindGroup(),
                                  m_shadow_map->texture())) {
         m_stats.lighting_draw_calls += 1;
     }
+    m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::Lighting);
 
+    m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::Skybox);
     if (m_frameUniforms.environmentIntensity > 0.0f) {
         if (m_skybox_pass->execute(gbuffer, m_environment_map_cache->bindGroup())) {
             m_stats.skybox_draw_calls += 1;
         }
     }
+    m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::Skybox);
 
+    m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::DebugLines);
     m_stats.debug_line_draw_calls += m_debug_line_pass->execute(gbuffer, m_pending_debug_lines);
+    m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::DebugLines);
 
     m_stats.draw_calls_total = m_stats.geometry_draw_calls + m_stats.shadow_draw_calls + m_stats.debug_line_draw_calls +
                                m_stats.lighting_draw_calls + m_stats.skybox_draw_calls;
 
     m_lighting_pass->transitionFinalColorForSampling(gbuffer);
 
+    m_gpu_profiler->endFrame(*m_cmd);
     m_cmd->end();
     m_device->submit(m_command_list);
 }
@@ -447,6 +459,7 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
                                 frame.lighting.directional_light_count > 0 &&
                                     frame.lighting.directional_light.shadow.enabled);
 
+    m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::Shadow);
     if (shouldRenderShadowMap(frame)) {
         m_shadow_map->ensure(frame.lighting.directional_light.shadow);
         const auto cascadeData = directionalShadowCascades(frame.camera,
@@ -454,7 +467,7 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
                                                            m_shadow_map->size(),
                                                            m_shadow_map->cascadeCount(),
                                                            frame.meshes);
-        const auto shadowDrawCalls = m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes);
+        const auto shadowDrawCalls = m_shadow_pass->execute(*m_shadow_map, cascadeData, frame.meshes, *m_gpu_profiler);
         const auto cascadeCount = std::min(cascadeData.count, diagnostics::MaxShadowCascadeStats);
         for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
             const auto& cascade = cascadeData.cascades[cascadeIndex];
@@ -469,11 +482,16 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
             cascadeData, frame.lighting.directional_light.shadow, m_shadow_map->size(), true));
     } else {
+        for (uint32_t cascadeIndex = 0; cascadeIndex < MaxShadowCascades; ++cascadeIndex) {
+            m_gpu_profiler->recordEmptyPass(*m_cmd, GpuProfiler::shadowCascadePass(cascadeIndex));
+        }
         m_shadow_map->updateLightingUniforms(makeShadowLightingUniforms(
             ShadowCascadeData{}, frame.lighting.directional_light.shadow, m_shadow_map->size(), false));
     }
+    m_gpu_profiler->endPass(*m_cmd, GpuProfiler::Pass::Shadow);
 
     const auto& gbuffer = m_gbuffer->get();
+    m_gpu_profiler->beginPass(*m_cmd, GpuProfiler::Pass::Geometry);
     m_geometry_pass->begin(gbuffer);
     m_geometry_pass_recorded_this_frame = true;
 

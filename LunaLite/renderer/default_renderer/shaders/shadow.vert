@@ -6,11 +6,10 @@ layout(std140, binding = 0) uniform ShadowFrameUniforms {
     mat4 u_light_view_projection;
 };
 
-layout(std140, binding = 1) uniform ShadowObjectUniforms {
-    mat4 u_model;
-};
+uniform vec4 uPushConstants[4];
 
 void main()
 {
-    gl_Position = u_light_view_projection * u_model * vec4(a_position, 1.0);
+    mat4 model = mat4(uPushConstants[0], uPushConstants[1], uPushConstants[2], uPushConstants[3]);
+    gl_Position = u_light_view_projection * model * vec4(a_position, 1.0);
 }

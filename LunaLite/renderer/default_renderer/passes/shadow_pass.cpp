@@ -1,5 +1,6 @@
 #include "../../../asset/asset_database.h"
 #include "../../../core/log.h"
+#include "../gpu_profiler.h"
 #include "shadow_pass.h"
 
 #include <algorithm>
@@ -23,12 +24,6 @@ ShadowPass::ShadowPass(rhi::Device& device,
         .memory = rhi::MemoryUsage::CpuToGpu,
         .initial_state = rhi::ResourceState::UniformRead,
     });
-    m_shadow_object_uniform_buffer = m_device->createBuffer(rhi::BufferDesc{
-        .size = sizeof(ShadowObjectUniforms),
-        .usage = rhi::BufferUsage::Uniform | rhi::BufferUsage::CopyDst,
-        .memory = rhi::MemoryUsage::CpuToGpu,
-        .initial_state = rhi::ResourceState::UniformRead,
-    });
     m_shadow_bind_group = m_device->createBindGroup(rhi::BindGroupDesc{
         .layout = m_shadow_bind_group_layout,
         .entries =
@@ -43,21 +38,10 @@ ShadowPass::ShadowPass(rhi::Device& device,
                             .size = sizeof(ShadowFrameUniforms),
                         },
                 },
-                rhi::BindGroupEntry{
-                    .binding = 1,
-                    .type = rhi::BindingType::UniformBuffer,
-                    .buffer =
-                        rhi::BufferBinding{
-                            .buffer = m_shadow_object_uniform_buffer,
-                            .offset = 0,
-                            .size = sizeof(ShadowObjectUniforms),
-                        },
-                },
             },
     });
 
     LUNA_ASSERT(m_shadow_frame_uniform_buffer, "Failed to create shadow frame uniform buffer.");
-    LUNA_ASSERT(m_shadow_object_uniform_buffer, "Failed to create shadow object uniform buffer.");
     LUNA_ASSERT(m_shadow_bind_group, "Failed to create shadow bind group.");
 }
 
@@ -77,10 +61,6 @@ ShadowPass::~ShadowPass()
         m_device->destroyBindGroup(m_shadow_bind_group);
         m_shadow_bind_group = {};
     }
-    if (m_shadow_object_uniform_buffer) {
-        m_device->destroyBuffer(m_shadow_object_uniform_buffer);
-        m_shadow_object_uniform_buffer = {};
-    }
     if (m_shadow_frame_uniform_buffer) {
         m_device->destroyBuffer(m_shadow_frame_uniform_buffer);
         m_shadow_frame_uniform_buffer = {};
@@ -90,17 +70,30 @@ ShadowPass::~ShadowPass()
 std::array<uint32_t, MaxShadowCascades>
     ShadowPass::execute(const ShadowMapResource& shadow_map,
                         const ShadowCascadeData& cascade_data,
-                        const std::vector<interface::MeshDrawCommand>& mesh_commands)
+                        const std::vector<interface::MeshDrawCommand>& mesh_commands,
+                        GpuProfiler& gpu_profiler)
 {
     std::array<uint32_t, MaxShadowCascades> drawCalls{};
     const auto cascadeCount = std::min(cascade_data.count, shadow_map.cascadeCount());
-    if (!shadow_map.view() || shadow_map.size() == 0 || cascadeCount == 0 || mesh_commands.empty()) {
+    const bool canRender = shadow_map.view() && shadow_map.size() > 0 && cascadeCount > 0 && !mesh_commands.empty();
+    if (!canRender) {
+        for (uint32_t cascadeIndex = 0; cascadeIndex < MaxShadowCascades; ++cascadeIndex) {
+            gpu_profiler.recordEmptyPass(*m_cmd, GpuProfiler::shadowCascadePass(cascadeIndex));
+        }
         return drawCalls;
     }
 
-    for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex) {
+    for (uint32_t cascadeIndex = 0; cascadeIndex < MaxShadowCascades; ++cascadeIndex) {
+        const auto profilePass = GpuProfiler::shadowCascadePass(cascadeIndex);
+        gpu_profiler.beginPass(*m_cmd, profilePass);
+        if (cascadeIndex >= cascadeCount) {
+            gpu_profiler.endPass(*m_cmd, profilePass);
+            continue;
+        }
+
         const auto layerView = shadow_map.layerView(cascadeIndex);
         if (!layerView) {
+            gpu_profiler.endPass(*m_cmd, profilePass);
             continue;
         }
 
@@ -131,6 +124,7 @@ std::array<uint32_t, MaxShadowCascades>
         }
 
         m_cmd->endRenderPass();
+        gpu_profiler.endPass(*m_cmd, profilePass);
     }
 
     return drawCalls;
@@ -180,8 +174,7 @@ bool ShadowPass::drawSubMesh(const interface::Mesh& mesh,
         return false;
     }
 
-    m_object_uniforms.model = transform;
-    m_device->updateBuffer(m_shadow_object_uniform_buffer, 0, &m_object_uniforms, sizeof(ShadowObjectUniforms));
+    m_cmd->pushConstants(rhi::shaderStageFlag(rhi::ShaderStage::Vertex), 0, sizeof(glm::mat4), &transform);
 
     m_cmd->setVertexBuffer(0, gpu_mesh->vertex_buffer);
     if (gpu_mesh->index_buffer && gpu_mesh->index_count > 0) {

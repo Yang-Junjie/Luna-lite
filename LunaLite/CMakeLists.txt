@@ -6,6 +6,7 @@ add_library(LunaLiteRenderer
     renderer/debug_renderer.cpp
     renderer/default_renderer/environment_map_cache.cpp
     renderer/default_renderer/gbuffer_resource.cpp
+    renderer/default_renderer/gpu_profiler.cpp
     renderer/default_renderer/material_gpu_cache.cpp
     renderer/default_renderer/passes/debug_line_pass.cpp
     renderer/default_renderer/passes/geometry_pass.cpp
