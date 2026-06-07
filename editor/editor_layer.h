@@ -4,6 +4,7 @@
 #include "../LunaLite/scene/scene.h"
 #include "editor_camera.h"
 #include "panels/content_browser_panel.h"
+#include "panels/debug_panel.h"
 #include "panels/editor_setting_panel.h"
 #include "panels/hierarchy_panel.h"
 #include "panels/inspector_panel.h"
@@ -32,6 +33,7 @@ public:
 private:
     void drawMenuBar();
     void drawViewport();
+    void drawDebugOverlays();
     void createProject();
     void openProject();
     void saveProject();
@@ -59,6 +61,7 @@ private:
     MaterialEditorPanel m_material_editor_panel;
     RenderStatsPanel m_render_stats_panel;
     ContentBrowserPanel m_content_browser_panel;
+    DebugPanel m_debug_panel;
     SceneState m_scene_state{SceneState::Edit};
     bool m_viewport_hovered{false};
     std::filesystem::path m_current_scene_path;

@@ -333,8 +333,8 @@ Renderer::Renderer(rhi::Device& device, rhi::Swapchain& swapchain)
         *m_device, *m_cmd, m_pipeline_resources->shadowPipeline(), m_pipeline_resources->shadowBindGroupLayout());
     m_debug_line_pass = std::make_unique<DebugLinePass>(*m_device,
                                                         *m_cmd,
-                                                        m_pipeline_resources->linePipeline(),
-                                                        m_pipeline_resources->geometryPipeline(),
+                                                        m_pipeline_resources->lineDepthPipeline(),
+                                                        m_pipeline_resources->lineOverlayPipeline(),
                                                         m_pipeline_resources->geometryBindGroup(),
                                                         m_pipeline_resources->frameUniformBuffer(),
                                                         m_pipeline_resources->objectUniformBuffer(),
@@ -391,6 +391,7 @@ void Renderer::beginFrame()
         ShadowCascadeData{}, interface::RenderShadowSettings{}, m_shadow_map->size(), false));
     m_cmd->begin();
     m_geometry_pass_recorded_this_frame = false;
+    m_pending_debug_lines.clear();
 }
 
 void Renderer::endFrame()
@@ -414,6 +415,8 @@ void Renderer::endFrame()
         }
     }
 
+    m_stats.debug_line_draw_calls += m_debug_line_pass->execute(gbuffer, m_pending_debug_lines);
+
     m_stats.draw_calls_total = m_stats.geometry_draw_calls + m_stats.shadow_draw_calls + m_stats.debug_line_draw_calls +
                                m_stats.lighting_draw_calls + m_stats.skybox_draw_calls;
 
@@ -434,6 +437,7 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
         static_cast<uint32_t>(std::min<size_t>(frame.meshes.size(), std::numeric_limits<uint32_t>::max()));
     m_stats.debug_lines =
         static_cast<uint32_t>(std::min<size_t>(frame.debug_lines.size(), std::numeric_limits<uint32_t>::max()));
+    m_pending_debug_lines = frame.debug_lines;
 
     setLighting(frame.lighting);
     setViewProjection(frame.camera.view, frame.camera.projection, frame.camera.position, frame.camera.exposure);
@@ -474,12 +478,6 @@ void Renderer::renderFrame(const interface::FrameRenderData& frame)
 
     for (const auto& meshCommand : frame.meshes) {
         m_stats.geometry_draw_calls += m_geometry_pass->renderMesh(meshCommand);
-    }
-
-    for (const auto& lineCommand : frame.debug_lines) {
-        if (m_debug_line_pass->renderLine(lineCommand)) {
-            m_stats.debug_line_draw_calls += 1;
-        }
     }
 }
 

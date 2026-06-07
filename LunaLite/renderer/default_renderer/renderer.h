@@ -1,5 +1,6 @@
 #pragma once
 #include "../interface/frame_image.h"
+#include "../interface/frame_render_data.h"
 #include "../interface/render_lighting.h"
 #include "../interface/renderer.h"
 #include "renderer_common.h"
@@ -10,6 +11,7 @@
 
 #include <glm/glm.hpp>
 #include <memory>
+#include <vector>
 
 namespace lunalite::renderer {
 
@@ -61,6 +63,7 @@ private:
     std::unique_ptr<SkyboxPass> m_skybox_pass;
     FrameUniforms m_frameUniforms;
     diagnostics::RenderStats m_stats;
+    std::vector<interface::LineDrawCommand> m_pending_debug_lines;
     bool m_frame_uniforms_dirty{true};
     bool m_geometry_pass_recorded_this_frame{false};
 };

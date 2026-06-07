@@ -25,6 +25,15 @@ target_link_libraries(MeshBoundsTest
         LunaLite
 )
 
+add_executable(DebugRendererTest
+    debug_renderer_test.cpp
+)
+
+target_link_libraries(DebugRendererTest
+    PRIVATE
+        LunaLite
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )

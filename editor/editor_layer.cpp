@@ -3,6 +3,8 @@
 #include "../LunaLite/imgui/imgui_renderer.h"
 #include "../LunaLite/platform/common/file_dialogs.h"
 #include "../LunaLite/project/project_manager.h"
+#include "../LunaLite/renderer/debug_renderer.h"
+#include "../LunaLite/renderer/interface/mesh.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "../LunaLite/scene/scene_serializer.h"
@@ -39,6 +41,31 @@ scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle m
 
     return entity;
 }
+
+void drawMeshRendererAABB(scene::Scene& scene,
+                          scene::Entity entity,
+                          renderer::DebugRenderer& debugRenderer,
+                          const glm::vec4& color,
+                          bool depthTest)
+{
+    if (!scene.isValidEntity(entity) || !scene.hasComponent<scene::MeshRendererComponent>(entity)) {
+        return;
+    }
+
+    const auto& meshRenderer = scene.getComponent<scene::MeshRendererComponent>(entity);
+    if (!meshRenderer.mesh.isValid()) {
+        return;
+    }
+
+    const auto* mesh = asset::AssetManager::get().getAsset<renderer::interface::Mesh>(meshRenderer.mesh);
+    if (mesh == nullptr) {
+        return;
+    }
+
+    const auto localAabb = mesh->getLocalAABB(meshRenderer.submesh_start, meshRenderer.submesh_count);
+    const auto worldAabb = localAabb.transformed(scene.getWorldTransform(entity));
+    debugRenderer.drawAABB(worldAabb, color, depthTest);
+}
 } // namespace
 
 EditorLayer::EditorLayer()
@@ -70,6 +97,7 @@ void EditorLayer::onRender()
     }
 
     core::Application::get().getSceneRenderer().onRenderEditor(m_scene, m_editor_camera);
+    drawDebugOverlays();
 }
 
 void EditorLayer::onImGuiRender()
@@ -85,6 +113,7 @@ void EditorLayer::onImGuiRender()
     m_editor_setting_panel.onImGuiRender();
     m_render_stats_panel.onImGuiRender();
     m_content_browser_panel.onImGuiRender();
+    m_debug_panel.onImGuiRender();
     drawViewport();
 }
 
@@ -131,6 +160,29 @@ void EditorLayer::drawMenuBar()
     }
 
     ImGui::EndMainMenuBar();
+}
+
+void EditorLayer::drawDebugOverlays()
+{
+    const auto& settings = m_debug_panel.overlaySettings();
+    if (!settings.mesh_aabb && !settings.selected_aabb) {
+        return;
+    }
+
+    auto& debugRenderer = core::Application::get().getDebugRenderer();
+    if (settings.mesh_aabb) {
+        const auto meshView =
+            m_scene.getRegistry().view<const scene::TransformComponent, const scene::MeshRendererComponent>();
+        for (const auto entity : meshView) {
+            drawMeshRendererAABB(
+                m_scene, scene::Entity{entity}, debugRenderer, glm::vec4{0.1f, 0.85f, 1.0f, 1.0f}, settings.depth_test);
+        }
+    }
+
+    if (settings.selected_aabb) {
+        drawMeshRendererAABB(
+            m_scene, m_selected_entity, debugRenderer, glm::vec4{1.0f, 0.9f, 0.1f, 1.0f}, settings.depth_test);
+    }
 }
 
 void EditorLayer::createProject()

@@ -351,49 +351,65 @@ void RendererPipelineResources::createPipelines()
                                           },
                                   });
 
-    m_line_pipeline = m_device
-                          ->createPipeline(
-                              rhi::PipelineDesc{
-                                  .topology = rhi::PrimitiveTopology::Line,
-                                  .vertex_input =
-                                      rhi::VertexInputDesc{
-                                          .buffers =
-                                              {
-                                                  rhi::VertexBufferLayoutDesc{
-                                                      .binding = 0,
-                                                      .stride = sizeof(LineVertex),
-                                                      .attributes =
-                                                          {
-                                                              rhi::VertexAttributeDesc{
-                                                                  .location = 0,
-                                                                  .format = rhi::VertexFormat::Float3,
-                                                                  .offset = offsetof(LineVertex, position),
-                                                              },
-                                                              rhi::VertexAttributeDesc{
-                                                                  .location = 1,
-                                                                  .format = rhi::VertexFormat::Float3,
-                                                                  .offset = offsetof(LineVertex, color),
-                                                              },
-                                                          },
-                                                  },
-                                              },
-                                      },
-                                  .layout = m_geometry_pipeline_layout,
-                                  .vertex_shader = m_line_vertex_shader,
-                                  .fragment_shader = m_line_fragment_shader,
-                                  .render_target_state =
-                                      rhi::RenderTargetState{
-                                          .color_targets =
-                                              {
-                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
-                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
-                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm},
-                                                  rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA16F},
-                                              },
-                                          .has_depth_stencil = true,
-                                          .depth_stencil_format = rhi::TextureFormat::Depth24Stencil8,
-                                      },
-                              });
+    const auto lineVertexInput = rhi::VertexInputDesc{
+        .buffers =
+            {
+                rhi::VertexBufferLayoutDesc{
+                    .binding = 0,
+                    .stride = sizeof(LineVertex),
+                    .attributes =
+                        {
+                            rhi::VertexAttributeDesc{
+                                .location = 0,
+                                .format = rhi::VertexFormat::Float3,
+                                .offset = offsetof(LineVertex, position),
+                            },
+                            rhi::VertexAttributeDesc{
+                                .location = 1,
+                                .format = rhi::VertexFormat::Float3,
+                                .offset = offsetof(LineVertex, color),
+                            },
+                        },
+                },
+            },
+    };
+    const auto lineColorTarget = rhi::ColorTargetState{.format = rhi::TextureFormat::RGBA8_UNorm};
+
+    m_line_depth_pipeline = m_device->createPipeline(rhi::PipelineDesc{
+        .topology = rhi::PrimitiveTopology::Line,
+        .vertex_input = lineVertexInput,
+        .layout = m_geometry_pipeline_layout,
+        .vertex_shader = m_line_vertex_shader,
+        .fragment_shader = m_line_fragment_shader,
+        .render_target_state =
+            rhi::RenderTargetState{
+                .color_targets = {lineColorTarget},
+                .has_depth_stencil = true,
+                .depth_stencil_format = rhi::TextureFormat::Depth24Stencil8,
+            },
+        .depth_state =
+            rhi::DepthState{
+                .enabled = true,
+                .write_enabled = false,
+                .compare = rhi::CompareOp::LessOrEqual,
+            },
+    });
+    m_line_overlay_pipeline = m_device->createPipeline(rhi::PipelineDesc{
+        .topology = rhi::PrimitiveTopology::Line,
+        .vertex_input = lineVertexInput,
+        .layout = m_geometry_pipeline_layout,
+        .vertex_shader = m_line_vertex_shader,
+        .fragment_shader = m_line_fragment_shader,
+        .render_target_state =
+            rhi::RenderTargetState{
+                .color_targets = {lineColorTarget},
+            },
+        .depth_state =
+            rhi::DepthState{
+                .enabled = false,
+                .write_enabled = false,
+            },
+    });
 
     m_lighting_pipeline = m_device->createPipeline(rhi::PipelineDesc{
         .topology = rhi::PrimitiveTopology::Triangle,
@@ -578,7 +594,8 @@ void RendererPipelineResources::validatePipelines() const
     LUNA_ASSERT(m_geometry_pipeline, "Failed to create geometry pipeline.");
     LUNA_ASSERT(m_lighting_pipeline, "Failed to create lighting pipeline.");
     LUNA_ASSERT(m_skybox_pipeline, "Failed to create skybox pipeline.");
-    LUNA_ASSERT(m_line_pipeline, "Failed to create line pipeline.");
+    LUNA_ASSERT(m_line_depth_pipeline, "Failed to create depth-tested line pipeline.");
+    LUNA_ASSERT(m_line_overlay_pipeline, "Failed to create overlay line pipeline.");
     LUNA_ASSERT(m_environment_cubemap_pipeline, "Failed to create environment cubemap pipeline.");
     LUNA_ASSERT(m_environment_irradiance_pipeline, "Failed to create environment irradiance pipeline.");
     LUNA_ASSERT(m_environment_prefilter_pipeline, "Failed to create environment prefilter pipeline.");
@@ -631,9 +648,13 @@ void RendererPipelineResources::destroy()
         m_device->destroyPipeline(m_lighting_pipeline);
         m_lighting_pipeline = {};
     }
-    if (m_line_pipeline) {
-        m_device->destroyPipeline(m_line_pipeline);
-        m_line_pipeline = {};
+    if (m_line_overlay_pipeline) {
+        m_device->destroyPipeline(m_line_overlay_pipeline);
+        m_line_overlay_pipeline = {};
+    }
+    if (m_line_depth_pipeline) {
+        m_device->destroyPipeline(m_line_depth_pipeline);
+        m_line_depth_pipeline = {};
     }
     if (m_geometry_pipeline) {
         m_device->destroyPipeline(m_geometry_pipeline);

@@ -1,6 +1,9 @@
 #include "../core/log.h"
 #include "debug_renderer.h"
 
+#include <cstddef>
+
+#include <array>
 #include <glm/gtc/matrix_inverse.hpp>
 
 namespace lunalite::renderer {
@@ -29,11 +32,94 @@ void DebugRenderer::setViewProjection(const glm::mat4& view,
     m_frame->camera.exposure = exposure;
 }
 
-void DebugRenderer::renderLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color)
+void DebugRenderer::drawLine(const glm::vec3& start, const glm::vec3& end, const glm::vec4& color, bool depth_test)
 {
     LUNA_ASSERT(m_frame, "DebugRenderer has no frame render data.");
-    m_frame->debug_lines.push_back(
-        interface::LineDrawCommand{.start = start, .end = end, .color = glm::vec4{color, 1.0f}});
+    m_frame->debug_lines.push_back(interface::LineDrawCommand{
+        .start = start,
+        .end = end,
+        .color = color,
+        .depth_test = depth_test,
+    });
+}
+
+void DebugRenderer::drawLine(const glm::vec3& start, const glm::vec3& end, const glm::vec3& color, bool depth_test)
+{
+    drawLine(start, end, glm::vec4{color, 1.0f}, depth_test);
+}
+
+void DebugRenderer::drawAABB(const interface::AABB& aabb, const glm::vec4& color, bool depth_test)
+{
+    if (!aabb.valid) {
+        return;
+    }
+
+    const auto corners = aabb.corners();
+    static constexpr uint32_t edges[][2] = {
+        {0, 1},
+        {1, 3},
+        {3, 2},
+        {2, 0},
+        {4, 5},
+        {5, 7},
+        {7, 6},
+        {6, 4},
+        {0, 4},
+        {1, 5},
+        {2, 6},
+        {3, 7},
+    };
+
+    for (const auto& edge : edges) {
+        drawLine(corners[edge[0]], corners[edge[1]], color, depth_test);
+    }
+}
+
+void DebugRenderer::drawOBB(const interface::AABB& local_aabb,
+                            const glm::mat4& transform,
+                            const glm::vec4& color,
+                            bool depth_test)
+{
+    if (!local_aabb.valid) {
+        return;
+    }
+
+    const auto corners = local_aabb.corners();
+    std::array<glm::vec3, 8> transformedCorners{};
+    for (size_t cornerIndex = 0; cornerIndex < corners.size(); ++cornerIndex) {
+        transformedCorners[cornerIndex] = glm::vec3{transform * glm::vec4{corners[cornerIndex], 1.0f}};
+    }
+
+    static constexpr uint32_t edges[][2] = {
+        {0, 1},
+        {1, 3},
+        {3, 2},
+        {2, 0},
+        {4, 5},
+        {5, 7},
+        {7, 6},
+        {6, 4},
+        {0, 4},
+        {1, 5},
+        {2, 6},
+        {3, 7},
+    };
+
+    for (const auto& edge : edges) {
+        drawLine(transformedCorners[edge[0]], transformedCorners[edge[1]], color, depth_test);
+    }
+}
+
+void DebugRenderer::drawTransformAxes(const glm::mat4& transform, float size, bool depth_test)
+{
+    const auto origin = glm::vec3{transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    const auto xAxis = glm::vec3{transform * glm::vec4{size, 0.0f, 0.0f, 1.0f}};
+    const auto yAxis = glm::vec3{transform * glm::vec4{0.0f, size, 0.0f, 1.0f}};
+    const auto zAxis = glm::vec3{transform * glm::vec4{0.0f, 0.0f, size, 1.0f}};
+
+    drawLine(origin, xAxis, glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}, depth_test);
+    drawLine(origin, yAxis, glm::vec4{0.1f, 1.0f, 0.1f, 1.0f}, depth_test);
+    drawLine(origin, zAxis, glm::vec4{0.1f, 0.3f, 1.0f, 1.0f}, depth_test);
 }
 
 } // namespace lunalite::renderer

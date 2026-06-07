@@ -46,9 +46,14 @@ public:
         return m_geometry_pipeline;
     }
 
-    rhi::PipelineHandle linePipeline() const
+    rhi::PipelineHandle lineDepthPipeline() const
     {
-        return m_line_pipeline;
+        return m_line_depth_pipeline;
+    }
+
+    rhi::PipelineHandle lineOverlayPipeline() const
+    {
+        return m_line_overlay_pipeline;
     }
 
     rhi::PipelineHandle lightingPipeline() const
@@ -141,7 +146,8 @@ private:
     rhi::PipelineLayoutHandle m_shadow_pipeline_layout{};
 
     rhi::PipelineHandle m_geometry_pipeline{};
-    rhi::PipelineHandle m_line_pipeline{};
+    rhi::PipelineHandle m_line_depth_pipeline{};
+    rhi::PipelineHandle m_line_overlay_pipeline{};
     rhi::PipelineHandle m_lighting_pipeline{};
     rhi::PipelineHandle m_skybox_pipeline{};
     rhi::PipelineHandle m_environment_cubemap_pipeline{};
