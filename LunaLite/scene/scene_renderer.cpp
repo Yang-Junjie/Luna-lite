@@ -2,6 +2,7 @@
 #include "../asset/sprite.h"
 #include "../core/log.h"
 #include "../renderer/interface/mesh.h"
+#include "../renderer/interface/sprite_geometry.h"
 #include "../renderer/interface/texture.h"
 #include "components.h"
 #include "scene_renderer.h"
@@ -290,6 +291,9 @@ void SceneRenderer::renderScene(const Scene& scene,
 
         auto spriteCommand = makeSpriteDrawCommand(spriteRenderer, scene.getWorldTransform(Entity{entity}));
         if (!spriteCommand.texture.isValid()) {
+            continue;
+        }
+        if (!renderer::interface::spriteIntersectsClipVolume(spriteCommand, frame.camera.view_projection)) {
             continue;
         }
         frame.sprites.push_back(std::move(spriteCommand));

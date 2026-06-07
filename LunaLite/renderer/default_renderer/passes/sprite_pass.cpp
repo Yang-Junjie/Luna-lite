@@ -1,4 +1,5 @@
 #include "../../../core/log.h"
+#include "../../interface/sprite_geometry.h"
 #include "sprite_pass.h"
 
 #include <algorithm>
@@ -8,11 +9,6 @@
 
 namespace lunalite::renderer {
 namespace {
-glm::vec3 transformPoint(const glm::mat4& transform, const glm::vec3& point)
-{
-    return glm::vec3{transform * glm::vec4{point, 1.0f}};
-}
-
 void appendSpriteGeometry(const interface::SpriteDrawCommand& sprite,
                           std::vector<SpriteVertex>& vertices,
                           std::vector<uint32_t>& indices)
@@ -25,16 +21,7 @@ void appendSpriteGeometry(const interface::SpriteDrawCommand& sprite,
     const auto u1 = sprite.uv_rect.x + sprite.uv_rect.z;
     const auto v1 = sprite.uv_rect.y + sprite.uv_rect.w;
 
-    const float left = -sprite.pivot.x * sprite.size.x;
-    const float right = (1.0f - sprite.pivot.x) * sprite.size.x;
-    const float bottom = -sprite.pivot.y * sprite.size.y;
-    const float top = (1.0f - sprite.pivot.y) * sprite.size.y;
-    const std::array<glm::vec3, 4> positions = {
-        glm::vec3{left, bottom, 0.0f},
-        glm::vec3{right, bottom, 0.0f},
-        glm::vec3{right, top, 0.0f},
-        glm::vec3{left, top, 0.0f},
-    };
+    const auto positions = interface::spriteLocalCorners(sprite);
     const float vBottom = sprite.flip_y ? v1 : v0;
     const float vTop = sprite.flip_y ? v0 : v1;
     const std::array<glm::vec2, 4> uvs = {
@@ -46,7 +33,7 @@ void appendSpriteGeometry(const interface::SpriteDrawCommand& sprite,
 
     for (size_t i = 0; i < positions.size(); ++i) {
         vertices.push_back(SpriteVertex{
-            .position = transformPoint(sprite.transform, positions[i]),
+            .position = interface::transformSpritePoint(sprite.transform, positions[i]),
             .uv = uvs[i],
             .color = sprite.color,
         });

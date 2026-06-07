@@ -43,6 +43,15 @@ target_link_libraries(FrustumTest
         LunaLite
 )
 
+add_executable(SpriteCullingTest
+    sprite_culling_test.cpp
+)
+
+target_link_libraries(SpriteCullingTest
+    PRIVATE
+        LunaLite
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )
