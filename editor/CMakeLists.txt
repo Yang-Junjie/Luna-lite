@@ -15,4 +15,5 @@ add_executable(LunaLiteEditor
 target_link_libraries(LunaLiteEditor
     PRIVATE
         LunaLite
+        LunaLiteTooling
 )

@@ -2,6 +2,9 @@
 #include "../../LunaLite/asset/factory/asset_factory_manager.h"
 #include "../../LunaLite/core/log.h"
 #include "../../LunaLite/project/project_manager.h"
+#include "../../LunaLiteTooling/commands/asset_commands.h"
+#include "../../LunaLiteTooling/commands/command_registry.h"
+#include "../../LunaLiteTooling/context/tool_context.h"
 #include "content_browser_panel.h"
 
 #include <filesystem>
@@ -11,8 +14,8 @@
 
 namespace lunalite::editor {
 namespace {
-struct PendingFactoryRequest {
-    std::string factory_id;
+struct PendingCommandRequest {
+    std::string command_id;
     asset::AssetHandle source{0};
     std::filesystem::path target_directory;
 };
@@ -33,7 +36,7 @@ void ContentBrowserPanel::onImGuiRender()
     ImGui::TextUnformatted(projectRootText.c_str());
     ImGui::Separator();
 
-    std::optional<PendingFactoryRequest> pendingFactoryRequest;
+    std::optional<PendingCommandRequest> pendingCommandRequest;
     for (const auto& [_, metadata] : asset::AssetManager::get().getMetadataRegistry()) {
         if (!metadata.Handle.isValid() || metadata.Type == asset::AssetType::None || metadata.MemoryOnly) {
             continue;
@@ -62,10 +65,15 @@ void ContentBrowserPanel::onImGuiRender()
         const auto factories = asset::AssetFactoryManager::get().factoriesFor(factoryContext);
         if (!factories.empty() && ImGui::BeginPopupContextItem()) {
             for (const auto* factory : factories) {
+                const auto commandId = tooling::commandIdForAssetFactory(factory->id());
+                if (!commandId) {
+                    continue;
+                }
+
                 const auto factoryLabel = std::string{factory->label()};
                 if (ImGui::MenuItem(factoryLabel.c_str())) {
-                    pendingFactoryRequest = PendingFactoryRequest{
-                        .factory_id = std::string{factory->id()},
+                    pendingCommandRequest = PendingCommandRequest{
+                        .command_id = std::string{*commandId},
                         .source = metadata.Handle,
                         .target_directory = metadata.FilePath.parent_path(),
                     };
@@ -76,21 +84,18 @@ void ContentBrowserPanel::onImGuiRender()
         ImGui::PopID();
     }
 
-    if (pendingFactoryRequest) {
-        const auto* source = asset::AssetManager::get().getMetadata(pendingFactoryRequest->source);
-        if (source == nullptr) {
-            LUNA_CORE_ERROR("Failed to run asset factory '{}': source asset is missing",
-                            pendingFactoryRequest->factory_id);
-        } else {
-            const asset::AssetFactoryContext context{
-                .source = source,
-                .target_directory = pendingFactoryRequest->target_directory,
-            };
-            const auto result = asset::AssetFactoryManager::get().create(pendingFactoryRequest->factory_id, context);
-            if (!result.handle.isValid() && !result.error.empty()) {
-                LUNA_CORE_ERROR(
-                    "Failed to run asset factory '{}': {}", pendingFactoryRequest->factory_id, result.error);
-            }
+    if (pendingCommandRequest) {
+        tooling::ToolContext context;
+        tooling::CommandArgs args;
+        args.set("source_asset", pendingCommandRequest->source);
+        args.set("target_directory", pendingCommandRequest->target_directory);
+
+        const auto result =
+            tooling::CommandRegistry::get().execute(pendingCommandRequest->command_id, context, args);
+        if (!result.success) {
+            LUNA_CORE_ERROR("Failed to execute command '{}': {}",
+                            pendingCommandRequest->command_id,
+                            result.message.empty() ? "unknown error" : result.message);
         }
     }
 

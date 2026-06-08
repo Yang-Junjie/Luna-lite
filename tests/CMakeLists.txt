@@ -52,6 +52,15 @@ target_link_libraries(SpriteCullingTest
         LunaLite
 )
 
+add_executable(ToolingCommandTest
+    tooling_command_test.cpp
+)
+
+target_link_libraries(ToolingCommandTest
+    PRIVATE
+        LunaLiteTooling
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )
