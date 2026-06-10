@@ -2,6 +2,7 @@
 
 #include "../LunaLite/core/layer.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLiteTooling/context/selection_context.h"
 #include "editor_camera.h"
 #include "panels/content_browser_panel.h"
 #include "panels/debug_panel.h"
@@ -63,7 +64,7 @@ private:
     scene::Scene m_scene;
     scene::Scene m_runtime_scene;
 
-    scene::Entity m_selected_entity;
+    tooling::SelectionContext m_selection;
 
     HierarchyPanel m_hierarchy_panel;
     InspectorPanel m_inspector_panel;

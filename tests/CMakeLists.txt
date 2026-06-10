@@ -61,6 +61,24 @@ target_link_libraries(ToolingCommandTest
         LunaLiteTooling
 )
 
+add_executable(SelectionContextTest
+    selection_context_test.cpp
+)
+
+target_link_libraries(SelectionContextTest
+    PRIVATE
+        LunaLiteTooling
+)
+
+add_executable(SceneCommandsTest
+    scene_commands_test.cpp
+)
+
+target_link_libraries(SceneCommandsTest
+    PRIVATE
+        LunaLiteTooling
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )

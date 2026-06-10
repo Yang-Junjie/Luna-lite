@@ -1,5 +1,6 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/core/application.h"
+#include "../LunaLite/core/log.h"
 #include "../LunaLite/imgui/imgui_renderer.h"
 #include "../LunaLite/platform/common/file_dialogs.h"
 #include "../LunaLite/project/project_manager.h"
@@ -9,6 +10,9 @@
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "../LunaLite/scene/scene_serializer.h"
+#include "../LunaLiteTooling/commands/command_registry.h"
+#include "../LunaLiteTooling/commands/scene_commands.h"
+#include "../LunaLiteTooling/context/tool_context.h"
 #include "editor_layer.h"
 
 #include <cstdint>
@@ -17,46 +21,29 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <imgui.h>
 #include <optional>
+#include <type_traits>
 
 namespace lunalite::editor {
 namespace {
-asset::AssetHandle resolvePrefabCompanion(asset::AssetHandle handle)
-{
-    const auto* metadata = asset::AssetManager::get().getMetadata(handle);
-    if (metadata == nullptr || metadata->Type != asset::AssetType::Mesh) {
-        return {};
-    }
+using EntityUnderlying = std::underlying_type_t<entt::entity>;
 
-    const auto prefabPath = metadata->FilePath.parent_path() / (metadata->FilePath.stem().string() + ".lunaprefab");
-    return asset::AssetManager::get().getHandleByRelativePath(prefabPath);
+scene::Entity entityFromCommandValue(uint64_t value)
+{
+    return scene::Entity{static_cast<entt::entity>(static_cast<EntityUnderlying>(value))};
 }
 
-scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle meshHandle)
+std::optional<scene::Entity> entityFromCommandResult(const tooling::CommandResult& result)
 {
-    auto entity = scene.createEntity();
-    auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
-    meshRenderer.mesh = meshHandle;
-
-    if (const auto* metadata = asset::AssetManager::get().getMetadata(meshHandle)) {
-        auto& tag = scene.getComponent<scene::TagComponent>(entity);
-        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    if (const auto* created = result.get<uint64_t>("created_entity")) {
+        return entityFromCommandValue(*created);
     }
-
-    return entity;
-}
-
-scene::Entity createSpriteRendererEntity(scene::Scene& scene, asset::AssetHandle spriteHandle)
-{
-    auto entity = scene.createEntity();
-    auto& spriteRenderer = scene.addComponent<scene::SpriteRendererComponent>(entity);
-    spriteRenderer.sprite = spriteHandle;
-
-    if (const auto* metadata = asset::AssetManager::get().getMetadata(spriteHandle)) {
-        auto& tag = scene.getComponent<scene::TagComponent>(entity);
-        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
+    if (const auto* affected = result.get<uint64_t>("affected_entity")) {
+        return entityFromCommandValue(*affected);
     }
-
-    return entity;
+    if (const auto* entity = result.get<uint64_t>("entity")) {
+        return entityFromCommandValue(*entity);
+    }
+    return std::nullopt;
 }
 
 std::optional<renderer::interface::AABB> meshRendererWorldAABB(scene::Scene& scene, scene::Entity entity)
@@ -83,9 +70,10 @@ std::optional<renderer::interface::AABB> meshRendererWorldAABB(scene::Scene& sce
 EditorLayer::EditorLayer()
     : Layer("EditorLayer"),
       m_editor_setting_panel(m_editor_camera),
-      m_hierarchy_panel(m_scene, m_selected_entity),
-      m_inspector_panel(m_scene, m_selected_entity),
-      m_scene_panel(m_scene)
+      m_hierarchy_panel(m_scene, m_selection),
+      m_inspector_panel(m_scene, m_selection),
+      m_scene_panel(m_scene),
+      m_content_browser_panel(m_selection)
 {}
 
 void EditorLayer::onAttach() {}
@@ -222,7 +210,8 @@ void EditorLayer::drawDebugOverlays()
     }
 
     if (settings.selected_aabb) {
-        const auto selectedAabb = meshRendererWorldAABB(m_scene, m_selected_entity);
+        const auto selectedEntity = m_selection.isEntity() ? m_selection.selectedEntity() : scene::Entity{};
+        const auto selectedAabb = meshRendererWorldAABB(m_scene, selectedEntity);
         if (selectedAabb) {
             debugRenderer.drawAABB(*selectedAabb, glm::vec4{1.0f, 0.9f, 0.1f, 1.0f}, settings.depth_test);
         }
@@ -264,7 +253,7 @@ void EditorLayer::createProject()
 
     asset::AssetManager::get().loadProjectAssets();
     m_scene.clear();
-    m_selected_entity = scene::Entity{};
+    m_selection.clear();
     m_current_scene_path.clear();
 }
 
@@ -284,7 +273,7 @@ void EditorLayer::openProject()
 
     asset::AssetManager::get().loadProjectAssets();
     m_scene.clear();
-    m_selected_entity = scene::Entity{};
+    m_selection.clear();
     m_current_scene_path.clear();
 
     const auto& projectInfo = projectManager.getProjectInfo();
@@ -334,7 +323,7 @@ void EditorLayer::createScene()
     }
 
     m_scene.clear();
-    m_selected_entity = scene::Entity{};
+    m_selection.clear();
     if (!scene::SceneSerializer::serialize(m_scene, scenePath)) {
         return;
     }
@@ -379,56 +368,34 @@ bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
         return false;
     }
 
-    m_selected_entity = scene::Entity{};
+    m_selection.clear();
     m_current_scene_path = scene_path;
     return true;
 }
 
 void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
 {
-    const auto handle = payload.handle;
-    if (!handle.isValid()) {
+    if (!payload.handle.isValid()) {
         return;
     }
 
-    if (payload.type == asset::AssetType::Prefab) {
-        const auto root = m_scene.instantiatePrefab(handle);
-        if (root) {
-            m_selected_entity = root;
-        }
+    tooling::ToolContext context;
+    context.setScene(m_scene);
+
+    tooling::CommandArgs args;
+    args.set("source_asset", payload.handle);
+    args.set("asset_type", static_cast<uint64_t>(payload.type));
+
+    const auto result = tooling::CommandRegistry::get().execute(tooling::CreateEntityFromAssetCommandId, context, args);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to create entity from asset '{}': {}",
+                        payload.handle.toString(),
+                        result.message.empty() ? "unknown error" : result.message);
         return;
     }
 
-    if (payload.type == asset::AssetType::Mesh) {
-        const auto prefabHandle = resolvePrefabCompanion(handle);
-        if (prefabHandle.isValid()) {
-            const auto root = m_scene.instantiatePrefab(prefabHandle);
-            if (root) {
-                m_selected_entity = root;
-                return;
-            }
-        }
-
-        m_selected_entity = createMeshRendererEntity(m_scene, handle);
-        return;
-    }
-
-    if (payload.type == asset::AssetType::Sprite) {
-        m_selected_entity = createSpriteRendererEntity(m_scene, handle);
-        return;
-    }
-
-    if (payload.type == asset::AssetType::Script) {
-        auto entity = m_scene.createEntity();
-        auto& script = m_scene.addComponent<scene::ScriptComponent>(entity);
-        script.scripts.push_back({handle, true});
-
-        if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
-            auto& tag = m_scene.getComponent<scene::TagComponent>(entity);
-            tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
-        }
-
-        m_selected_entity = entity;
+    if (const auto entity = entityFromCommandResult(result)) {
+        m_selection.selectEntity(*entity);
     }
 }
 

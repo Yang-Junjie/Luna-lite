@@ -21,6 +21,10 @@ struct PendingCommandRequest {
 };
 } // namespace
 
+ContentBrowserPanel::ContentBrowserPanel(tooling::SelectionContext& selection)
+    : m_selection(selection)
+{}
+
 void ContentBrowserPanel::onImGuiRender()
 {
     ImGui::Begin("Content Browser");
@@ -46,7 +50,10 @@ void ContentBrowserPanel::onImGuiRender()
         const auto label = name + " (" + asset::assetTypeToString(metadata.Type) + ")";
         const auto id = metadata.Handle.toString();
         ImGui::PushID(id.c_str());
-        ImGui::Selectable(label.c_str());
+        const bool selected = m_selection.isAsset() && m_selection.selectedAsset() == metadata.Handle;
+        if (ImGui::Selectable(label.c_str(), selected)) {
+            m_selection.selectAsset(metadata.Handle);
+        }
 
         if (ImGui::BeginDragDropSource()) {
             const AssetDragDropPayload payload{

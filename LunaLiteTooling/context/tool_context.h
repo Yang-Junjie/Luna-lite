@@ -3,6 +3,10 @@
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/asset/factory/asset_factory_manager.h"
 
+namespace lunalite::scene {
+class Scene;
+}
+
 namespace lunalite::tooling {
 
 class ToolContext {
@@ -12,6 +16,17 @@ public:
         : m_asset_manager(asset_manager),
           m_asset_factory_manager(asset_factory_manager)
     {}
+
+    ToolContext& setScene(scene::Scene& scene)
+    {
+        m_scene = &scene;
+        return *this;
+    }
+
+    scene::Scene* scene() const
+    {
+        return m_scene;
+    }
 
     asset::AssetManager& assetManager() const
     {
@@ -24,6 +39,7 @@ public:
     }
 
 private:
+    scene::Scene* m_scene{nullptr};
     asset::AssetManager* m_asset_manager{nullptr};
     asset::AssetFactoryManager* m_asset_factory_manager{nullptr};
 };

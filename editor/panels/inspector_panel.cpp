@@ -144,22 +144,24 @@ bool drawShadowMapSizeControl(uint32_t& map_size)
 }
 } // namespace
 
-InspectorPanel::InspectorPanel(scene::Scene& scene, scene::Entity& selected_entity)
+InspectorPanel::InspectorPanel(scene::Scene& scene, tooling::SelectionContext& selection)
     : m_scene(scene),
-      m_selected_entity(selected_entity)
+      m_selection(selection)
 {}
 
 void InspectorPanel::onImGuiRender()
 {
     ImGui::Begin("Inspector");
 
-    if (!m_scene.isValidEntity(m_selected_entity)) {
+    if (!m_selection.isEntity() || !m_scene.isValidEntity(m_selection.selectedEntity())) {
         ImGui::TextUnformatted("No entity selected");
         ImGui::End();
         return;
     }
 
-    ImGui::Text("Entity %u", static_cast<uint32_t>(m_selected_entity.getHandle()));
+    const auto selectedEntity = m_selection.selectedEntity();
+
+    ImGui::Text("Entity %u", static_cast<uint32_t>(selectedEntity.getHandle()));
     ImGui::Separator();
 
     if (ImGui::Button("Add Component")) {
@@ -167,27 +169,26 @@ void InspectorPanel::onImGuiRender()
     }
 
     if (ImGui::BeginPopup("AddComponent")) {
-        if (!m_scene.hasComponent<scene::MeshRendererComponent>(m_selected_entity) &&
-            ImGui::MenuItem("Mesh Renderer")) {
-            m_scene.addComponent<scene::MeshRendererComponent>(m_selected_entity);
+        if (!m_scene.hasComponent<scene::MeshRendererComponent>(selectedEntity) && ImGui::MenuItem("Mesh Renderer")) {
+            m_scene.addComponent<scene::MeshRendererComponent>(selectedEntity);
         }
 
-        if (!m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity) &&
+        if (!m_scene.hasComponent<scene::SpriteRendererComponent>(selectedEntity) &&
             ImGui::MenuItem("Sprite Renderer")) {
-            m_scene.addComponent<scene::SpriteRendererComponent>(m_selected_entity);
+            m_scene.addComponent<scene::SpriteRendererComponent>(selectedEntity);
         }
 
-        if (!m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity) && ImGui::MenuItem("Script")) {
-            m_scene.addComponent<scene::ScriptComponent>(m_selected_entity);
+        if (!m_scene.hasComponent<scene::ScriptComponent>(selectedEntity) && ImGui::MenuItem("Script")) {
+            m_scene.addComponent<scene::ScriptComponent>(selectedEntity);
         }
 
-        if (!m_scene.hasComponent<scene::CameraComponent>(m_selected_entity) && ImGui::MenuItem("Camera")) {
-            m_scene.addComponent<scene::CameraComponent>(m_selected_entity);
+        if (!m_scene.hasComponent<scene::CameraComponent>(selectedEntity) && ImGui::MenuItem("Camera")) {
+            m_scene.addComponent<scene::CameraComponent>(selectedEntity);
         }
 
-        if (!m_scene.hasComponent<scene::DirectionalLightComponent>(m_selected_entity) &&
+        if (!m_scene.hasComponent<scene::DirectionalLightComponent>(selectedEntity) &&
             ImGui::MenuItem("Directional Light")) {
-            m_scene.addComponent<scene::DirectionalLightComponent>(m_selected_entity);
+            m_scene.addComponent<scene::DirectionalLightComponent>(selectedEntity);
         }
 
         ImGui::EndPopup();
@@ -195,10 +196,10 @@ void InspectorPanel::onImGuiRender()
 
     ImGui::Separator();
 
-    if (m_scene.hasComponent<scene::TagComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::TagComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Tag", ImGuiTreeNodeFlags_DefaultOpen);
-        if (open && m_scene.hasComponent<scene::TagComponent>(m_selected_entity)) {
-            auto& tag = m_scene.getComponent<scene::TagComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::TagComponent>(selectedEntity)) {
+            auto& tag = m_scene.getComponent<scene::TagComponent>(selectedEntity);
             std::array<char, 256> buffer{};
             const size_t copySize = tag.tag.size() < buffer.size() - 1 ? tag.tag.size() : buffer.size() - 1;
             std::memcpy(buffer.data(), tag.tag.data(), copySize);
@@ -208,12 +209,12 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::TransformComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
-        if (open && m_scene.hasComponent<scene::TransformComponent>(m_selected_entity)) {
-            auto& transform = m_scene.getComponent<scene::TransformComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::TransformComponent>(selectedEntity)) {
+            auto& transform = m_scene.getComponent<scene::TransformComponent>(selectedEntity);
             ImGui::DragFloat3("Translation", &transform.translation.x, 0.1f);
-            syncRotationEditor(m_selected_entity, transform.rotation);
+            syncRotationEditor(selectedEntity, transform.rotation);
             auto rotation = m_rotation_edit_degrees;
             if (ImGui::DragFloat3("Rotation", &rotation.x, 1.0f)) {
                 const auto delta = rotation - m_rotation_edit_degrees;
@@ -225,16 +226,16 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::MeshRendererComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::MeshRendererComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("MeshRendererPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::MeshRendererComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::MeshRendererComponent>(selectedEntity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::MeshRendererComponent>(m_selected_entity)) {
-            auto& meshRenderer = m_scene.getComponent<scene::MeshRendererComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::MeshRendererComponent>(selectedEntity)) {
+            auto& meshRenderer = m_scene.getComponent<scene::MeshRendererComponent>(selectedEntity);
             const BuiltinAssetOption builtinMeshes[] = {
                 {"Cube", asset::builtin::cubeMeshHandle()},
                 {"Plane", asset::builtin::planeMeshHandle()},
@@ -280,16 +281,16 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::SpriteRendererComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("SpriteRendererPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::SpriteRendererComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::SpriteRendererComponent>(selectedEntity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::SpriteRendererComponent>(m_selected_entity)) {
-            auto& spriteRenderer = m_scene.getComponent<scene::SpriteRendererComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::SpriteRendererComponent>(selectedEntity)) {
+            auto& spriteRenderer = m_scene.getComponent<scene::SpriteRendererComponent>(selectedEntity);
             drawAssetHandleControl("Sprite", asset::AssetType::Sprite, spriteRenderer.sprite, {});
             ImGui::ColorEdit4("Color", &spriteRenderer.color.x);
 
@@ -307,16 +308,16 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::ScriptComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("ScriptPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::ScriptComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::ScriptComponent>(selectedEntity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::ScriptComponent>(m_selected_entity)) {
-            auto& script = m_scene.getComponent<scene::ScriptComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::ScriptComponent>(selectedEntity)) {
+            auto& script = m_scene.getComponent<scene::ScriptComponent>(selectedEntity);
             if (ImGui::Button("Add Script")) {
                 script.scripts.push_back({});
             }
@@ -347,16 +348,16 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::CameraComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::CameraComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("CameraPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::CameraComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::CameraComponent>(selectedEntity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::CameraComponent>(m_selected_entity)) {
-            auto& camera = m_scene.getComponent<scene::CameraComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::CameraComponent>(selectedEntity)) {
+            auto& camera = m_scene.getComponent<scene::CameraComponent>(selectedEntity);
             ImGui::Checkbox("Primary", &camera.primary);
             float exposure = camera.camera.getExposure();
             if (ImGui::DragFloat("Exposure", &exposure, 0.05f, 0.0f, 64.0f, "%.3f")) {
@@ -376,16 +377,16 @@ void InspectorPanel::onImGuiRender()
         }
     }
 
-    if (m_scene.hasComponent<scene::DirectionalLightComponent>(m_selected_entity)) {
+    if (m_scene.hasComponent<scene::DirectionalLightComponent>(selectedEntity)) {
         const bool open = ImGui::CollapsingHeader("Directional Light", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("DirectionalLightPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::DirectionalLightComponent>(m_selected_entity);
+                m_scene.removeComponent<scene::DirectionalLightComponent>(selectedEntity);
             }
             ImGui::EndPopup();
         }
-        if (open && m_scene.hasComponent<scene::DirectionalLightComponent>(m_selected_entity)) {
-            auto& light = m_scene.getComponent<scene::DirectionalLightComponent>(m_selected_entity);
+        if (open && m_scene.hasComponent<scene::DirectionalLightComponent>(selectedEntity)) {
+            auto& light = m_scene.getComponent<scene::DirectionalLightComponent>(selectedEntity);
             ImGui::ColorEdit3("Color", &light.color.x);
             ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f, "%.3f");
 

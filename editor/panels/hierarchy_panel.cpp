@@ -1,14 +1,20 @@
-#include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
+#include "../../LunaLite/core/log.h"
 #include "../../LunaLite/scene/components.h"
+#include "../../LunaLiteTooling/commands/command_registry.h"
+#include "../../LunaLiteTooling/commands/scene_commands.h"
+#include "../../LunaLiteTooling/context/tool_context.h"
 #include "content_browser_panel.h"
 #include "hierarchy_panel.h"
 
 #include <cstdint>
 
-#include <filesystem>
 #include <imgui.h>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 
 namespace lunalite::editor {
 namespace {
@@ -18,113 +24,114 @@ struct EntityDragDropPayload {
     uint32_t handle{0};
 };
 
-asset::AssetHandle resolvePrefabCompanion(asset::AssetHandle handle)
-{
-    const auto* metadata = asset::AssetManager::get().getMetadata(handle);
-    if (metadata == nullptr || metadata->Type != asset::AssetType::Mesh) {
-        return {};
-    }
+using EntityUnderlying = std::underlying_type_t<entt::entity>;
 
-    const auto prefabPath = metadata->FilePath.parent_path() / (metadata->FilePath.stem().string() + ".lunaprefab");
-    return asset::AssetManager::get().getHandleByRelativePath(prefabPath);
+uint64_t entityToCommandValue(scene::Entity entity)
+{
+    return static_cast<uint64_t>(static_cast<EntityUnderlying>(entity.getHandle()));
 }
 
-void setEntityTagFromAsset(scene::Scene& scene, scene::Entity entity, asset::AssetHandle handle)
+scene::Entity entityFromCommandValue(uint64_t value)
 {
-    if (const auto* metadata = asset::AssetManager::get().getMetadata(handle)) {
-        auto& tag = scene.getComponent<scene::TagComponent>(entity);
-        tag.tag = metadata->Name.empty() ? metadata->FilePath.stem().string() : metadata->Name;
-    }
+    return scene::Entity{static_cast<entt::entity>(static_cast<EntityUnderlying>(value))};
 }
 
-void addScriptToEntity(scene::Scene& scene, scene::Entity entity, asset::AssetHandle handle)
+tooling::CommandResult
+    executeSceneCommand(scene::Scene& scene, std::string_view commandId, const tooling::CommandArgs& args = {})
 {
-    if (!scene.hasComponent<scene::ScriptComponent>(entity)) {
-        scene.addComponent<scene::ScriptComponent>(entity);
-    }
-
-    auto& script = scene.getComponent<scene::ScriptComponent>(entity);
-    script.scripts.push_back({handle, true});
+    tooling::ToolContext context;
+    context.setScene(scene);
+    return tooling::CommandRegistry::get().execute(commandId, context, args);
 }
 
-scene::Entity createMeshRendererEntity(scene::Scene& scene, asset::AssetHandle meshHandle, scene::Entity parent = {})
+std::optional<scene::Entity>
+    createEntityWithCommand(scene::Scene& scene, std::string name = {}, scene::Entity parent = {})
 {
-    auto entity = scene.createEntity();
-    auto& meshRenderer = scene.addComponent<scene::MeshRendererComponent>(entity);
-    meshRenderer.mesh = meshHandle;
+    tooling::CommandArgs args;
+    if (!name.empty()) {
+        args.set("name", std::move(name));
+    }
     if (parent) {
-        scene.setParent(entity, parent, false);
+        args.set("parent_entity", entityToCommandValue(parent));
     }
-    setEntityTagFromAsset(scene, entity, meshHandle);
-    return entity;
+
+    const auto result = executeSceneCommand(scene, tooling::CreateEntityCommandId, args);
+    if (!result.success) {
+        return std::nullopt;
+    }
+
+    const auto* createdEntity = result.get<uint64_t>("created_entity");
+    if (createdEntity == nullptr) {
+        return std::nullopt;
+    }
+    return entityFromCommandValue(*createdEntity);
 }
 
-scene::Entity
-    createSpriteRendererEntity(scene::Scene& scene, asset::AssetHandle spriteHandle, scene::Entity parent = {})
+bool deleteEntityWithCommand(scene::Scene& scene, scene::Entity entity)
 {
-    auto entity = scene.createEntity();
-    auto& spriteRenderer = scene.addComponent<scene::SpriteRendererComponent>(entity);
-    spriteRenderer.sprite = spriteHandle;
-    if (parent) {
-        scene.setParent(entity, parent, false);
-    }
-    setEntityTagFromAsset(scene, entity, spriteHandle);
-    return entity;
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    return executeSceneCommand(scene, tooling::DeleteEntityCommandId, args).success;
 }
 
-void createEntityFromAsset(scene::Scene& scene,
-                           scene::Entity& selectedEntity,
-                           const AssetDragDropPayload& payload,
-                           scene::Entity targetEntity = {})
+bool setParentWithCommand(scene::Scene& scene, scene::Entity entity, scene::Entity parent, bool keepWorldTransform)
 {
-    const auto handle = payload.handle;
-    if (!handle.isValid()) {
-        return;
-    }
-
-    if (payload.type == asset::AssetType::Prefab) {
-        const auto root = scene.instantiatePrefab(handle, targetEntity);
-        if (root) {
-            selectedEntity = root;
-        }
-        return;
-    }
-
-    if (payload.type == asset::AssetType::Mesh) {
-        const auto prefabHandle = resolvePrefabCompanion(handle);
-        if (prefabHandle.isValid()) {
-            const auto root = scene.instantiatePrefab(prefabHandle, targetEntity);
-            if (root) {
-                selectedEntity = root;
-                return;
-            }
-        }
-
-        auto entity =
-            createMeshRendererEntity(scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
-        selectedEntity = entity;
-        return;
-    }
-
-    if (payload.type == asset::AssetType::Sprite) {
-        auto entity = createSpriteRendererEntity(
-            scene, handle, scene.isValidEntity(targetEntity) ? targetEntity : scene::Entity{});
-        selectedEntity = entity;
-        return;
-    }
-
-    if (payload.type == asset::AssetType::Script) {
-        const bool useTargetEntity = scene.isValidEntity(targetEntity);
-        auto entity = useTargetEntity ? targetEntity : scene.createEntity();
-        addScriptToEntity(scene, entity, handle);
-        if (!useTargetEntity) {
-            setEntityTagFromAsset(scene, entity, handle);
-        }
-        selectedEntity = entity;
-    }
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("parent_entity", entityToCommandValue(parent));
+    args.set("keep_world_transform", keepWorldTransform);
+    return executeSceneCommand(scene, tooling::SetParentCommandId, args).success;
 }
 
-bool acceptEntityDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::Entity targetEntity)
+bool clearParentWithCommand(scene::Scene& scene, scene::Entity entity, bool keepWorldTransform)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("keep_world_transform", keepWorldTransform);
+    return executeSceneCommand(scene, tooling::ClearParentCommandId, args).success;
+}
+
+std::optional<scene::Entity> entityFromCommandResult(const tooling::CommandResult& result)
+{
+    if (const auto* created = result.get<uint64_t>("created_entity")) {
+        return entityFromCommandValue(*created);
+    }
+    if (const auto* affected = result.get<uint64_t>("affected_entity")) {
+        return entityFromCommandValue(*affected);
+    }
+    if (const auto* entity = result.get<uint64_t>("entity")) {
+        return entityFromCommandValue(*entity);
+    }
+    return std::nullopt;
+}
+
+std::optional<scene::Entity> createEntityFromAssetWithCommand(scene::Scene& scene,
+                                                              const AssetDragDropPayload& payload,
+                                                              scene::Entity targetEntity = {})
+{
+    if (!payload.handle.isValid()) {
+        return std::nullopt;
+    }
+
+    tooling::CommandArgs args;
+    args.set("source_asset", payload.handle);
+    args.set("asset_type", static_cast<uint64_t>(payload.type));
+    if (targetEntity) {
+        args.set("target_entity", entityToCommandValue(targetEntity));
+    }
+
+    const auto result = executeSceneCommand(scene, tooling::CreateEntityFromAssetCommandId, args);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to create entity from asset '{}': {}",
+                        payload.handle.toString(),
+                        result.message.empty() ? "unknown error" : result.message);
+        return std::nullopt;
+    }
+
+    return entityFromCommandResult(result);
+}
+
+bool acceptEntityDrop(scene::Scene& scene, tooling::SelectionContext& selection, scene::Entity targetEntity)
 {
     bool accepted = false;
     if (ImGui::BeginDragDropTarget()) {
@@ -134,8 +141,8 @@ bool acceptEntityDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene:
                 const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
                 if (scene.isValidEntity(dragged) &&
                     (!targetEntity || dragged.getHandle() != targetEntity.getHandle()) &&
-                    scene.setParent(dragged, targetEntity, true)) {
-                    selectedEntity = dragged;
+                    setParentWithCommand(scene, dragged, targetEntity, true)) {
+                    selection.selectEntity(dragged);
                     accepted = true;
                 }
             }
@@ -145,13 +152,15 @@ bool acceptEntityDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene:
     return accepted;
 }
 
-void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::Entity targetEntity = {})
+void acceptAssetDrop(scene::Scene& scene, tooling::SelectionContext& selection, scene::Entity targetEntity = {})
 {
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
             if (payload->DataSize == sizeof(AssetDragDropPayload)) {
-                createEntityFromAsset(
-                    scene, selectedEntity, *static_cast<const AssetDragDropPayload*>(payload->Data), targetEntity);
+                const auto& assetPayload = *static_cast<const AssetDragDropPayload*>(payload->Data);
+                if (auto entity = createEntityFromAssetWithCommand(scene, assetPayload, targetEntity)) {
+                    selection.selectEntity(*entity);
+                }
             }
         }
         ImGui::EndDragDropTarget();
@@ -159,7 +168,7 @@ void acceptAssetDrop(scene::Scene& scene, scene::Entity& selectedEntity, scene::
 }
 
 void drawEntityNode(scene::Scene& scene,
-                    scene::Entity& selectedEntity,
+                    tooling::SelectionContext& selection,
                     scene::Entity entity,
                     scene::Entity& entityToDelete)
 {
@@ -181,14 +190,14 @@ void drawEntityNode(scene::Scene& scene,
     if (children.empty()) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }
-    if (selectedEntity.getHandle() == handle) {
+    if (selection.isEntity() && selection.selectedEntity().getHandle() == handle) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
     ImGui::PushID(static_cast<int>(entityId));
     const bool open = ImGui::TreeNodeEx("##entity", flags, "%s", label.c_str());
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        selectedEntity = entity;
+        selection.selectEntity(entity);
     }
 
     if (ImGui::BeginDragDropSource()) {
@@ -198,17 +207,17 @@ void drawEntityNode(scene::Scene& scene,
         ImGui::EndDragDropSource();
     }
 
-    acceptEntityDrop(scene, selectedEntity, entity);
-    acceptAssetDrop(scene, selectedEntity, entity);
+    acceptEntityDrop(scene, selection, entity);
+    acceptAssetDrop(scene, selection, entity);
 
     if (ImGui::BeginPopupContextItem()) {
         if (ImGui::MenuItem("Create Child")) {
-            auto child = scene.createEntity();
-            scene.setParent(child, entity, false);
-            selectedEntity = child;
+            if (auto child = createEntityWithCommand(scene, {}, entity)) {
+                selection.selectEntity(*child);
+            }
         }
         if (scene.getParent(entity) && ImGui::MenuItem("Unparent")) {
-            scene.clearParent(entity, true);
+            clearParentWithCommand(scene, entity, true);
         }
         if (ImGui::MenuItem("Delete")) {
             entityToDelete = entity;
@@ -218,7 +227,7 @@ void drawEntityNode(scene::Scene& scene,
 
     if (open && !children.empty()) {
         for (const auto child : children) {
-            drawEntityNode(scene, selectedEntity, child, entityToDelete);
+            drawEntityNode(scene, selection, child, entityToDelete);
         }
         ImGui::TreePop();
     }
@@ -226,9 +235,9 @@ void drawEntityNode(scene::Scene& scene,
 }
 } // namespace
 
-HierarchyPanel::HierarchyPanel(scene::Scene& scene, scene::Entity& selected_entity)
+HierarchyPanel::HierarchyPanel(scene::Scene& scene, tooling::SelectionContext& selection)
     : m_scene(scene),
-      m_selected_entity(selected_entity)
+      m_selection(selection)
 {}
 
 void HierarchyPanel::onImGuiRender()
@@ -237,21 +246,22 @@ void HierarchyPanel::onImGuiRender()
 
     scene::Entity entity_to_delete;
     for (const auto entity : m_scene.getRootEntities()) {
-        drawEntityNode(m_scene, m_selected_entity, entity, entity_to_delete);
+        drawEntityNode(m_scene, m_selection, entity, entity_to_delete);
     }
 
     const auto available = ImGui::GetContentRegionAvail();
     if (available.y > 0.0f) {
         ImGui::Dummy(available);
-        acceptAssetDrop(m_scene, m_selected_entity);
+        acceptAssetDrop(m_scene, m_selection);
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(EntityDragDropPayloadName)) {
                 if (payload->DataSize == sizeof(EntityDragDropPayload)) {
                     const auto& entityPayload = *static_cast<const EntityDragDropPayload*>(payload->Data);
                     const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
                     if (m_scene.isValidEntity(dragged)) {
-                        m_scene.clearParent(dragged, true);
-                        m_selected_entity = dragged;
+                        if (clearParentWithCommand(m_scene, dragged, true)) {
+                            m_selection.selectEntity(dragged);
+                        }
                     }
                 }
             }
@@ -261,24 +271,26 @@ void HierarchyPanel::onImGuiRender()
         if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext",
                                            ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
             if (ImGui::MenuItem("Create Entity")) {
-                m_selected_entity = m_scene.createEntity();
+                if (auto entity = createEntityWithCommand(m_scene)) {
+                    m_selection.selectEntity(*entity);
+                }
             }
             if (ImGui::BeginMenu("Create Builtin Mesh")) {
                 if (ImGui::MenuItem("Cube")) {
-                    auto entity = createMeshRendererEntity(m_scene, asset::builtin::cubeMeshHandle());
-                    m_scene.getComponent<scene::MeshRendererComponent>(entity).materials = {
-                        asset::builtin::defaultMaterialHandle(),
-                    };
-                    m_scene.getComponent<scene::TagComponent>(entity).tag = "Cube";
-                    m_selected_entity = entity;
+                    if (auto entity = createEntityWithCommand(m_scene, "Cube")) {
+                        auto& meshRenderer = m_scene.addComponent<scene::MeshRendererComponent>(*entity);
+                        meshRenderer.mesh = asset::builtin::cubeMeshHandle();
+                        meshRenderer.materials = {asset::builtin::defaultMaterialHandle()};
+                        m_selection.selectEntity(*entity);
+                    }
                 }
                 if (ImGui::MenuItem("Plane")) {
-                    auto entity = createMeshRendererEntity(m_scene, asset::builtin::planeMeshHandle());
-                    m_scene.getComponent<scene::MeshRendererComponent>(entity).materials = {
-                        asset::builtin::defaultMaterialHandle(),
-                    };
-                    m_scene.getComponent<scene::TagComponent>(entity).tag = "Plane";
-                    m_selected_entity = entity;
+                    if (auto entity = createEntityWithCommand(m_scene, "Plane")) {
+                        auto& meshRenderer = m_scene.addComponent<scene::MeshRendererComponent>(*entity);
+                        meshRenderer.mesh = asset::builtin::planeMeshHandle();
+                        meshRenderer.materials = {asset::builtin::defaultMaterialHandle()};
+                        m_selection.selectEntity(*entity);
+                    }
                 }
                 ImGui::EndMenu();
             }
@@ -287,9 +299,9 @@ void HierarchyPanel::onImGuiRender()
     }
 
     if (entity_to_delete) {
-        m_scene.destroyEntity(entity_to_delete);
-        if (m_selected_entity.getHandle() == entity_to_delete.getHandle()) {
-            m_selected_entity = scene::Entity{};
+        deleteEntityWithCommand(m_scene, entity_to_delete);
+        if (m_selection.isEntity() && !m_scene.isValidEntity(m_selection.selectedEntity())) {
+            m_selection.clear();
         }
     }
 

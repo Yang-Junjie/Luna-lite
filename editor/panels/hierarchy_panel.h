@@ -1,18 +1,19 @@
 #pragma once
 
 #include "../../LunaLite/scene/scene.h"
+#include "../../LunaLiteTooling/context/selection_context.h"
 
 namespace lunalite::editor {
 
 class HierarchyPanel {
 public:
-    HierarchyPanel(scene::Scene& scene, scene::Entity& selected_entity);
+    HierarchyPanel(scene::Scene& scene, tooling::SelectionContext& selection);
 
     void onImGuiRender();
 
 private:
     scene::Scene& m_scene;
-    scene::Entity& m_selected_entity;
+    tooling::SelectionContext& m_selection;
 };
 
 } // namespace lunalite::editor

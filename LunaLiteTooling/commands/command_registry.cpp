@@ -2,6 +2,7 @@
 
 #include "../../LunaLite/core/log.h"
 #include "asset_commands.h"
+#include "scene_commands.h"
 
 #include <utility>
 
@@ -15,6 +16,7 @@ void CommandRegistry::registerDefaults()
 
     m_defaults_registered = true;
     registerAssetCommands(*this);
+    registerSceneCommands(*this);
 }
 
 bool CommandRegistry::registerCommand(CommandDesc command)

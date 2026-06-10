@@ -2,6 +2,7 @@
 
 #include "../../LunaLite/asset/asset.h"
 #include "../../LunaLite/asset/asset_types.h"
+#include "../../LunaLiteTooling/context/selection_context.h"
 
 namespace lunalite::editor {
 
@@ -14,7 +15,12 @@ struct AssetDragDropPayload {
 
 class ContentBrowserPanel {
 public:
+    explicit ContentBrowserPanel(tooling::SelectionContext& selection);
+
     void onImGuiRender();
+
+private:
+    tooling::SelectionContext& m_selection;
 };
 
 } // namespace lunalite::editor
