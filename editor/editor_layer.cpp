@@ -1,5 +1,9 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/core/application.h"
+#include "../LunaLite/core/event.h"
+#include "../LunaLite/core/input.h"
+#include "../LunaLite/core/key_codes.h"
+#include "../LunaLite/core/key_event.h"
 #include "../LunaLite/core/log.h"
 #include "../LunaLite/imgui/imgui_renderer.h"
 #include "../LunaLite/platform/common/file_dialogs.h"
@@ -10,42 +14,17 @@
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "../LunaLite/scene/scene_serializer.h"
-#include "../LunaLiteTooling/commands/command_registry.h"
-#include "../LunaLiteTooling/commands/scene_commands.h"
-#include "../LunaLiteTooling/context/tool_context.h"
+#include "editor_actions.h"
 #include "editor_layer.h"
-
-#include <cstdint>
 
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <imgui.h>
 #include <optional>
-#include <type_traits>
+#include <utility>
 
 namespace lunalite::editor {
 namespace {
-using EntityUnderlying = std::underlying_type_t<entt::entity>;
-
-scene::Entity entityFromCommandValue(uint64_t value)
-{
-    return scene::Entity{static_cast<entt::entity>(static_cast<EntityUnderlying>(value))};
-}
-
-std::optional<scene::Entity> entityFromCommandResult(const tooling::CommandResult& result)
-{
-    if (const auto* created = result.get<uint64_t>("created_entity")) {
-        return entityFromCommandValue(*created);
-    }
-    if (const auto* affected = result.get<uint64_t>("affected_entity")) {
-        return entityFromCommandValue(*affected);
-    }
-    if (const auto* entity = result.get<uint64_t>("entity")) {
-        return entityFromCommandValue(*entity);
-    }
-    return std::nullopt;
-}
-
 std::optional<renderer::interface::AABB> meshRendererWorldAABB(scene::Scene& scene, scene::Entity entity)
 {
     if (!scene.isValidEntity(entity) || !scene.hasComponent<scene::MeshRendererComponent>(entity)) {
@@ -100,6 +79,14 @@ void EditorLayer::onRender()
     drawDebugOverlays();
 }
 
+void EditorLayer::onEvent(core::Event& event)
+{
+    core::EventDispatcher dispatcher(event);
+    dispatcher.dispatch<core::KeyPressedEvent>([this](core::KeyPressedEvent& keyEvent) {
+        return onKeyPressedEvent(keyEvent);
+    });
+}
+
 void EditorLayer::onImGuiRender()
 {
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) {
@@ -137,29 +124,158 @@ void EditorLayer::drawMenuBar()
     }
 
     if (ImGui::BeginMenu("Scene")) {
-        if (ImGui::MenuItem("Open Scene")) {
+        if (ImGui::MenuItem("Open Scene", "Ctrl+O")) {
             openScene();
         }
-        if (ImGui::MenuItem("Create Scene")) {
+        if (ImGui::MenuItem("Create Scene", "Ctrl+N")) {
             createScene();
         }
-        if (ImGui::MenuItem("Save Scene")) {
+        if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
             saveScene();
         }
         ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Edit")) {
+        const bool can_modify_scene = canModifyScene();
+        if (ImGui::MenuItem("Create Entity", "Ctrl+Shift+N", false, can_modify_scene)) {
+            createSelectedEntity();
+        }
+        const bool canDeleteSelection =
+            can_modify_scene && m_selection.isEntity() && m_scene.isValidEntity(m_selection.selectedEntity());
+        if (ImGui::MenuItem("Delete Selected", "Del", false, canDeleteSelection)) {
+            deleteSelectedEntity();
+        }
+        const bool canUnparentSelection = can_modify_scene && m_selection.isEntity() &&
+                                          m_scene.isValidEntity(m_selection.selectedEntity()) &&
+                                          m_scene.getParent(m_selection.selectedEntity());
+        if (ImGui::MenuItem("Unparent Selected", nullptr, false, canUnparentSelection)) {
+            unparentSelectedEntity();
+        }
+        ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Runtime")) {
-        if (ImGui::MenuItem("Play", nullptr, false, m_scene_state != SceneState::Play)) {
+        if (ImGui::MenuItem("Play", "F5", false, m_scene_state != SceneState::Play)) {
             startRuntime();
         }
-        if (ImGui::MenuItem("Stop", nullptr, false, m_scene_state == SceneState::Play)) {
+        if (ImGui::MenuItem("Stop", "F5", false, m_scene_state == SceneState::Play)) {
             stopRuntime();
         }
         ImGui::EndMenu();
     }
 
     ImGui::EndMainMenuBar();
+}
+
+bool EditorLayer::onKeyPressedEvent(core::KeyPressedEvent& event)
+{
+    if (event.isRepeat()) {
+        return false;
+    }
+
+    const bool controlDown =
+        core::Input::isKeyPressed(core::KeyCode::LeftControl) || core::Input::isKeyPressed(core::KeyCode::RightControl);
+    const bool shiftDown =
+        core::Input::isKeyPressed(core::KeyCode::LeftShift) || core::Input::isKeyPressed(core::KeyCode::RightShift);
+    const bool wantsTextInput = ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantTextInput;
+
+    switch (event.getKeyCode()) {
+        case core::KeyCode::O:
+            if (controlDown && !shiftDown) {
+                openScene();
+                return true;
+            }
+            break;
+        case core::KeyCode::N:
+            if (controlDown && !shiftDown) {
+                createScene();
+                return true;
+            }
+            if (controlDown && shiftDown) {
+                if (!wantsTextInput && canModifyScene()) {
+                    createSelectedEntity();
+                    return true;
+                }
+            }
+            break;
+        case core::KeyCode::S:
+            if (controlDown && !shiftDown) {
+                saveScene();
+                return true;
+            }
+            break;
+        case core::KeyCode::F5:
+            if (!controlDown && !shiftDown) {
+                if (m_scene_state == SceneState::Play) {
+                    stopRuntime();
+                } else {
+                    startRuntime();
+                }
+                return true;
+            }
+            break;
+        case core::KeyCode::Delete:
+            if (!wantsTextInput && canModifyScene()) {
+                deleteSelectedEntity();
+                return true;
+            }
+            break;
+        default:
+            break;
+    }
+
+    return false;
+}
+
+void EditorLayer::createSelectedEntity(std::string name, scene::Entity parent)
+{
+    if (!canModifyScene()) {
+        return;
+    }
+
+    if (auto entity = actions::createEntity(m_scene, std::move(name), parent)) {
+        m_selection.selectEntity(*entity);
+    }
+}
+
+void EditorLayer::deleteSelectedEntity()
+{
+    if (!canModifyScene() || !m_selection.isEntity()) {
+        return;
+    }
+
+    const auto selectedEntity = m_selection.selectedEntity();
+    if (!m_scene.isValidEntity(selectedEntity)) {
+        m_selection.clear();
+        return;
+    }
+
+    actions::deleteEntity(m_scene, selectedEntity);
+    if (m_selection.isEntity() && !m_scene.isValidEntity(m_selection.selectedEntity())) {
+        m_selection.clear();
+    }
+}
+
+void EditorLayer::unparentSelectedEntity()
+{
+    if (!canModifyScene() || !m_selection.isEntity()) {
+        return;
+    }
+
+    const auto selectedEntity = m_selection.selectedEntity();
+    if (!m_scene.isValidEntity(selectedEntity) || !m_scene.getParent(selectedEntity)) {
+        return;
+    }
+
+    if (actions::clearParent(m_scene, selectedEntity, true)) {
+        m_selection.selectEntity(selectedEntity);
+    }
+}
+
+bool EditorLayer::canModifyScene() const
+{
+    return m_scene_state != SceneState::Play;
 }
 
 void EditorLayer::drawDebugOverlays()
@@ -379,22 +495,7 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
         return;
     }
 
-    tooling::ToolContext context;
-    context.setScene(m_scene);
-
-    tooling::CommandArgs args;
-    args.set("source_asset", payload.handle);
-    args.set("asset_type", static_cast<uint64_t>(payload.type));
-
-    const auto result = tooling::CommandRegistry::get().execute(tooling::CreateEntityFromAssetCommandId, context, args);
-    if (!result.success) {
-        LUNA_CORE_ERROR("Failed to create entity from asset '{}': {}",
-                        payload.handle.toString(),
-                        result.message.empty() ? "unknown error" : result.message);
-        return;
-    }
-
-    if (const auto entity = entityFromCommandResult(result)) {
+    if (const auto entity = actions::createEntityFromAsset(m_scene, payload.handle, payload.type)) {
         m_selection.selectEntity(*entity);
     }
 }

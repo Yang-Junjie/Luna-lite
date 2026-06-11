@@ -1,6 +1,7 @@
 add_executable(LunaLiteEditor
     application.cpp
     editor_camera.cpp
+    editor_actions.cpp
     editor_layer.cpp
     panels/content_browser_panel.cpp
     panels/debug_panel.cpp

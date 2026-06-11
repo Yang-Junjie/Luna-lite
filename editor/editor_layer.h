@@ -16,6 +16,11 @@
 #include <filesystem>
 #include <glm/glm.hpp>
 
+namespace lunalite::core {
+class Event;
+class KeyPressedEvent;
+} // namespace lunalite::core
+
 namespace lunalite::editor {
 
 enum class SceneState {
@@ -30,6 +35,7 @@ public:
     void onAttach() override;
     void onUpdate(core::Timestep dt) override;
     void onRender() override;
+    void onEvent(core::Event& event) override;
     void onImGuiRender() override;
 
 private:
@@ -55,7 +61,16 @@ private:
     void openScene();
     void saveScene();
     bool loadScene(const std::filesystem::path& scene_path);
+
     void createEntityFromAsset(const AssetDragDropPayload& payload);
+    bool onKeyPressedEvent(core::KeyPressedEvent& event);
+
+    void createSelectedEntity(std::string name = {}, scene::Entity parent = {});
+    void deleteSelectedEntity();
+    void unparentSelectedEntity();
+
+    bool canModifyScene() const;
+
     std::filesystem::path projectRelativePath(const std::filesystem::path& path) const;
 
     EditorCamera m_editor_camera;

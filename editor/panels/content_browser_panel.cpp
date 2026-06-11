@@ -3,8 +3,7 @@
 #include "../../LunaLite/core/log.h"
 #include "../../LunaLite/project/project_manager.h"
 #include "../../LunaLiteTooling/commands/asset_commands.h"
-#include "../../LunaLiteTooling/commands/command_registry.h"
-#include "../../LunaLiteTooling/context/tool_context.h"
+#include "../editor_actions.h"
 #include "content_browser_panel.h"
 
 #include <filesystem>
@@ -92,13 +91,9 @@ void ContentBrowserPanel::onImGuiRender()
     }
 
     if (pendingCommandRequest) {
-        tooling::ToolContext context;
-        tooling::CommandArgs args;
-        args.set("source_asset", pendingCommandRequest->source);
-        args.set("target_directory", pendingCommandRequest->target_directory);
-
-        const auto result =
-            tooling::CommandRegistry::get().execute(pendingCommandRequest->command_id, context, args);
+        const auto result = actions::executeAssetCommand(pendingCommandRequest->command_id,
+                                                         pendingCommandRequest->source,
+                                                         pendingCommandRequest->target_directory);
         if (!result.success) {
             LUNA_CORE_ERROR("Failed to execute command '{}': {}",
                             pendingCommandRequest->command_id,
