@@ -79,6 +79,15 @@ target_link_libraries(SceneCommandsTest
         LunaLiteTooling
 )
 
+add_executable(CommandHistoryTest
+    command_history_test.cpp
+)
+
+target_link_libraries(CommandHistoryTest
+    PRIVATE
+        LunaLiteTooling
+)
+
 add_executable(ScriptRuntimeTest
     script_runtime_test.cpp
 )

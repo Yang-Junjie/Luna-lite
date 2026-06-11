@@ -13,6 +13,7 @@ public:
     std::string_view id() const override;
     std::string_view label() const override;
     std::string_view category() const override;
+    bool canUndo() const override;
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
@@ -21,6 +22,7 @@ public:
     std::string_view id() const override;
     std::string_view label() const override;
     std::string_view category() const override;
+    bool canUndo() const override;
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
@@ -29,6 +31,7 @@ public:
     std::string_view id() const override;
     std::string_view label() const override;
     std::string_view category() const override;
+    bool canUndo() const override;
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
@@ -37,6 +40,7 @@ public:
     std::string_view id() const override;
     std::string_view label() const override;
     std::string_view category() const override;
+    bool canUndo() const override;
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
@@ -45,6 +49,7 @@ public:
     std::string_view id() const override;
     std::string_view label() const override;
     std::string_view category() const override;
+    bool canUndo() const override;
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 

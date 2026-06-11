@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
@@ -112,12 +113,11 @@ renderer::interface::Camera::ProjectionType stringToProjectionType(const std::st
 
     return renderer::interface::Camera::ProjectionType::Perspective;
 }
-} // namespace
 
-bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path& scene_path)
+YAML::Node serializeSceneNode(const Scene& scene, std::string_view scene_name)
 {
     YAML::Node root;
-    root["Scene"] = scene_path.stem().string();
+    root["Scene"] = scene_name.empty() ? "Scene" : std::string(scene_name);
     root["Settings"]["EnvironmentMap"] = static_cast<uint64_t>(scene.getSettings().environment_map);
     root["Settings"]["EnvironmentIntensity"] = scene.getSettings().environment_intensity;
 
@@ -266,45 +266,15 @@ bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path&
     }
 
     root["Entities"] = entities;
-
-    if (!scene_path.parent_path().empty()) {
-        std::error_code error;
-        std::filesystem::create_directories(scene_path.parent_path(), error);
-        if (error) {
-            LUNA_CORE_ERROR(
-                "Failed to create scene directory '{}': {}", scene_path.parent_path().string(), error.message());
-            return false;
-        }
-    }
-
-    std::ofstream out(scene_path);
-    if (!out.is_open()) {
-        LUNA_CORE_ERROR("Failed to open scene file for writing: '{}'", scene_path.string());
-        return false;
-    }
-
-    out << root;
-    if (!out.good()) {
-        LUNA_CORE_ERROR("Failed to write scene file: '{}'", scene_path.string());
-        return false;
-    }
-
-    LUNA_CORE_INFO("Serialized scene '{}' with {} entity/entities", scene_path.string(), sceneEntities.size());
-    return true;
+    return root;
 }
 
-bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& scene_path)
+bool deserializeSceneNode(Scene& scene, const YAML::Node& root, std::string_view source_name)
 {
-    if (!std::filesystem::exists(scene_path)) {
-        LUNA_CORE_ERROR("Failed to deserialize scene: '{}' does not exist", scene_path.string());
-        return false;
-    }
-
     try {
-        const YAML::Node root = YAML::LoadFile(scene_path.string());
         const YAML::Node entities = root["Entities"];
         if (!entities || !entities.IsSequence()) {
-            LUNA_CORE_ERROR("Failed to deserialize scene '{}': missing Entities", scene_path.string());
+            LUNA_CORE_ERROR("Failed to deserialize scene '{}': missing Entities", source_name);
             return false;
         }
 
@@ -318,7 +288,10 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
         entityMap.reserve(entities.size());
         for (const auto& serializedEntity : entities) {
             const auto sourceHandle = serializedEntity["Entity"].as<uint32_t>(0);
-            entityMap.emplace(sourceHandle, scene.createEntity());
+            Entity entity{scene.getRegistry().create(static_cast<entt::entity>(sourceHandle))};
+            scene.addComponent<TagComponent>(entity);
+            scene.addComponent<TransformComponent>(entity);
+            entityMap.emplace(sourceHandle, entity);
         }
 
         for (const auto& serializedEntity : entities) {
@@ -424,12 +397,83 @@ bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& sce
             }
         }
 
-        LUNA_CORE_INFO("Deserialized scene '{}' with {} entity/entities", scene_path.string(), entities.size());
+        LUNA_CORE_INFO("Deserialized scene '{}' with {} entity/entities", source_name, entities.size());
         return true;
+    } catch (const YAML::Exception& exception) {
+        LUNA_CORE_ERROR("Failed to deserialize scene '{}': {}", source_name, exception.what());
+    } catch (const std::filesystem::filesystem_error& exception) {
+        LUNA_CORE_ERROR("Failed to deserialize scene '{}': {}", source_name, exception.what());
+    }
+
+    return false;
+}
+} // namespace
+
+bool SceneSerializer::serialize(const Scene& scene, const std::filesystem::path& scene_path)
+{
+    const auto root = serializeSceneNode(scene, scene_path.stem().string());
+
+    if (!scene_path.parent_path().empty()) {
+        std::error_code error;
+        std::filesystem::create_directories(scene_path.parent_path(), error);
+        if (error) {
+            LUNA_CORE_ERROR(
+                "Failed to create scene directory '{}': {}", scene_path.parent_path().string(), error.message());
+            return false;
+        }
+    }
+
+    std::ofstream out(scene_path);
+    if (!out.is_open()) {
+        LUNA_CORE_ERROR("Failed to open scene file for writing: '{}'", scene_path.string());
+        return false;
+    }
+
+    out << root;
+    if (!out.good()) {
+        LUNA_CORE_ERROR("Failed to write scene file: '{}'", scene_path.string());
+        return false;
+    }
+
+    const auto entityCount = root["Entities"] && root["Entities"].IsSequence() ? root["Entities"].size() : 0;
+    LUNA_CORE_INFO("Serialized scene '{}' with {} entity/entities", scene_path.string(), entityCount);
+    return true;
+}
+
+std::string SceneSerializer::serializeToString(const Scene& scene)
+{
+    const auto root = serializeSceneNode(scene, "Snapshot");
+    std::ostringstream out;
+    out << root;
+    return out.str();
+}
+
+bool SceneSerializer::deserialize(Scene& scene, const std::filesystem::path& scene_path)
+{
+    if (!std::filesystem::exists(scene_path)) {
+        LUNA_CORE_ERROR("Failed to deserialize scene: '{}' does not exist", scene_path.string());
+        return false;
+    }
+
+    try {
+        const YAML::Node root = YAML::LoadFile(scene_path.string());
+        return deserializeSceneNode(scene, root, scene_path.string());
     } catch (const YAML::Exception& exception) {
         LUNA_CORE_ERROR("Failed to deserialize scene '{}': {}", scene_path.string(), exception.what());
     } catch (const std::filesystem::filesystem_error& exception) {
         LUNA_CORE_ERROR("Failed to deserialize scene '{}': {}", scene_path.string(), exception.what());
+    }
+
+    return false;
+}
+
+bool SceneSerializer::deserializeFromString(Scene& scene, const std::string& scene_data)
+{
+    try {
+        const YAML::Node root = YAML::Load(scene_data);
+        return deserializeSceneNode(scene, root, "Snapshot");
+    } catch (const YAML::Exception& exception) {
+        LUNA_CORE_ERROR("Failed to deserialize scene snapshot: {}", exception.what());
     }
 
     return false;

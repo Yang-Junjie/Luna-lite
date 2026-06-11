@@ -208,6 +208,10 @@ int main()
         std::cerr << "Failed to find serialized hierarchy entities.\n";
         return 1;
     }
+    if (loadedParent.getHandle() != parentEntity.getHandle() || loadedChild.getHandle() != childEntity.getHandle()) {
+        std::cerr << "Scene deserialization did not preserve entity handles.\n";
+        return 1;
+    }
     if (loadedScene.getParent(loadedChild).getHandle() != loadedParent.getHandle()) {
         std::cerr << "Failed to deserialize parent relation.\n";
         return 1;

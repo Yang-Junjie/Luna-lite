@@ -1,6 +1,6 @@
 #include "../LunaLite/core/log.h"
 #include "../LunaLite/scene/components.h"
-#include "../LunaLiteTooling/commands/command_registry.h"
+#include "../LunaLiteTooling/commands/command_manager.h"
 #include "../LunaLiteTooling/commands/scene_commands.h"
 #include "../LunaLiteTooling/context/tool_context.h"
 #include "editor_actions.h"
@@ -31,7 +31,7 @@ tooling::CommandResult executeCommand(tooling::ToolContext& context,
                                       std::string_view commandId,
                                       const tooling::CommandArgs& args)
 {
-    return tooling::CommandRegistry::get().execute(commandId, context, args);
+    return tooling::CommandManager::get().execute(commandId, context, args);
 }
 } // namespace
 

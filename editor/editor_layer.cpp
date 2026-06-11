@@ -14,6 +14,8 @@
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene_renderer.h"
 #include "../LunaLite/scene/scene_serializer.h"
+#include "../LunaLiteTooling/commands/command_manager.h"
+#include "../LunaLiteTooling/context/tool_context.h"
 #include "editor_actions.h"
 #include "editor_layer.h"
 
@@ -138,6 +140,23 @@ void EditorLayer::drawMenuBar()
 
     if (ImGui::BeginMenu("Edit")) {
         const bool can_modify_scene = canModifyScene();
+        const bool canUndo = can_modify_scene && tooling::CommandManager::get().canUndo();
+        if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) {
+            tooling::ToolContext context;
+            context.setScene(m_scene);
+            if (tooling::CommandManager::get().undo(context)) {
+                m_selection.clear();
+            }
+        }
+        const bool canRedo = can_modify_scene && tooling::CommandManager::get().canRedo();
+        if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) {
+            tooling::ToolContext context;
+            context.setScene(m_scene);
+            if (tooling::CommandManager::get().redo(context)) {
+                m_selection.clear();
+            }
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem("Create Entity", "Ctrl+Shift+N", false, can_modify_scene)) {
             createSelectedEntity();
         }
@@ -203,6 +222,34 @@ bool EditorLayer::onKeyPressedEvent(core::KeyPressedEvent& event)
             if (controlDown && !shiftDown) {
                 saveScene();
                 return true;
+            }
+            break;
+        case core::KeyCode::Z:
+            if (controlDown && !shiftDown && !wantsTextInput && canModifyScene()) {
+                tooling::ToolContext context;
+                context.setScene(m_scene);
+                if (tooling::CommandManager::get().undo(context)) {
+                    m_selection.clear();
+                    return true;
+                }
+            }
+            if (controlDown && shiftDown && !wantsTextInput && canModifyScene()) {
+                tooling::ToolContext context;
+                context.setScene(m_scene);
+                if (tooling::CommandManager::get().redo(context)) {
+                    m_selection.clear();
+                    return true;
+                }
+            }
+            break;
+        case core::KeyCode::Y:
+            if (controlDown && !shiftDown && !wantsTextInput && canModifyScene()) {
+                tooling::ToolContext context;
+                context.setScene(m_scene);
+                if (tooling::CommandManager::get().redo(context)) {
+                    m_selection.clear();
+                    return true;
+                }
             }
             break;
         case core::KeyCode::F5:
@@ -369,6 +416,7 @@ void EditorLayer::createProject()
 
     asset::AssetManager::get().loadProjectAssets();
     m_scene.clear();
+    tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
 }
@@ -389,6 +437,7 @@ void EditorLayer::openProject()
 
     asset::AssetManager::get().loadProjectAssets();
     m_scene.clear();
+    tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
 
@@ -439,6 +488,7 @@ void EditorLayer::createScene()
     }
 
     m_scene.clear();
+    tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     if (!scene::SceneSerializer::serialize(m_scene, scenePath)) {
         return;
@@ -479,6 +529,7 @@ void EditorLayer::saveScene()
 bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
 {
     stopRuntime();
+    tooling::CommandManager::get().clearHistory();
 
     if (!scene::SceneSerializer::deserialize(m_scene, scene_path)) {
         return false;

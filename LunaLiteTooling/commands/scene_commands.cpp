@@ -341,6 +341,11 @@ std::string_view CreateEntityCommand::category() const
     return "Scene";
 }
 
+bool CreateEntityCommand::canUndo() const
+{
+    return true;
+}
+
 CommandResult CreateEntityCommand::execute(ToolContext& context, const CommandArgs& args)
 {
     return createEntity(context, args);
@@ -359,6 +364,11 @@ std::string_view DeleteEntityCommand::label() const
 std::string_view DeleteEntityCommand::category() const
 {
     return "Scene";
+}
+
+bool DeleteEntityCommand::canUndo() const
+{
+    return true;
 }
 
 CommandResult DeleteEntityCommand::execute(ToolContext& context, const CommandArgs& args)
@@ -381,6 +391,11 @@ std::string_view SetParentCommand::category() const
     return "Scene";
 }
 
+bool SetParentCommand::canUndo() const
+{
+    return true;
+}
+
 CommandResult SetParentCommand::execute(ToolContext& context, const CommandArgs& args)
 {
     return setParent(context, args);
@@ -401,6 +416,11 @@ std::string_view ClearParentCommand::category() const
     return "Scene";
 }
 
+bool ClearParentCommand::canUndo() const
+{
+    return true;
+}
+
 CommandResult ClearParentCommand::execute(ToolContext& context, const CommandArgs& args)
 {
     return clearParent(context, args);
@@ -419,6 +439,11 @@ std::string_view CreateEntityFromAssetCommand::label() const
 std::string_view CreateEntityFromAssetCommand::category() const
 {
     return "Scene";
+}
+
+bool CreateEntityFromAssetCommand::canUndo() const
+{
+    return true;
 }
 
 CommandResult CreateEntityFromAssetCommand::execute(ToolContext& context, const CommandArgs& args)
