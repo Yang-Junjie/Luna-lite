@@ -1,12 +1,12 @@
-#include "scene_commands.h"
-
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/scene/components.h"
 #include "../../LunaLite/scene/scene.h"
 #include "command_registry.h"
+#include "scene_commands.h"
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -323,44 +323,116 @@ CommandResult createEntityFromAsset(ToolContext& context, const CommandArgs& arg
 
     return CommandResult::fail("scene.create_entity_from_asset does not support this asset type");
 }
+
 } // namespace
+
+std::string_view CreateEntityCommand::id() const
+{
+    return CreateEntityCommandId;
+}
+
+std::string_view CreateEntityCommand::label() const
+{
+    return "Create Entity";
+}
+
+std::string_view CreateEntityCommand::category() const
+{
+    return "Scene";
+}
+
+CommandResult CreateEntityCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return createEntity(context, args);
+}
+
+std::string_view DeleteEntityCommand::id() const
+{
+    return DeleteEntityCommandId;
+}
+
+std::string_view DeleteEntityCommand::label() const
+{
+    return "Delete Entity";
+}
+
+std::string_view DeleteEntityCommand::category() const
+{
+    return "Scene";
+}
+
+CommandResult DeleteEntityCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return deleteEntity(context, args);
+}
+
+std::string_view SetParentCommand::id() const
+{
+    return SetParentCommandId;
+}
+
+std::string_view SetParentCommand::label() const
+{
+    return "Set Parent";
+}
+
+std::string_view SetParentCommand::category() const
+{
+    return "Scene";
+}
+
+CommandResult SetParentCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return setParent(context, args);
+}
+
+std::string_view ClearParentCommand::id() const
+{
+    return ClearParentCommandId;
+}
+
+std::string_view ClearParentCommand::label() const
+{
+    return "Clear Parent";
+}
+
+std::string_view ClearParentCommand::category() const
+{
+    return "Scene";
+}
+
+CommandResult ClearParentCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return clearParent(context, args);
+}
+
+std::string_view CreateEntityFromAssetCommand::id() const
+{
+    return CreateEntityFromAssetCommandId;
+}
+
+std::string_view CreateEntityFromAssetCommand::label() const
+{
+    return "Create Entity From Asset";
+}
+
+std::string_view CreateEntityFromAssetCommand::category() const
+{
+    return "Scene";
+}
+
+CommandResult CreateEntityFromAssetCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return createEntityFromAsset(context, args);
+}
 
 void registerSceneCommands(CommandRegistry& registry)
 {
-    registry.registerCommand(CommandDesc{
-        .id = std::string{CreateEntityCommandId},
-        .label = "Create Entity",
-        .category = "Scene",
-        .execute = createEntity,
-    });
-
-    registry.registerCommand(CommandDesc{
-        .id = std::string{DeleteEntityCommandId},
-        .label = "Delete Entity",
-        .category = "Scene",
-        .execute = deleteEntity,
-    });
-
-    registry.registerCommand(CommandDesc{
-        .id = std::string{SetParentCommandId},
-        .label = "Set Parent",
-        .category = "Scene",
-        .execute = setParent,
-    });
-
-    registry.registerCommand(CommandDesc{
-        .id = std::string{ClearParentCommandId},
-        .label = "Clear Parent",
-        .category = "Scene",
-        .execute = clearParent,
-    });
-
-    registry.registerCommand(CommandDesc{
-        .id = std::string{CreateEntityFromAssetCommandId},
-        .label = "Create Entity From Asset",
-        .category = "Scene",
-        .execute = createEntityFromAsset,
-    });
+    registry.registerCommand(std::make_unique<CreateEntityCommand>());
+    registry.registerCommand(std::make_unique<DeleteEntityCommand>());
+    registry.registerCommand(std::make_unique<SetParentCommand>());
+    registry.registerCommand(std::make_unique<ClearParentCommand>());
+    registry.registerCommand(std::make_unique<CreateEntityFromAssetCommand>());
 }
 
 } // namespace lunalite::tooling

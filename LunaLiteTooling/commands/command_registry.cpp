@@ -1,9 +1,10 @@
-#include "command_registry.h"
-
 #include "../../LunaLite/core/log.h"
 #include "asset_commands.h"
+#include "command_registry.h"
 #include "scene_commands.h"
 
+#include <memory>
+#include <string>
 #include <utility>
 
 namespace lunalite::tooling {
@@ -19,26 +20,30 @@ void CommandRegistry::registerDefaults()
     registerSceneCommands(*this);
 }
 
-bool CommandRegistry::registerCommand(CommandDesc command)
+bool CommandRegistry::registerCommand(std::unique_ptr<Command> command)
 {
-    if (command.id.empty()) {
+    if (command == nullptr) {
+        LUNA_CORE_ERROR("Failed to register command: null command");
+        return false;
+    }
+
+    const auto id = command->id();
+    if (id.empty()) {
         LUNA_CORE_ERROR("Failed to register command: missing id");
         return false;
     }
-    if (!command.execute) {
-        LUNA_CORE_ERROR("Failed to register command '{}': missing execute handler", command.id);
-        return false;
-    }
-    if (m_commands.contains(command.id)) {
-        LUNA_CORE_ERROR("Failed to register command '{}': duplicate id", command.id);
+
+    const auto key = std::string{id};
+    if (m_commands.contains(key)) {
+        LUNA_CORE_ERROR("Failed to register command '{}': duplicate id", id);
         return false;
     }
 
-    m_commands.emplace(command.id, std::move(command));
+    m_commands.emplace(std::move(key), std::move(command));
     return true;
 }
 
-const CommandDesc* CommandRegistry::find(std::string_view id)
+Command* CommandRegistry::find(std::string_view id)
 {
     registerDefaults();
 
@@ -46,24 +51,24 @@ const CommandDesc* CommandRegistry::find(std::string_view id)
     if (command == m_commands.end()) {
         return nullptr;
     }
-    return &command->second;
+    return command->second.get();
 }
 
-std::vector<const CommandDesc*> CommandRegistry::commands()
+std::vector<Command*> CommandRegistry::commands()
 {
     registerDefaults();
 
-    std::vector<const CommandDesc*> result;
+    std::vector<Command*> result;
     result.reserve(m_commands.size());
     for (const auto& [_, command] : m_commands) {
-        result.push_back(&command);
+        result.push_back(command.get());
     }
     return result;
 }
 
 CommandResult CommandRegistry::execute(std::string_view id, ToolContext& context, const CommandArgs& args)
 {
-    const auto* command = find(id);
+    auto* command = find(id);
     if (command == nullptr) {
         return CommandResult::fail("Command is not registered");
     }

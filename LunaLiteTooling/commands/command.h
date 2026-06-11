@@ -4,18 +4,29 @@
 #include "command_args.h"
 #include "command_result.h"
 
-#include <functional>
-#include <string>
+#include <string_view>
 
 namespace lunalite::tooling {
 
-using CommandHandler = std::function<CommandResult(ToolContext&, const CommandArgs&)>;
+class Command {
+public:
+    virtual ~Command() = default;
 
-struct CommandDesc {
-    std::string id;
-    std::string label;
-    std::string category;
-    CommandHandler execute;
+    virtual std::string_view id() const = 0;
+    virtual std::string_view label() const = 0;
+    virtual std::string_view category() const = 0;
+
+    virtual CommandResult execute(ToolContext& context, const CommandArgs& args) = 0;
+
+    virtual bool canUndo() const
+    {
+        return false;
+    }
+
+    virtual CommandResult undo(ToolContext&, const CommandArgs&)
+    {
+        return CommandResult::fail("Undo not supported");
+    }
 };
 
 } // namespace lunalite::tooling
