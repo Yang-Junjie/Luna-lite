@@ -212,25 +212,25 @@ void InspectorPanel::onImGuiRender()
 
     if (ImGui::BeginPopup("AddComponent")) {
         if (!m_scene.hasComponent<scene::MeshRendererComponent>(selectedEntity) && ImGui::MenuItem("Mesh Renderer")) {
-            m_scene.addComponent<scene::MeshRendererComponent>(selectedEntity);
+            actions::addComponent(m_scene, selectedEntity, tooling::MeshRendererComponentType);
         }
 
         if (!m_scene.hasComponent<scene::SpriteRendererComponent>(selectedEntity) &&
             ImGui::MenuItem("Sprite Renderer")) {
-            m_scene.addComponent<scene::SpriteRendererComponent>(selectedEntity);
+            actions::addComponent(m_scene, selectedEntity, tooling::SpriteRendererComponentType);
         }
 
         if (!m_scene.hasComponent<scene::ScriptComponent>(selectedEntity) && ImGui::MenuItem("Script")) {
-            m_scene.addComponent<scene::ScriptComponent>(selectedEntity);
+            actions::addComponent(m_scene, selectedEntity, tooling::ScriptComponentType);
         }
 
         if (!m_scene.hasComponent<scene::CameraComponent>(selectedEntity) && ImGui::MenuItem("Camera")) {
-            m_scene.addComponent<scene::CameraComponent>(selectedEntity);
+            actions::addComponent(m_scene, selectedEntity, tooling::CameraComponentType);
         }
 
         if (!m_scene.hasComponent<scene::DirectionalLightComponent>(selectedEntity) &&
             ImGui::MenuItem("Directional Light")) {
-            m_scene.addComponent<scene::DirectionalLightComponent>(selectedEntity);
+            actions::addComponent(m_scene, selectedEntity, tooling::DirectionalLightComponentType);
         }
 
         ImGui::EndPopup();
@@ -302,7 +302,7 @@ void InspectorPanel::onImGuiRender()
         const bool open = ImGui::CollapsingHeader("Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("MeshRendererPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::MeshRendererComponent>(selectedEntity);
+                actions::removeComponent(m_scene, selectedEntity, tooling::MeshRendererComponentType);
             }
             ImGui::EndPopup();
         }
@@ -345,7 +345,7 @@ void InspectorPanel::onImGuiRender()
                 });
 
             if (ImGui::Button("Add Material")) {
-                meshRenderer.materials.push_back(asset::builtin::defaultMaterialHandle());
+                actions::addMaterialSlot(m_scene, selectedEntity, asset::builtin::defaultMaterialHandle());
             }
 
             int materialToDelete = -1;
@@ -366,7 +366,7 @@ void InspectorPanel::onImGuiRender()
             }
 
             if (materialToDelete >= 0) {
-                meshRenderer.materials.erase(meshRenderer.materials.begin() + materialToDelete);
+                actions::removeMaterialSlot(m_scene, selectedEntity, static_cast<size_t>(materialToDelete));
             }
         }
     }
@@ -375,7 +375,7 @@ void InspectorPanel::onImGuiRender()
         const bool open = ImGui::CollapsingHeader("Sprite Renderer", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("SpriteRendererPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::SpriteRendererComponent>(selectedEntity);
+                actions::removeComponent(m_scene, selectedEntity, tooling::SpriteRendererComponentType);
             }
             ImGui::EndPopup();
         }
@@ -437,14 +437,14 @@ void InspectorPanel::onImGuiRender()
         const bool open = ImGui::CollapsingHeader("Script", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("ScriptPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::ScriptComponent>(selectedEntity);
+                actions::removeComponent(m_scene, selectedEntity, tooling::ScriptComponentType);
             }
             ImGui::EndPopup();
         }
         if (open && m_scene.hasComponent<scene::ScriptComponent>(selectedEntity)) {
             auto& script = m_scene.getComponent<scene::ScriptComponent>(selectedEntity);
             if (ImGui::Button("Add Script")) {
-                script.scripts.push_back({});
+                actions::addScriptBinding(m_scene, selectedEntity);
             }
 
             int scriptToDelete = -1;
@@ -489,7 +489,7 @@ void InspectorPanel::onImGuiRender()
             }
 
             if (scriptToDelete >= 0) {
-                script.scripts.erase(script.scripts.begin() + scriptToDelete);
+                actions::removeScriptBinding(m_scene, selectedEntity, static_cast<size_t>(scriptToDelete));
             }
         }
     }
@@ -498,7 +498,7 @@ void InspectorPanel::onImGuiRender()
         const bool open = ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("CameraPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::CameraComponent>(selectedEntity);
+                actions::removeComponent(m_scene, selectedEntity, tooling::CameraComponentType);
             }
             ImGui::EndPopup();
         }
@@ -548,7 +548,7 @@ void InspectorPanel::onImGuiRender()
         const bool open = ImGui::CollapsingHeader("Directional Light", ImGuiTreeNodeFlags_DefaultOpen);
         if (ImGui::BeginPopupContextItem("DirectionalLightPopup")) {
             if (ImGui::MenuItem("Delete Component")) {
-                m_scene.removeComponent<scene::DirectionalLightComponent>(selectedEntity);
+                actions::removeComponent(m_scene, selectedEntity, tooling::DirectionalLightComponentType);
             }
             ImGui::EndPopup();
         }

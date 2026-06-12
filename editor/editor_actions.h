@@ -5,6 +5,9 @@
 #include "../LunaLite/scene/scene.h"
 #include "../LunaLiteTooling/commands/command_args.h"
 #include "../LunaLiteTooling/commands/command_result.h"
+#include "../LunaLiteTooling/commands/scene_commands.h"
+
+#include <cstddef>
 
 #include <filesystem>
 #include <optional>
@@ -38,6 +41,25 @@ std::optional<scene::Entity> createEntityFromAsset(scene::Scene& scene,
                                                    asset::AssetHandle sourceAsset,
                                                    asset::AssetType type,
                                                    scene::Entity targetEntity = {});
+std::optional<scene::Entity> createBuiltinMeshEntity(scene::Scene& scene,
+                                                     std::string name,
+                                                     asset::AssetHandle mesh,
+                                                     asset::AssetHandle material,
+                                                     scene::Entity parent = {});
+
+bool addComponent(scene::Scene& scene, scene::Entity entity, std::string_view componentType);
+bool removeComponent(scene::Scene& scene, scene::Entity entity, std::string_view componentType);
+bool addMaterialSlot(scene::Scene& scene,
+                     scene::Entity entity,
+                     asset::AssetHandle material,
+                     std::optional<size_t> index = std::nullopt);
+bool removeMaterialSlot(scene::Scene& scene, scene::Entity entity, size_t index);
+bool addScriptBinding(scene::Scene& scene,
+                      scene::Entity entity,
+                      asset::AssetHandle script = {},
+                      bool enabled = true,
+                      std::optional<size_t> index = std::nullopt);
+bool removeScriptBinding(scene::Scene& scene, scene::Entity entity, size_t index);
 
 bool beginSceneEdit(scene::Scene& scene, std::string_view commandId);
 bool commitSceneEdit(scene::Scene& scene);

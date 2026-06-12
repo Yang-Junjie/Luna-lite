@@ -1,4 +1,5 @@
 #include "../LunaLite/asset/asset_manager.h"
+#include "../LunaLite/asset/builtin/builtin_assets.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene.h"
@@ -152,6 +153,135 @@ int main()
 
     if (tooling::CommandRegistry::get().execute(tooling::DeleteEntityCommandId, context, deleteParentArgs).success) {
         std::cerr << "scene.delete_entity should reject an invalid entity.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs builtinMeshArgs;
+    builtinMeshArgs.set("name", std::string{"Builtin Cube"});
+    builtinMeshArgs.set("mesh", asset::builtin::cubeMeshHandle());
+    builtinMeshArgs.set("material", asset::builtin::defaultMaterialHandle());
+    const auto builtinMeshResult =
+        tooling::CommandRegistry::get().execute(tooling::CreateBuiltinMeshEntityCommandId, context, builtinMeshArgs);
+    const auto builtinMeshEntity = createdEntityFrom(builtinMeshResult);
+    if (!builtinMeshResult.success || !scene.isValidEntity(builtinMeshEntity) ||
+        !scene.hasComponent<scene::MeshRendererComponent>(builtinMeshEntity) ||
+        scene.getComponent<scene::MeshRendererComponent>(builtinMeshEntity).mesh != asset::builtin::cubeMeshHandle() ||
+        scene.getComponent<scene::MeshRendererComponent>(builtinMeshEntity).materials.size() != 1 ||
+        scene.getComponent<scene::MeshRendererComponent>(builtinMeshEntity).materials.front() !=
+            asset::builtin::defaultMaterialHandle() ||
+        scene.getComponent<scene::TagComponent>(builtinMeshEntity).tag != "Builtin Cube") {
+        std::cerr << "scene.create_builtin_mesh_entity did not create the expected mesh renderer entity.\n";
+        return 1;
+    }
+
+    const auto componentEntity = scene.createEntity();
+    tooling::CommandArgs addSpriteComponentArgs;
+    addSpriteComponentArgs.set("entity", entityToValue(componentEntity));
+    addSpriteComponentArgs.set("component_type", std::string{tooling::SpriteRendererComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addSpriteComponentArgs)
+             .success ||
+        !scene.hasComponent<scene::SpriteRendererComponent>(componentEntity)) {
+        std::cerr << "scene.add_component did not add SpriteRenderer.\n";
+        return 1;
+    }
+    if (tooling::CommandRegistry::get()
+            .execute(tooling::AddComponentCommandId, context, addSpriteComponentArgs)
+            .success) {
+        std::cerr << "scene.add_component should reject duplicate components.\n";
+        return 1;
+    }
+    tooling::CommandArgs removeSpriteComponentArgs;
+    removeSpriteComponentArgs.set("entity", entityToValue(componentEntity));
+    removeSpriteComponentArgs.set("component_type", std::string{tooling::SpriteRendererComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::RemoveComponentCommandId, context, removeSpriteComponentArgs)
+             .success ||
+        scene.hasComponent<scene::SpriteRendererComponent>(componentEntity)) {
+        std::cerr << "scene.remove_component did not remove SpriteRenderer.\n";
+        return 1;
+    }
+    if (tooling::CommandRegistry::get()
+            .execute(tooling::RemoveComponentCommandId, context, removeSpriteComponentArgs)
+            .success) {
+        std::cerr << "scene.remove_component should reject missing components.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addMeshRendererArgs;
+    addMeshRendererArgs.set("entity", entityToValue(componentEntity));
+    addMeshRendererArgs.set("component_type", std::string{tooling::MeshRendererComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addMeshRendererArgs)
+             .success) {
+        std::cerr << "scene.add_component did not add MeshRenderer.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addMaterialSlotArgs;
+    addMaterialSlotArgs.set("entity", entityToValue(componentEntity));
+    addMaterialSlotArgs.set("material", asset::builtin::defaultMaterialHandle());
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddMaterialSlotCommandId, context, addMaterialSlotArgs)
+             .success ||
+        scene.getComponent<scene::MeshRendererComponent>(componentEntity).materials.size() != 1) {
+        std::cerr << "scene.add_material_slot did not add a material.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs removeMaterialSlotArgs;
+    removeMaterialSlotArgs.set("entity", entityToValue(componentEntity));
+    removeMaterialSlotArgs.set("index", uint64_t{0});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::RemoveMaterialSlotCommandId, context, removeMaterialSlotArgs)
+             .success ||
+        !scene.getComponent<scene::MeshRendererComponent>(componentEntity).materials.empty()) {
+        std::cerr << "scene.remove_material_slot did not remove the material.\n";
+        return 1;
+    }
+    if (tooling::CommandRegistry::get()
+            .execute(tooling::RemoveMaterialSlotCommandId, context, removeMaterialSlotArgs)
+            .success) {
+        std::cerr << "scene.remove_material_slot should reject an invalid index.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addScriptComponentArgs;
+    addScriptComponentArgs.set("entity", entityToValue(componentEntity));
+    addScriptComponentArgs.set("component_type", std::string{tooling::ScriptComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addScriptComponentArgs)
+             .success) {
+        std::cerr << "scene.add_component did not add Script component.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addScriptBindingArgs;
+    addScriptBindingArgs.set("entity", entityToValue(componentEntity));
+    addScriptBindingArgs.set("enabled", false);
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddScriptBindingCommandId, context, addScriptBindingArgs)
+             .success ||
+        scene.getComponent<scene::ScriptComponent>(componentEntity).scripts.size() != 1 ||
+        scene.getComponent<scene::ScriptComponent>(componentEntity).scripts.front().enabled) {
+        std::cerr << "scene.add_script_binding did not add the expected binding.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs removeScriptBindingArgs;
+    removeScriptBindingArgs.set("entity", entityToValue(componentEntity));
+    removeScriptBindingArgs.set("index", uint64_t{0});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::RemoveScriptBindingCommandId, context, removeScriptBindingArgs)
+             .success ||
+        !scene.getComponent<scene::ScriptComponent>(componentEntity).scripts.empty()) {
+        std::cerr << "scene.remove_script_binding did not remove the binding.\n";
+        return 1;
+    }
+    if (tooling::CommandRegistry::get()
+            .execute(tooling::RemoveScriptBindingCommandId, context, removeScriptBindingArgs)
+            .success) {
+        std::cerr << "scene.remove_script_binding should reject an invalid index.\n";
         return 1;
     }
 

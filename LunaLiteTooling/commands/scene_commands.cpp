@@ -1,9 +1,11 @@
 #include "../../LunaLite/asset/asset_manager.h"
+#include "../../LunaLite/asset/builtin/builtin_assets.h"
 #include "../../LunaLite/scene/components.h"
 #include "../../LunaLite/scene/scene.h"
 #include "command_registry.h"
 #include "scene_commands.h"
 
+#include <cstddef>
 #include <cstdint>
 
 #include <memory>
@@ -45,6 +47,21 @@ bool boolArg(const CommandArgs& args, std::string_view key, bool fallback)
 {
     const auto value = args.get<bool>(key);
     return value ? *value : fallback;
+}
+
+asset::AssetHandle assetArg(const CommandArgs& args, std::string_view key, asset::AssetHandle fallback = {})
+{
+    const auto value = args.get<asset::AssetHandle>(key);
+    return value ? *value : fallback;
+}
+
+std::optional<size_t> indexArg(const CommandArgs& args, std::string_view key)
+{
+    const auto value = args.get<uint64_t>(key);
+    if (!value) {
+        return std::nullopt;
+    }
+    return static_cast<size_t>(*value);
 }
 
 std::optional<asset::AssetType> assetTypeArg(const CommandArgs& args)
@@ -324,6 +341,276 @@ CommandResult createEntityFromAsset(ToolContext& context, const CommandArgs& arg
     return CommandResult::fail("scene.create_entity_from_asset does not support this asset type");
 }
 
+CommandResult createBuiltinMeshEntity(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.create_builtin_mesh_entity requires an active scene");
+    }
+
+    const auto mesh = args.get<asset::AssetHandle>("mesh");
+    if (!mesh || !mesh->isValid()) {
+        return CommandResult::fail("scene.create_builtin_mesh_entity requires a valid mesh");
+    }
+
+    const auto entity = scene->createEntity();
+    if (const auto name = args.get<std::string>("name")) {
+        if (scene->hasComponent<scene::TagComponent>(entity)) {
+            scene->getComponent<scene::TagComponent>(entity).tag = *name;
+        }
+    }
+
+    if (const auto parent = entityArg(args, "parent_entity")) {
+        if (!scene->setParent(entity, *parent, false)) {
+            scene->destroyEntity(entity);
+            return CommandResult::fail("scene.create_builtin_mesh_entity failed to assign parent_entity");
+        }
+    }
+
+    auto& meshRenderer = scene->addComponent<scene::MeshRendererComponent>(entity);
+    meshRenderer.mesh = *mesh;
+    meshRenderer.materials.push_back(assetArg(args, "material", asset::builtin::defaultMaterialHandle()));
+
+    return entityResult("Builtin mesh entity created", entity, true);
+}
+
+CommandResult addComponent(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.add_component requires an active scene");
+    }
+
+    const auto entity = entityArg(args, "entity");
+    if (!entity || !scene->isValidEntity(*entity)) {
+        return CommandResult::fail("scene.add_component requires a valid entity");
+    }
+
+    const auto componentType = args.get<std::string>("component_type");
+    if (!componentType || componentType->empty()) {
+        return CommandResult::fail("scene.add_component requires component_type");
+    }
+
+    const std::string_view componentTypeView{*componentType};
+
+    if (componentTypeView == MeshRendererComponentType) {
+        if (scene->hasComponent<scene::MeshRendererComponent>(*entity)) {
+            return CommandResult::fail("Entity already has MeshRenderer component");
+        }
+        scene->addComponent<scene::MeshRendererComponent>(*entity);
+    } else if (componentTypeView == SpriteRendererComponentType) {
+        if (scene->hasComponent<scene::SpriteRendererComponent>(*entity)) {
+            return CommandResult::fail("Entity already has SpriteRenderer component");
+        }
+        scene->addComponent<scene::SpriteRendererComponent>(*entity);
+    } else if (componentTypeView == ScriptComponentType) {
+        if (scene->hasComponent<scene::ScriptComponent>(*entity)) {
+            return CommandResult::fail("Entity already has Script component");
+        }
+        scene->addComponent<scene::ScriptComponent>(*entity);
+    } else if (componentTypeView == CameraComponentType) {
+        if (scene->hasComponent<scene::CameraComponent>(*entity)) {
+            return CommandResult::fail("Entity already has Camera component");
+        }
+        scene->addComponent<scene::CameraComponent>(*entity);
+    } else if (componentTypeView == DirectionalLightComponentType) {
+        if (scene->hasComponent<scene::DirectionalLightComponent>(*entity)) {
+            return CommandResult::fail("Entity already has DirectionalLight component");
+        }
+        scene->addComponent<scene::DirectionalLightComponent>(*entity);
+    } else {
+        return CommandResult::fail("scene.add_component does not support this component_type");
+    }
+
+    auto result = CommandResult::ok("Component added");
+    result.set("entity", entityToValue(*entity));
+    result.set("component_type", *componentType);
+    return result;
+}
+
+CommandResult removeComponent(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.remove_component requires an active scene");
+    }
+
+    const auto entity = entityArg(args, "entity");
+    if (!entity || !scene->isValidEntity(*entity)) {
+        return CommandResult::fail("scene.remove_component requires a valid entity");
+    }
+
+    const auto componentType = args.get<std::string>("component_type");
+    if (!componentType || componentType->empty()) {
+        return CommandResult::fail("scene.remove_component requires component_type");
+    }
+
+    const std::string_view componentTypeView{*componentType};
+
+    if (componentTypeView == MeshRendererComponentType) {
+        if (!scene->hasComponent<scene::MeshRendererComponent>(*entity)) {
+            return CommandResult::fail("Entity does not have MeshRenderer component");
+        }
+        scene->removeComponent<scene::MeshRendererComponent>(*entity);
+    } else if (componentTypeView == SpriteRendererComponentType) {
+        if (!scene->hasComponent<scene::SpriteRendererComponent>(*entity)) {
+            return CommandResult::fail("Entity does not have SpriteRenderer component");
+        }
+        scene->removeComponent<scene::SpriteRendererComponent>(*entity);
+    } else if (componentTypeView == ScriptComponentType) {
+        if (!scene->hasComponent<scene::ScriptComponent>(*entity)) {
+            return CommandResult::fail("Entity does not have Script component");
+        }
+        scene->removeComponent<scene::ScriptComponent>(*entity);
+    } else if (componentTypeView == CameraComponentType) {
+        if (!scene->hasComponent<scene::CameraComponent>(*entity)) {
+            return CommandResult::fail("Entity does not have Camera component");
+        }
+        scene->removeComponent<scene::CameraComponent>(*entity);
+    } else if (componentTypeView == DirectionalLightComponentType) {
+        if (!scene->hasComponent<scene::DirectionalLightComponent>(*entity)) {
+            return CommandResult::fail("Entity does not have DirectionalLight component");
+        }
+        scene->removeComponent<scene::DirectionalLightComponent>(*entity);
+    } else {
+        return CommandResult::fail("scene.remove_component does not support this component_type");
+    }
+
+    auto result = CommandResult::ok("Component removed");
+    result.set("entity", entityToValue(*entity));
+    result.set("component_type", *componentType);
+    return result;
+}
+
+CommandResult addMaterialSlot(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.add_material_slot requires an active scene");
+    }
+
+    const auto entity = entityArg(args, "entity");
+    if (!entity || !scene->isValidEntity(*entity)) {
+        return CommandResult::fail("scene.add_material_slot requires a valid entity");
+    }
+    if (!scene->hasComponent<scene::MeshRendererComponent>(*entity)) {
+        return CommandResult::fail("scene.add_material_slot requires MeshRenderer component");
+    }
+
+    auto& meshRenderer = scene->getComponent<scene::MeshRendererComponent>(*entity);
+    const auto material = assetArg(args, "material", asset::builtin::defaultMaterialHandle());
+    const auto index = indexArg(args, "index").value_or(meshRenderer.materials.size());
+    if (index > meshRenderer.materials.size()) {
+        return CommandResult::fail("scene.add_material_slot index is out of range");
+    }
+
+    meshRenderer.materials.insert(meshRenderer.materials.begin() + static_cast<std::ptrdiff_t>(index), material);
+
+    auto result = CommandResult::ok("Material slot added");
+    result.set("entity", entityToValue(*entity));
+    result.set("index", static_cast<uint64_t>(index));
+    result.set("material", material);
+    return result;
+}
+
+CommandResult removeMaterialSlot(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.remove_material_slot requires an active scene");
+    }
+
+    const auto entity = entityArg(args, "entity");
+    if (!entity || !scene->isValidEntity(*entity)) {
+        return CommandResult::fail("scene.remove_material_slot requires a valid entity");
+    }
+    if (!scene->hasComponent<scene::MeshRendererComponent>(*entity)) {
+        return CommandResult::fail("scene.remove_material_slot requires MeshRenderer component");
+    }
+
+    auto& meshRenderer = scene->getComponent<scene::MeshRendererComponent>(*entity);
+    const auto index = indexArg(args, "index");
+    if (!index || *index >= meshRenderer.materials.size()) {
+        return CommandResult::fail("scene.remove_material_slot requires a valid index");
+    }
+
+    const auto removedMaterial = meshRenderer.materials[*index];
+    meshRenderer.materials.erase(meshRenderer.materials.begin() + static_cast<std::ptrdiff_t>(*index));
+
+    auto result = CommandResult::ok("Material slot removed");
+    result.set("entity", entityToValue(*entity));
+    result.set("index", static_cast<uint64_t>(*index));
+    result.set("removed_material", removedMaterial);
+    return result;
+}
+
+CommandResult addScriptBinding(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.add_script_binding requires an active scene");
+    }
+
+    const auto entity = entityArg(args, "entity");
+    if (!entity || !scene->isValidEntity(*entity)) {
+        return CommandResult::fail("scene.add_script_binding requires a valid entity");
+    }
+    if (!scene->hasComponent<scene::ScriptComponent>(*entity)) {
+        return CommandResult::fail("scene.add_script_binding requires Script component");
+    }
+
+    auto& script = scene->getComponent<scene::ScriptComponent>(*entity);
+    const auto binding = scene::ScriptBinding{
+        .script = assetArg(args, "script"),
+        .enabled = boolArg(args, "enabled", true),
+    };
+    const auto index = indexArg(args, "index").value_or(script.scripts.size());
+    if (index > script.scripts.size()) {
+        return CommandResult::fail("scene.add_script_binding index is out of range");
+    }
+
+    script.scripts.insert(script.scripts.begin() + static_cast<std::ptrdiff_t>(index), binding);
+
+    auto result = CommandResult::ok("Script binding added");
+    result.set("entity", entityToValue(*entity));
+    result.set("index", static_cast<uint64_t>(index));
+    result.set("script", binding.script);
+    result.set("enabled", binding.enabled);
+    return result;
+}
+
+CommandResult removeScriptBinding(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.remove_script_binding requires an active scene");
+    }
+
+    const auto entity = entityArg(args, "entity");
+    if (!entity || !scene->isValidEntity(*entity)) {
+        return CommandResult::fail("scene.remove_script_binding requires a valid entity");
+    }
+    if (!scene->hasComponent<scene::ScriptComponent>(*entity)) {
+        return CommandResult::fail("scene.remove_script_binding requires Script component");
+    }
+
+    auto& script = scene->getComponent<scene::ScriptComponent>(*entity);
+    const auto index = indexArg(args, "index");
+    if (!index || *index >= script.scripts.size()) {
+        return CommandResult::fail("scene.remove_script_binding requires a valid index");
+    }
+
+    const auto removedBinding = script.scripts[*index];
+    script.scripts.erase(script.scripts.begin() + static_cast<std::ptrdiff_t>(*index));
+
+    auto result = CommandResult::ok("Script binding removed");
+    result.set("entity", entityToValue(*entity));
+    result.set("index", static_cast<uint64_t>(*index));
+    result.set("removed_script", removedBinding.script);
+    result.set("removed_enabled", removedBinding.enabled);
+    return result;
+}
+
 } // namespace
 
 std::string_view CreateEntityCommand::id() const
@@ -451,6 +738,181 @@ CommandResult CreateEntityFromAssetCommand::execute(ToolContext& context, const 
     return createEntityFromAsset(context, args);
 }
 
+std::string_view CreateBuiltinMeshEntityCommand::id() const
+{
+    return CreateBuiltinMeshEntityCommandId;
+}
+
+std::string_view CreateBuiltinMeshEntityCommand::label() const
+{
+    return "Create Builtin Mesh Entity";
+}
+
+std::string_view CreateBuiltinMeshEntityCommand::category() const
+{
+    return "Scene";
+}
+
+bool CreateBuiltinMeshEntityCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult CreateBuiltinMeshEntityCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return createBuiltinMeshEntity(context, args);
+}
+
+std::string_view AddComponentCommand::id() const
+{
+    return AddComponentCommandId;
+}
+
+std::string_view AddComponentCommand::label() const
+{
+    return "Add Component";
+}
+
+std::string_view AddComponentCommand::category() const
+{
+    return "Scene";
+}
+
+bool AddComponentCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult AddComponentCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return addComponent(context, args);
+}
+
+std::string_view RemoveComponentCommand::id() const
+{
+    return RemoveComponentCommandId;
+}
+
+std::string_view RemoveComponentCommand::label() const
+{
+    return "Remove Component";
+}
+
+std::string_view RemoveComponentCommand::category() const
+{
+    return "Scene";
+}
+
+bool RemoveComponentCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult RemoveComponentCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return removeComponent(context, args);
+}
+
+std::string_view AddMaterialSlotCommand::id() const
+{
+    return AddMaterialSlotCommandId;
+}
+
+std::string_view AddMaterialSlotCommand::label() const
+{
+    return "Add Material Slot";
+}
+
+std::string_view AddMaterialSlotCommand::category() const
+{
+    return "Scene";
+}
+
+bool AddMaterialSlotCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult AddMaterialSlotCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return addMaterialSlot(context, args);
+}
+
+std::string_view RemoveMaterialSlotCommand::id() const
+{
+    return RemoveMaterialSlotCommandId;
+}
+
+std::string_view RemoveMaterialSlotCommand::label() const
+{
+    return "Remove Material Slot";
+}
+
+std::string_view RemoveMaterialSlotCommand::category() const
+{
+    return "Scene";
+}
+
+bool RemoveMaterialSlotCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult RemoveMaterialSlotCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return removeMaterialSlot(context, args);
+}
+
+std::string_view AddScriptBindingCommand::id() const
+{
+    return AddScriptBindingCommandId;
+}
+
+std::string_view AddScriptBindingCommand::label() const
+{
+    return "Add Script Binding";
+}
+
+std::string_view AddScriptBindingCommand::category() const
+{
+    return "Scene";
+}
+
+bool AddScriptBindingCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult AddScriptBindingCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return addScriptBinding(context, args);
+}
+
+std::string_view RemoveScriptBindingCommand::id() const
+{
+    return RemoveScriptBindingCommandId;
+}
+
+std::string_view RemoveScriptBindingCommand::label() const
+{
+    return "Remove Script Binding";
+}
+
+std::string_view RemoveScriptBindingCommand::category() const
+{
+    return "Scene";
+}
+
+bool RemoveScriptBindingCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult RemoveScriptBindingCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return removeScriptBinding(context, args);
+}
+
 void registerSceneCommands(CommandRegistry& registry)
 {
     registry.registerCommand(std::make_unique<CreateEntityCommand>());
@@ -458,6 +920,13 @@ void registerSceneCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<SetParentCommand>());
     registry.registerCommand(std::make_unique<ClearParentCommand>());
     registry.registerCommand(std::make_unique<CreateEntityFromAssetCommand>());
+    registry.registerCommand(std::make_unique<CreateBuiltinMeshEntityCommand>());
+    registry.registerCommand(std::make_unique<AddComponentCommand>());
+    registry.registerCommand(std::make_unique<RemoveComponentCommand>());
+    registry.registerCommand(std::make_unique<AddMaterialSlotCommand>());
+    registry.registerCommand(std::make_unique<RemoveMaterialSlotCommand>());
+    registry.registerCommand(std::make_unique<AddScriptBindingCommand>());
+    registry.registerCommand(std::make_unique<RemoveScriptBindingCommand>());
 }
 
 } // namespace lunalite::tooling

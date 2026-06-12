@@ -135,6 +135,88 @@ std::optional<scene::Entity> createEntityFromAsset(scene::Scene& scene,
     return entityFromCommandResult(result);
 }
 
+std::optional<scene::Entity> createBuiltinMeshEntity(
+    scene::Scene& scene, std::string name, asset::AssetHandle mesh, asset::AssetHandle material, scene::Entity parent)
+{
+    tooling::CommandArgs args;
+    args.set("mesh", mesh);
+    args.set("material", material);
+    if (!name.empty()) {
+        args.set("name", std::move(name));
+    }
+    if (parent) {
+        args.set("parent_entity", entityToCommandValue(parent));
+    }
+
+    const auto result = executeSceneCommand(scene, tooling::CreateBuiltinMeshEntityCommandId, args);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to create builtin mesh entity: {}",
+                        result.message.empty() ? "unknown error" : result.message);
+        return std::nullopt;
+    }
+
+    return entityFromCommandResult(result);
+}
+
+bool addComponent(scene::Scene& scene, scene::Entity entity, std::string_view componentType)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("component_type", std::string{componentType});
+    return executeSceneCommand(scene, tooling::AddComponentCommandId, args).success;
+}
+
+bool removeComponent(scene::Scene& scene, scene::Entity entity, std::string_view componentType)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("component_type", std::string{componentType});
+    return executeSceneCommand(scene, tooling::RemoveComponentCommandId, args).success;
+}
+
+bool addMaterialSlot(scene::Scene& scene,
+                     scene::Entity entity,
+                     asset::AssetHandle material,
+                     std::optional<size_t> index)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("material", material);
+    if (index) {
+        args.set("index", static_cast<uint64_t>(*index));
+    }
+    return executeSceneCommand(scene, tooling::AddMaterialSlotCommandId, args).success;
+}
+
+bool removeMaterialSlot(scene::Scene& scene, scene::Entity entity, size_t index)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("index", static_cast<uint64_t>(index));
+    return executeSceneCommand(scene, tooling::RemoveMaterialSlotCommandId, args).success;
+}
+
+bool addScriptBinding(
+    scene::Scene& scene, scene::Entity entity, asset::AssetHandle script, bool enabled, std::optional<size_t> index)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("script", script);
+    args.set("enabled", enabled);
+    if (index) {
+        args.set("index", static_cast<uint64_t>(*index));
+    }
+    return executeSceneCommand(scene, tooling::AddScriptBindingCommandId, args).success;
+}
+
+bool removeScriptBinding(scene::Scene& scene, scene::Entity entity, size_t index)
+{
+    tooling::CommandArgs args;
+    args.set("entity", entityToCommandValue(entity));
+    args.set("index", static_cast<uint64_t>(index));
+    return executeSceneCommand(scene, tooling::RemoveScriptBindingCommandId, args).success;
+}
+
 bool beginSceneEdit(scene::Scene& scene, std::string_view commandId)
 {
     tooling::ToolContext context;

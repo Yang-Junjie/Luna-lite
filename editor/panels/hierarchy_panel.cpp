@@ -162,18 +162,18 @@ void HierarchyPanel::onImGuiRender()
             }
             if (ImGui::BeginMenu("Create Builtin Mesh")) {
                 if (ImGui::MenuItem("Cube")) {
-                    if (auto entity = actions::createEntity(m_scene, "Cube")) {
-                        auto& meshRenderer = m_scene.addComponent<scene::MeshRendererComponent>(*entity);
-                        meshRenderer.mesh = asset::builtin::cubeMeshHandle();
-                        meshRenderer.materials = {asset::builtin::defaultMaterialHandle()};
+                    if (auto entity = actions::createBuiltinMeshEntity(m_scene,
+                                                                       "Cube",
+                                                                       asset::builtin::cubeMeshHandle(),
+                                                                       asset::builtin::defaultMaterialHandle())) {
                         m_selection.selectEntity(*entity);
                     }
                 }
                 if (ImGui::MenuItem("Plane")) {
-                    if (auto entity = actions::createEntity(m_scene, "Plane")) {
-                        auto& meshRenderer = m_scene.addComponent<scene::MeshRendererComponent>(*entity);
-                        meshRenderer.mesh = asset::builtin::planeMeshHandle();
-                        meshRenderer.materials = {asset::builtin::defaultMaterialHandle()};
+                    if (auto entity = actions::createBuiltinMeshEntity(m_scene,
+                                                                       "Plane",
+                                                                       asset::builtin::planeMeshHandle(),
+                                                                       asset::builtin::defaultMaterialHandle())) {
                         m_selection.selectEntity(*entity);
                     }
                 }
