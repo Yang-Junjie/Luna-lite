@@ -69,6 +69,10 @@ private:
     void deleteSelectedEntity();
     void unparentSelectedEntity();
 
+    bool undoSceneHistory();
+    bool redoSceneHistory();
+    void restoreSelectionAfterSceneHistory(const tooling::Selection& previous_selection);
+
     bool canModifyScene() const;
 
     std::filesystem::path projectRelativePath(const std::filesystem::path& path) const;

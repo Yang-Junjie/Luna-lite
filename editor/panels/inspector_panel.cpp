@@ -2,6 +2,7 @@
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
 #include "../../LunaLite/renderer/interface/mesh.h"
 #include "../../LunaLite/scene/components.h"
+#include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "inspector_panel.h"
 
@@ -16,6 +17,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace lunalite::editor {
@@ -24,6 +26,31 @@ struct BuiltinAssetOption {
     const char* label{nullptr};
     asset::AssetHandle handle{0};
 };
+
+template <typename DrawFn, typename ApplyFn>
+bool drawLiveSceneEdit(scene::Scene& scene, std::string_view commandId, DrawFn&& draw, ApplyFn&& apply)
+{
+    const bool changed = draw();
+    const bool activated = ImGui::IsItemActivated();
+    const bool active = ImGui::IsItemActive();
+    const bool deactivated = ImGui::IsItemDeactivated();
+
+    if (activated && (active || changed)) {
+        actions::beginSceneEdit(scene, commandId);
+    } else if (changed && !actions::hasActiveSceneEdit()) {
+        actions::beginSceneEdit(scene, commandId);
+    }
+
+    if (changed) {
+        apply();
+    }
+
+    if ((deactivated || (changed && !active)) && actions::hasActiveSceneEdit()) {
+        actions::commitSceneEdit(scene);
+    }
+
+    return changed;
+}
 
 std::string getAssetDisplayName(asset::AssetHandle handle)
 {
@@ -58,6 +85,8 @@ bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
 }
 
 bool drawAssetHandleControl(const char* label,
+                            scene::Scene& scene,
+                            std::string_view commandId,
                             asset::AssetType type,
                             asset::AssetHandle& handle,
                             std::span<const BuiltinAssetOption> builtinOptions)
@@ -66,12 +95,22 @@ bool drawAssetHandleControl(const char* label,
     ImGui::PushID(label);
 
     uint64_t rawHandle = static_cast<uint64_t>(handle);
-    if (ImGui::InputScalar(label, ImGuiDataType_U64, &rawHandle)) {
-        handle = asset::AssetHandle{rawHandle};
-        changed = true;
-    }
+    changed |= drawLiveSceneEdit(
+        scene,
+        commandId,
+        [&]() {
+            return ImGui::InputScalar(label, ImGuiDataType_U64, &rawHandle);
+        },
+        [&]() {
+            handle = asset::AssetHandle{rawHandle};
+        });
 
-    if (acceptAssetHandleDrop(type, handle)) {
+    auto droppedHandle = handle;
+    if (acceptAssetHandleDrop(type, droppedHandle)) {
+        if (actions::beginSceneEdit(scene, commandId)) {
+            handle = droppedHandle;
+            actions::commitSceneEdit(scene);
+        }
         changed = true;
     }
 
@@ -84,7 +123,10 @@ bool drawAssetHandleControl(const char* label,
         if (ImGui::BeginPopup("BuiltinAssets")) {
             for (const auto& option : builtinOptions) {
                 if (ImGui::MenuItem(option.label)) {
-                    handle = option.handle;
+                    if (actions::beginSceneEdit(scene, commandId)) {
+                        handle = option.handle;
+                        actions::commitSceneEdit(scene);
+                    }
                     changed = true;
                 }
             }
@@ -203,9 +245,15 @@ void InspectorPanel::onImGuiRender()
             std::array<char, 256> buffer{};
             const size_t copySize = tag.tag.size() < buffer.size() - 1 ? tag.tag.size() : buffer.size() - 1;
             std::memcpy(buffer.data(), tag.tag.data(), copySize);
-            if (ImGui::InputText("Name", buffer.data(), buffer.size())) {
-                tag.tag = buffer.data();
-            }
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditTagCommandId,
+                [&]() {
+                    return ImGui::InputText("Name", buffer.data(), buffer.size());
+                },
+                [&]() {
+                    tag.tag = buffer.data();
+                });
         }
     }
 
@@ -213,16 +261,40 @@ void InspectorPanel::onImGuiRender()
         const bool open = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
         if (open && m_scene.hasComponent<scene::TransformComponent>(selectedEntity)) {
             auto& transform = m_scene.getComponent<scene::TransformComponent>(selectedEntity);
-            ImGui::DragFloat3("Translation", &transform.translation.x, 0.1f);
+            auto translation = transform.translation;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditTransformCommandId,
+                [&]() {
+                    return ImGui::DragFloat3("Translation", &translation.x, 0.1f);
+                },
+                [&]() {
+                    transform.translation = translation;
+                });
             syncRotationEditor(selectedEntity, transform.rotation);
             auto rotation = m_rotation_edit_degrees;
-            if (ImGui::DragFloat3("Rotation", &rotation.x, 1.0f)) {
-                const auto delta = rotation - m_rotation_edit_degrees;
-                transform.rotation = safeNormalize(transform.rotation * glm::quat{glm::radians(delta)});
-                m_rotation_edit_degrees = rotation;
-                m_rotation_edit_source = transform.rotation;
-            }
-            ImGui::DragFloat3("Scale", &transform.scale.x, 0.1f);
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditTransformCommandId,
+                [&]() {
+                    return ImGui::DragFloat3("Rotation", &rotation.x, 1.0f);
+                },
+                [&]() {
+                    const auto delta = rotation - m_rotation_edit_degrees;
+                    transform.rotation = safeNormalize(transform.rotation * glm::quat{glm::radians(delta)});
+                    m_rotation_edit_degrees = rotation;
+                    m_rotation_edit_source = transform.rotation;
+                });
+            auto scale = transform.scale;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditTransformCommandId,
+                [&]() {
+                    return ImGui::DragFloat3("Scale", &scale.x, 0.1f);
+                },
+                [&]() {
+                    transform.scale = scale;
+                });
         }
     }
 
@@ -245,7 +317,12 @@ void InspectorPanel::onImGuiRender()
                 {"Error", asset::builtin::errorMaterialHandle()},
             };
 
-            drawAssetHandleControl("Mesh", asset::AssetType::Mesh, meshRenderer.mesh, builtinMeshes);
+            drawAssetHandleControl("Mesh",
+                                   m_scene,
+                                   actions::EditMeshRendererCommandId,
+                                   asset::AssetType::Mesh,
+                                   meshRenderer.mesh,
+                                   builtinMeshes);
 
             auto* meshAsset = meshRenderer.mesh.isValid()
                                   ? asset::AssetManager::get().getAsset<renderer::interface::Mesh>(meshRenderer.mesh)
@@ -256,7 +333,16 @@ void InspectorPanel::onImGuiRender()
                 ImGui::TextDisabled("Submeshes: %zu", meshAsset->getSubMeshes().size());
             }
 
-            ImGui::Checkbox("Cast Shadow", &meshRenderer.cast_shadow);
+            auto castShadow = meshRenderer.cast_shadow;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditMeshRendererCommandId,
+                [&]() {
+                    return ImGui::Checkbox("Cast Shadow", &castShadow);
+                },
+                [&]() {
+                    meshRenderer.cast_shadow = castShadow;
+                });
 
             if (ImGui::Button("Add Material")) {
                 meshRenderer.materials.push_back(asset::builtin::defaultMaterialHandle());
@@ -270,8 +356,12 @@ void InspectorPanel::onImGuiRender()
                 if (ImGui::SmallButton("Delete")) {
                     materialToDelete = static_cast<int>(materialIndex);
                 }
-                drawAssetHandleControl(
-                    "Material", asset::AssetType::Material, meshRenderer.materials[materialIndex], builtinMaterials);
+                drawAssetHandleControl("Material",
+                                       m_scene,
+                                       actions::EditMeshRendererCommandId,
+                                       asset::AssetType::Material,
+                                       meshRenderer.materials[materialIndex],
+                                       builtinMaterials);
                 ImGui::PopID();
             }
 
@@ -291,20 +381,55 @@ void InspectorPanel::onImGuiRender()
         }
         if (open && m_scene.hasComponent<scene::SpriteRendererComponent>(selectedEntity)) {
             auto& spriteRenderer = m_scene.getComponent<scene::SpriteRendererComponent>(selectedEntity);
-            drawAssetHandleControl("Sprite", asset::AssetType::Sprite, spriteRenderer.sprite, {});
-            ImGui::ColorEdit4("Color", &spriteRenderer.color.x);
+            drawAssetHandleControl("Sprite",
+                                   m_scene,
+                                   actions::EditSpriteRendererCommandId,
+                                   asset::AssetType::Sprite,
+                                   spriteRenderer.sprite,
+                                   {});
+            auto spriteColor = spriteRenderer.color;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteRendererCommandId,
+                [&]() {
+                    return ImGui::ColorEdit4("Color", &spriteColor.x);
+                },
+                [&]() {
+                    spriteRenderer.color = spriteColor;
+                });
 
             int sortingLayer = spriteRenderer.sorting_layer;
-            if (ImGui::DragInt("Sorting Layer", &sortingLayer, 1.0f)) {
-                spriteRenderer.sorting_layer = sortingLayer;
-            }
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteRendererCommandId,
+                [&]() {
+                    return ImGui::DragInt("Sorting Layer", &sortingLayer, 1.0f);
+                },
+                [&]() {
+                    spriteRenderer.sorting_layer = sortingLayer;
+                });
 
             int orderInLayer = spriteRenderer.order_in_layer;
-            if (ImGui::DragInt("Order In Layer", &orderInLayer, 1.0f)) {
-                spriteRenderer.order_in_layer = orderInLayer;
-            }
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteRendererCommandId,
+                [&]() {
+                    return ImGui::DragInt("Order In Layer", &orderInLayer, 1.0f);
+                },
+                [&]() {
+                    spriteRenderer.order_in_layer = orderInLayer;
+                });
 
-            ImGui::Checkbox("Depth Test", &spriteRenderer.depth_test);
+            auto depthTest = spriteRenderer.depth_test;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteRendererCommandId,
+                [&]() {
+                    return ImGui::Checkbox("Depth Test", &depthTest);
+                },
+                [&]() {
+                    spriteRenderer.depth_test = depthTest;
+                });
         }
     }
 
@@ -333,12 +458,33 @@ void InspectorPanel::onImGuiRender()
                 }
 
                 auto& binding = script.scripts[i];
-                ImGui::Checkbox("Enabled", &binding.enabled);
+                auto enabled = binding.enabled;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditScriptCommandId,
+                    [&]() {
+                        return ImGui::Checkbox("Enabled", &enabled);
+                    },
+                    [&]() {
+                        binding.enabled = enabled;
+                    });
                 uint64_t scriptHandle = static_cast<uint64_t>(binding.script);
-                if (ImGui::InputScalar("Handle", ImGuiDataType_U64, &scriptHandle)) {
-                    binding.script = asset::AssetHandle{scriptHandle};
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditScriptCommandId,
+                    [&]() {
+                        return ImGui::InputScalar("Handle", ImGuiDataType_U64, &scriptHandle);
+                    },
+                    [&]() {
+                        binding.script = asset::AssetHandle{scriptHandle};
+                    });
+                auto droppedScript = binding.script;
+                if (acceptAssetHandleDrop(asset::AssetType::Script, droppedScript)) {
+                    if (actions::beginSceneEdit(m_scene, actions::EditScriptCommandId)) {
+                        binding.script = droppedScript;
+                        actions::commitSceneEdit(m_scene);
+                    }
                 }
-                acceptAssetHandleDrop(asset::AssetType::Script, binding.script);
                 ImGui::PopID();
             }
 
@@ -358,22 +504,43 @@ void InspectorPanel::onImGuiRender()
         }
         if (open && m_scene.hasComponent<scene::CameraComponent>(selectedEntity)) {
             auto& camera = m_scene.getComponent<scene::CameraComponent>(selectedEntity);
-            ImGui::Checkbox("Primary", &camera.primary);
+            auto primary = camera.primary;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditCameraCommandId,
+                [&]() {
+                    return ImGui::Checkbox("Primary", &primary);
+                },
+                [&]() {
+                    camera.primary = primary;
+                });
             float exposure = camera.camera.getExposure();
-            if (ImGui::DragFloat("Exposure", &exposure, 0.05f, 0.0f, 64.0f, "%.3f")) {
-                camera.camera.setExposure(exposure);
-            }
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditCameraCommandId,
+                [&]() {
+                    return ImGui::DragFloat("Exposure", &exposure, 0.05f, 0.0f, 64.0f, "%.3f");
+                },
+                [&]() {
+                    camera.camera.setExposure(exposure);
+                });
 
             using ProjectionType = renderer::interface::Camera::ProjectionType;
             int projectionType = camera.camera.getProjectionType() == ProjectionType::Orthographic ? 1 : 0;
             const char* projectionTypes[] = {"Perspective", "Orthographic"};
-            if (ImGui::Combo("Projection", &projectionType, projectionTypes, 2)) {
-                if (projectionType == 1) {
-                    camera.camera.setOrthographic(10.0f, 0.1f, 100.0f);
-                } else {
-                    camera.camera.setPerspective(glm::radians(45.0f), 0.1f, 100.0f);
-                }
-            }
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditCameraCommandId,
+                [&]() {
+                    return ImGui::Combo("Projection", &projectionType, projectionTypes, 2);
+                },
+                [&]() {
+                    if (projectionType == 1) {
+                        camera.camera.setOrthographic(10.0f, 0.1f, 100.0f);
+                    } else {
+                        camera.camera.setPerspective(glm::radians(45.0f), 0.1f, 100.0f);
+                    }
+                });
         }
     }
 
@@ -387,47 +554,138 @@ void InspectorPanel::onImGuiRender()
         }
         if (open && m_scene.hasComponent<scene::DirectionalLightComponent>(selectedEntity)) {
             auto& light = m_scene.getComponent<scene::DirectionalLightComponent>(selectedEntity);
-            ImGui::ColorEdit3("Color", &light.color.x);
-            ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f, "%.3f");
+            auto lightColor = light.color;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditDirectionalLightCommandId,
+                [&]() {
+                    return ImGui::ColorEdit3("Color", &lightColor.x);
+                },
+                [&]() {
+                    light.color = lightColor;
+                });
+            auto intensity = light.intensity;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditDirectionalLightCommandId,
+                [&]() {
+                    return ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 1000.0f, "%.3f");
+                },
+                [&]() {
+                    light.intensity = intensity;
+                });
 
             if (ImGui::TreeNodeEx("Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Checkbox("Enabled", &light.shadow.enabled);
+                auto shadowEnabled = light.shadow.enabled;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::Checkbox("Enabled", &shadowEnabled);
+                    },
+                    [&]() {
+                        light.shadow.enabled = shadowEnabled;
+                    });
 
-                drawShadowMapSizeControl(light.shadow.map_size);
-                light.shadow.map_size = std::max(light.shadow.map_size, 1u);
+                auto mapSize = light.shadow.map_size;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return drawShadowMapSizeControl(mapSize);
+                    },
+                    [&]() {
+                        light.shadow.map_size = std::max(mapSize, 1u);
+                    });
 
-                ImGui::DragFloat("Max Distance", &light.shadow.max_distance, 0.5f, 0.0f, 10000.0f, "%.2f");
-                light.shadow.max_distance = std::max(light.shadow.max_distance, 0.0f);
+                auto maxDistance = light.shadow.max_distance;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::DragFloat("Max Distance", &maxDistance, 0.5f, 0.0f, 10000.0f, "%.2f");
+                    },
+                    [&]() {
+                        light.shadow.max_distance = std::max(maxDistance, 0.0f);
+                    });
 
-                ImGui::DragFloat("Bias", &light.shadow.bias, 0.0001f, 0.0f, 0.1f, "%.6f");
-                light.shadow.bias = std::max(light.shadow.bias, 0.0f);
+                auto bias = light.shadow.bias;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::DragFloat("Bias", &bias, 0.0001f, 0.0f, 0.1f, "%.6f");
+                    },
+                    [&]() {
+                        light.shadow.bias = std::max(bias, 0.0f);
+                    });
 
-                ImGui::DragFloat("Normal Bias", &light.shadow.normal_bias, 0.001f, 0.0f, 1.0f, "%.4f");
-                light.shadow.normal_bias = std::max(light.shadow.normal_bias, 0.0f);
+                auto normalBias = light.shadow.normal_bias;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::DragFloat("Normal Bias", &normalBias, 0.001f, 0.0f, 1.0f, "%.4f");
+                    },
+                    [&]() {
+                        light.shadow.normal_bias = std::max(normalBias, 0.0f);
+                    });
 
                 int pcfRadius = static_cast<int>(light.shadow.pcf_radius);
-                if (ImGui::SliderInt("PCF Radius", &pcfRadius, 0, 4)) {
-                    light.shadow.pcf_radius = static_cast<uint32_t>(std::clamp(pcfRadius, 0, 4));
-                }
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::SliderInt("PCF Radius", &pcfRadius, 0, 4);
+                    },
+                    [&]() {
+                        light.shadow.pcf_radius = static_cast<uint32_t>(std::clamp(pcfRadius, 0, 4));
+                    });
 
                 int cascadeCount = static_cast<int>(light.shadow.cascade_count);
-                if (ImGui::SliderInt("Cascade Count", &cascadeCount, 1, 4)) {
-                    light.shadow.cascade_count = static_cast<uint32_t>(std::clamp(cascadeCount, 1, 4));
-                }
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::SliderInt("Cascade Count", &cascadeCount, 1, 4);
+                    },
+                    [&]() {
+                        light.shadow.cascade_count = static_cast<uint32_t>(std::clamp(cascadeCount, 1, 4));
+                    });
 
-                ImGui::DragFloat("Cascade Split Lambda", &light.shadow.cascade_split_lambda, 0.01f, 0.0f, 1.0f, "%.3f");
-                light.shadow.cascade_split_lambda = std::clamp(light.shadow.cascade_split_lambda, 0.0f, 1.0f);
+                auto cascadeSplitLambda = light.shadow.cascade_split_lambda;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::DragFloat("Cascade Split Lambda", &cascadeSplitLambda, 0.01f, 0.0f, 1.0f, "%.3f");
+                    },
+                    [&]() {
+                        light.shadow.cascade_split_lambda = std::clamp(cascadeSplitLambda, 0.0f, 1.0f);
+                    });
 
-                ImGui::DragFloat("Cascade Seam Blend", &light.shadow.cascade_seam_blend, 0.1f, 0.0f, 1000.0f, "%.2f");
-                light.shadow.cascade_seam_blend = std::max(light.shadow.cascade_seam_blend, 0.0f);
+                auto cascadeSeamBlend = light.shadow.cascade_seam_blend;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::DragFloat("Cascade Seam Blend", &cascadeSeamBlend, 0.1f, 0.0f, 1000.0f, "%.2f");
+                    },
+                    [&]() {
+                        light.shadow.cascade_seam_blend = std::max(cascadeSeamBlend, 0.0f);
+                    });
 
-                ImGui::DragFloat("Cascade Caster Depth Padding",
-                                 &light.shadow.cascade_caster_depth_padding,
-                                 0.5f,
-                                 0.0f,
-                                 10000.0f,
-                                 "%.2f");
-                light.shadow.cascade_caster_depth_padding = std::max(light.shadow.cascade_caster_depth_padding, 0.0f);
+                auto cascadeCasterDepthPadding = light.shadow.cascade_caster_depth_padding;
+                drawLiveSceneEdit(
+                    m_scene,
+                    actions::EditDirectionalLightCommandId,
+                    [&]() {
+                        return ImGui::DragFloat(
+                            "Cascade Caster Depth Padding", &cascadeCasterDepthPadding, 0.5f, 0.0f, 10000.0f, "%.2f");
+                    },
+                    [&]() {
+                        light.shadow.cascade_caster_depth_padding = std::max(cascadeCasterDepthPadding, 0.0f);
+                    });
 
                 ImGui::TreePop();
             }

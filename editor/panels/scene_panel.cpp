@@ -1,10 +1,12 @@
 #include "../../LunaLite/asset/asset_manager.h"
+#include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "scene_panel.h"
 
 #include <cstdint>
 
 #include <imgui.h>
+#include <string_view>
 
 namespace lunalite::editor {
 namespace {
@@ -40,20 +42,60 @@ bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
     return accepted;
 }
 
-void drawAssetHandleControl(const char* label, asset::AssetType type, asset::AssetHandle& handle)
+template <typename DrawFn, typename ApplyFn>
+bool drawLiveSceneEdit(scene::Scene& scene, std::string_view commandId, DrawFn&& draw, ApplyFn&& apply)
+{
+    const bool changed = draw();
+    const bool activated = ImGui::IsItemActivated();
+    const bool active = ImGui::IsItemActive();
+    const bool deactivated = ImGui::IsItemDeactivated();
+
+    if (activated && (active || changed)) {
+        actions::beginSceneEdit(scene, commandId);
+    } else if (changed && !actions::hasActiveSceneEdit()) {
+        actions::beginSceneEdit(scene, commandId);
+    }
+
+    if (changed) {
+        apply();
+    }
+
+    if ((deactivated || (changed && !active)) && actions::hasActiveSceneEdit()) {
+        actions::commitSceneEdit(scene);
+    }
+
+    return changed;
+}
+
+void drawAssetHandleControl(scene::Scene& scene, const char* label, asset::AssetType type, asset::AssetHandle& handle)
 {
     ImGui::PushID(label);
 
     uint64_t rawHandle = static_cast<uint64_t>(handle);
-    if (ImGui::InputScalar(label, ImGuiDataType_U64, &rawHandle)) {
-        handle = asset::AssetHandle{rawHandle};
-    }
+    drawLiveSceneEdit(
+        scene,
+        actions::EditSceneSettingsCommandId,
+        [&]() {
+            return ImGui::InputScalar(label, ImGuiDataType_U64, &rawHandle);
+        },
+        [&]() {
+            handle = asset::AssetHandle{rawHandle};
+        });
 
-    acceptAssetHandleDrop(type, handle);
+    auto droppedHandle = handle;
+    if (acceptAssetHandleDrop(type, droppedHandle)) {
+        if (actions::beginSceneEdit(scene, actions::EditSceneSettingsCommandId)) {
+            handle = droppedHandle;
+            actions::commitSceneEdit(scene);
+        }
+    }
 
     ImGui::SameLine();
     if (ImGui::SmallButton("Clear")) {
-        handle = asset::AssetHandle{0};
+        if (actions::beginSceneEdit(scene, actions::EditSceneSettingsCommandId)) {
+            handle = asset::AssetHandle{0};
+            actions::commitSceneEdit(scene);
+        }
     }
 
     const auto displayName = getAssetDisplayName(handle);
@@ -71,8 +113,17 @@ void ScenePanel::onImGuiRender()
     ImGui::Begin("Scene");
 
     auto& settings = m_scene.getSettings();
-    drawAssetHandleControl("Environment Map", asset::AssetType::Texture, settings.environment_map);
-    ImGui::DragFloat("Environment Intensity", &settings.environment_intensity, 0.05f, 0.0f, 1000.0f, "%.3f");
+    drawAssetHandleControl(m_scene, "Environment Map", asset::AssetType::Texture, settings.environment_map);
+    auto environmentIntensity = settings.environment_intensity;
+    drawLiveSceneEdit(
+        m_scene,
+        actions::EditSceneSettingsCommandId,
+        [&]() {
+            return ImGui::DragFloat("Environment Intensity", &environmentIntensity, 0.05f, 0.0f, 1000.0f, "%.3f");
+        },
+        [&]() {
+            settings.environment_intensity = environmentIntensity;
+        });
 
     ImGui::End();
 }

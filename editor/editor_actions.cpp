@@ -27,17 +27,15 @@ scene::Entity entityFromCommandValue(uint64_t value)
     return scene::Entity{static_cast<entt::entity>(static_cast<EntityUnderlying>(value))};
 }
 
-tooling::CommandResult executeCommand(tooling::ToolContext& context,
-                                      std::string_view commandId,
-                                      const tooling::CommandArgs& args)
+tooling::CommandResult
+    executeCommand(tooling::ToolContext& context, std::string_view commandId, const tooling::CommandArgs& args)
 {
     return tooling::CommandManager::get().execute(commandId, context, args);
 }
 } // namespace
 
-tooling::CommandResult executeSceneCommand(scene::Scene& scene,
-                                           std::string_view commandId,
-                                           const tooling::CommandArgs& args)
+tooling::CommandResult
+    executeSceneCommand(scene::Scene& scene, std::string_view commandId, const tooling::CommandArgs& args)
 {
     tooling::ToolContext context;
     context.setScene(scene);
@@ -135,6 +133,32 @@ std::optional<scene::Entity> createEntityFromAsset(scene::Scene& scene,
     }
 
     return entityFromCommandResult(result);
+}
+
+bool beginSceneEdit(scene::Scene& scene, std::string_view commandId)
+{
+    tooling::ToolContext context;
+    context.setScene(scene);
+    return tooling::CommandManager::get().beginSceneEdit(commandId, context);
+}
+
+bool commitSceneEdit(scene::Scene& scene)
+{
+    tooling::ToolContext context;
+    context.setScene(scene);
+    return tooling::CommandManager::get().commitSceneEdit(context);
+}
+
+bool cancelSceneEdit(scene::Scene& scene)
+{
+    tooling::ToolContext context;
+    context.setScene(scene);
+    return tooling::CommandManager::get().cancelSceneEdit(context);
+}
+
+bool hasActiveSceneEdit()
+{
+    return tooling::CommandManager::get().hasActiveSceneEdit();
 }
 
 } // namespace lunalite::editor::actions

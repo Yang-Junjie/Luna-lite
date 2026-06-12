@@ -13,9 +13,17 @@
 
 namespace lunalite::editor::actions {
 
-tooling::CommandResult executeSceneCommand(scene::Scene& scene,
-                                           std::string_view commandId,
-                                           const tooling::CommandArgs& args = {});
+inline constexpr std::string_view EditTagCommandId = "scene.edit_tag";
+inline constexpr std::string_view EditTransformCommandId = "scene.edit_transform";
+inline constexpr std::string_view EditMeshRendererCommandId = "scene.edit_mesh_renderer";
+inline constexpr std::string_view EditSpriteRendererCommandId = "scene.edit_sprite_renderer";
+inline constexpr std::string_view EditScriptCommandId = "scene.edit_script";
+inline constexpr std::string_view EditCameraCommandId = "scene.edit_camera";
+inline constexpr std::string_view EditDirectionalLightCommandId = "scene.edit_directional_light";
+inline constexpr std::string_view EditSceneSettingsCommandId = "scene.edit_scene_settings";
+
+tooling::CommandResult
+    executeSceneCommand(scene::Scene& scene, std::string_view commandId, const tooling::CommandArgs& args = {});
 tooling::CommandResult executeAssetCommand(std::string_view commandId,
                                            const asset::AssetHandle& sourceAsset,
                                            const std::filesystem::path& targetDirectory);
@@ -30,5 +38,10 @@ std::optional<scene::Entity> createEntityFromAsset(scene::Scene& scene,
                                                    asset::AssetHandle sourceAsset,
                                                    asset::AssetType type,
                                                    scene::Entity targetEntity = {});
+
+bool beginSceneEdit(scene::Scene& scene, std::string_view commandId);
+bool commitSceneEdit(scene::Scene& scene);
+bool cancelSceneEdit(scene::Scene& scene);
+bool hasActiveSceneEdit();
 
 } // namespace lunalite::editor::actions

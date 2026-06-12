@@ -142,19 +142,11 @@ void EditorLayer::drawMenuBar()
         const bool can_modify_scene = canModifyScene();
         const bool canUndo = can_modify_scene && tooling::CommandManager::get().canUndo();
         if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) {
-            tooling::ToolContext context;
-            context.setScene(m_scene);
-            if (tooling::CommandManager::get().undo(context)) {
-                m_selection.clear();
-            }
+            undoSceneHistory();
         }
         const bool canRedo = can_modify_scene && tooling::CommandManager::get().canRedo();
         if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) {
-            tooling::ToolContext context;
-            context.setScene(m_scene);
-            if (tooling::CommandManager::get().redo(context)) {
-                m_selection.clear();
-            }
+            redoSceneHistory();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Create Entity", "Ctrl+Shift+N", false, can_modify_scene)) {
@@ -226,28 +218,19 @@ bool EditorLayer::onKeyPressedEvent(core::KeyPressedEvent& event)
             break;
         case core::KeyCode::Z:
             if (controlDown && !shiftDown && !wantsTextInput && canModifyScene()) {
-                tooling::ToolContext context;
-                context.setScene(m_scene);
-                if (tooling::CommandManager::get().undo(context)) {
-                    m_selection.clear();
+                if (undoSceneHistory()) {
                     return true;
                 }
             }
             if (controlDown && shiftDown && !wantsTextInput && canModifyScene()) {
-                tooling::ToolContext context;
-                context.setScene(m_scene);
-                if (tooling::CommandManager::get().redo(context)) {
-                    m_selection.clear();
+                if (redoSceneHistory()) {
                     return true;
                 }
             }
             break;
         case core::KeyCode::Y:
             if (controlDown && !shiftDown && !wantsTextInput && canModifyScene()) {
-                tooling::ToolContext context;
-                context.setScene(m_scene);
-                if (tooling::CommandManager::get().redo(context)) {
-                    m_selection.clear();
+                if (redoSceneHistory()) {
                     return true;
                 }
             }
@@ -317,6 +300,66 @@ void EditorLayer::unparentSelectedEntity()
 
     if (actions::clearParent(m_scene, selectedEntity, true)) {
         m_selection.selectEntity(selectedEntity);
+    }
+}
+
+bool EditorLayer::undoSceneHistory()
+{
+    if (!canModifyScene()) {
+        return false;
+    }
+
+    const auto previousSelection = m_selection.current();
+    tooling::ToolContext context;
+    context.setScene(m_scene);
+    if (!tooling::CommandManager::get().undo(context)) {
+        return false;
+    }
+
+    restoreSelectionAfterSceneHistory(previousSelection);
+    return true;
+}
+
+bool EditorLayer::redoSceneHistory()
+{
+    if (!canModifyScene()) {
+        return false;
+    }
+
+    const auto previousSelection = m_selection.current();
+    tooling::ToolContext context;
+    context.setScene(m_scene);
+    if (!tooling::CommandManager::get().redo(context)) {
+        return false;
+    }
+
+    restoreSelectionAfterSceneHistory(previousSelection);
+    return true;
+}
+
+void EditorLayer::restoreSelectionAfterSceneHistory(const tooling::Selection& previous_selection)
+{
+    switch (previous_selection.kind) {
+        case tooling::SelectionKind::Entity:
+            if (m_scene.isValidEntity(previous_selection.entity)) {
+                m_selection.selectEntity(previous_selection.entity);
+            } else {
+                m_selection.clear();
+            }
+            break;
+        case tooling::SelectionKind::Asset:
+            m_selection.selectAsset(previous_selection.asset);
+            break;
+        case tooling::SelectionKind::Folder:
+            m_selection.selectFolder(previous_selection.path);
+            break;
+        case tooling::SelectionKind::Project:
+            m_selection.selectProject();
+            break;
+        case tooling::SelectionKind::None:
+        default:
+            m_selection.clear();
+            break;
     }
 }
 
