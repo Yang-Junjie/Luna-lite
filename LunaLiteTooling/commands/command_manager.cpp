@@ -52,6 +52,11 @@ bool CommandManager::beginSceneEdit(std::string_view id, ToolContext& context)
         return false;
     }
 
+    auto* command = CommandRegistry::get().find(id);
+    if (command == nullptr || !command->canUndo()) {
+        return false;
+    }
+
     const std::string before_snapshot = captureSceneSnapshot(context);
     if (before_snapshot.empty()) {
         return false;

@@ -1,13 +1,16 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
 #include "../LunaLite/project/project_manager.h"
+#include "../LunaLite/renderer/interface/camera.h"
 #include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLiteTooling/commands/command_manager.h"
 #include "../LunaLiteTooling/commands/command_registry.h"
 #include "../LunaLiteTooling/commands/scene_commands.h"
 #include "../LunaLiteTooling/context/tool_context.h"
 #include "../third_party/stb/stb_image_write.h"
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -63,6 +66,22 @@ bool writeTestPngTexture(const std::filesystem::path& path)
         255,
     };
     return stbi_write_png(path.string().c_str(), 2, 2, 4, pixels.data(), 2 * 4) != 0;
+}
+
+bool nearlyEqual(float lhs, float rhs)
+{
+    return std::abs(lhs - rhs) <= 0.001f;
+}
+
+bool nearlyEqual(const glm::vec3& lhs, const glm::vec3& rhs)
+{
+    return nearlyEqual(lhs.x, rhs.x) && nearlyEqual(lhs.y, rhs.y) && nearlyEqual(lhs.z, rhs.z);
+}
+
+bool nearlyEqual(const glm::vec4& lhs, const glm::vec4& rhs)
+{
+    return nearlyEqual(lhs.x, rhs.x) && nearlyEqual(lhs.y, rhs.y) && nearlyEqual(lhs.z, rhs.z) &&
+           nearlyEqual(lhs.w, rhs.w);
 }
 } // namespace
 
@@ -284,6 +303,247 @@ int main()
         std::cerr << "scene.remove_script_binding should reject an invalid index.\n";
         return 1;
     }
+
+    tooling::CommandArgs editTagArgs;
+    editTagArgs.set("entity", entityToValue(root));
+    editTagArgs.set("tag", std::string{"Edited Root"});
+    if (!tooling::CommandRegistry::get().execute(tooling::EditTagCommandId, context, editTagArgs).success ||
+        scene.getComponent<scene::TagComponent>(root).tag != "Edited Root") {
+        std::cerr << "scene.edit_tag did not update the tag.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editTransformArgs;
+    editTransformArgs.set("entity", entityToValue(root));
+    editTransformArgs.set("translation_x", 1.0);
+    editTransformArgs.set("translation_y", 2.0);
+    editTransformArgs.set("translation_z", 3.0);
+    editTransformArgs.set("rotation_degrees_y", 90.0);
+    editTransformArgs.set("scale_x", 2.0);
+    editTransformArgs.set("scale_y", 3.0);
+    editTransformArgs.set("scale_z", 4.0);
+    if (!tooling::CommandRegistry::get().execute(tooling::EditTransformCommandId, context, editTransformArgs).success) {
+        std::cerr << "scene.edit_transform failed.\n";
+        return 1;
+    }
+    const auto& editedTransform = scene.getComponent<scene::TransformComponent>(root);
+    if (!nearlyEqual(editedTransform.translation, glm::vec3{1.0f, 2.0f, 3.0f}) ||
+        !nearlyEqual(editedTransform.scale, glm::vec3{2.0f, 3.0f, 4.0f})) {
+        std::cerr << "scene.edit_transform did not update translation and scale.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addMaterialForEditArgs;
+    addMaterialForEditArgs.set("entity", entityToValue(componentEntity));
+    addMaterialForEditArgs.set("material", asset::builtin::defaultMaterialHandle());
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddMaterialSlotCommandId, context, addMaterialForEditArgs)
+             .success) {
+        std::cerr << "scene.add_material_slot did not prepare material edit coverage.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editMeshRendererArgs;
+    editMeshRendererArgs.set("entity", entityToValue(componentEntity));
+    editMeshRendererArgs.set("mesh", asset::builtin::planeMeshHandle());
+    editMeshRendererArgs.set("cast_shadow", false);
+    editMeshRendererArgs.set("submesh_start", uint64_t{1});
+    editMeshRendererArgs.set("submesh_count", uint64_t{2});
+    editMeshRendererArgs.set("material_index", uint64_t{0});
+    editMeshRendererArgs.set("material", asset::builtin::errorMaterialHandle());
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::EditMeshRendererCommandId, context, editMeshRendererArgs)
+             .success) {
+        std::cerr << "scene.edit_mesh_renderer failed.\n";
+        return 1;
+    }
+    const auto& editedMeshRenderer = scene.getComponent<scene::MeshRendererComponent>(componentEntity);
+    if (editedMeshRenderer.mesh != asset::builtin::planeMeshHandle() || editedMeshRenderer.cast_shadow ||
+        editedMeshRenderer.submesh_start != 1 || editedMeshRenderer.submesh_count != 2 ||
+        editedMeshRenderer.materials.size() != 1 ||
+        editedMeshRenderer.materials.front() != asset::builtin::errorMaterialHandle()) {
+        std::cerr << "scene.edit_mesh_renderer did not update mesh renderer fields.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs invalidMaterialEditArgs;
+    invalidMaterialEditArgs.set("entity", entityToValue(componentEntity));
+    invalidMaterialEditArgs.set("material", asset::builtin::defaultMaterialHandle());
+    if (tooling::CommandRegistry::get()
+            .execute(tooling::EditMeshRendererCommandId, context, invalidMaterialEditArgs)
+            .success) {
+        std::cerr << "scene.edit_mesh_renderer should require material_index when material is set.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addSpriteForEditArgs;
+    addSpriteForEditArgs.set("entity", entityToValue(componentEntity));
+    addSpriteForEditArgs.set("component_type", std::string{tooling::SpriteRendererComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addSpriteForEditArgs)
+             .success) {
+        std::cerr << "scene.add_component did not prepare SpriteRenderer edit coverage.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editSpriteRendererArgs;
+    editSpriteRendererArgs.set("entity", entityToValue(componentEntity));
+    editSpriteRendererArgs.set("sprite", asset::AssetHandle{77});
+    editSpriteRendererArgs.set("color_r", 0.1);
+    editSpriteRendererArgs.set("color_g", 0.2);
+    editSpriteRendererArgs.set("color_b", 0.3);
+    editSpriteRendererArgs.set("color_a", 0.4);
+    editSpriteRendererArgs.set("sorting_layer", int64_t{-3});
+    editSpriteRendererArgs.set("order_in_layer", int64_t{12});
+    editSpriteRendererArgs.set("depth_test", true);
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::EditSpriteRendererCommandId, context, editSpriteRendererArgs)
+             .success) {
+        std::cerr << "scene.edit_sprite_renderer failed.\n";
+        return 1;
+    }
+    const auto& editedSpriteRenderer = scene.getComponent<scene::SpriteRendererComponent>(componentEntity);
+    if (editedSpriteRenderer.sprite != asset::AssetHandle{77} ||
+        !nearlyEqual(editedSpriteRenderer.color, glm::vec4{0.1f, 0.2f, 0.3f, 0.4f}) ||
+        editedSpriteRenderer.sorting_layer != -3 || editedSpriteRenderer.order_in_layer != 12 ||
+        !editedSpriteRenderer.depth_test) {
+        std::cerr << "scene.edit_sprite_renderer did not update sprite renderer fields.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addScriptForEditArgs;
+    addScriptForEditArgs.set("entity", entityToValue(componentEntity));
+    addScriptForEditArgs.set("script", asset::AssetHandle{88});
+    addScriptForEditArgs.set("enabled", true);
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddScriptBindingCommandId, context, addScriptForEditArgs)
+             .success) {
+        std::cerr << "scene.add_script_binding did not prepare script edit coverage.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editScriptArgs;
+    editScriptArgs.set("entity", entityToValue(componentEntity));
+    editScriptArgs.set("index", uint64_t{0});
+    editScriptArgs.set("script", asset::AssetHandle{99});
+    editScriptArgs.set("enabled", false);
+    if (!tooling::CommandRegistry::get().execute(tooling::EditScriptCommandId, context, editScriptArgs).success) {
+        std::cerr << "scene.edit_script failed.\n";
+        return 1;
+    }
+    const auto& editedScript = scene.getComponent<scene::ScriptComponent>(componentEntity);
+    if (editedScript.scripts.size() != 1 || editedScript.scripts.front().script != asset::AssetHandle{99} ||
+        editedScript.scripts.front().enabled) {
+        std::cerr << "scene.edit_script did not update the script binding.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs invalidScriptEditArgs;
+    invalidScriptEditArgs.set("entity", entityToValue(componentEntity));
+    invalidScriptEditArgs.set("index", uint64_t{8});
+    if (tooling::CommandRegistry::get().execute(tooling::EditScriptCommandId, context, invalidScriptEditArgs).success) {
+        std::cerr << "scene.edit_script should reject an invalid index.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addCameraForEditArgs;
+    addCameraForEditArgs.set("entity", entityToValue(componentEntity));
+    addCameraForEditArgs.set("component_type", std::string{tooling::CameraComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addCameraForEditArgs)
+             .success) {
+        std::cerr << "scene.add_component did not prepare Camera edit coverage.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editCameraArgs;
+    editCameraArgs.set("entity", entityToValue(componentEntity));
+    editCameraArgs.set("primary", false);
+    editCameraArgs.set("exposure", -2.0);
+    editCameraArgs.set("projection_type",
+                       static_cast<uint64_t>(renderer::interface::Camera::ProjectionType::Orthographic));
+    if (!tooling::CommandRegistry::get().execute(tooling::EditCameraCommandId, context, editCameraArgs).success) {
+        std::cerr << "scene.edit_camera failed.\n";
+        return 1;
+    }
+    const auto& editedCamera = scene.getComponent<scene::CameraComponent>(componentEntity);
+    if (editedCamera.primary || !nearlyEqual(editedCamera.camera.getExposure(), 0.0f) ||
+        editedCamera.camera.getProjectionType() != renderer::interface::Camera::ProjectionType::Orthographic) {
+        std::cerr << "scene.edit_camera did not update camera fields.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addLightForEditArgs;
+    addLightForEditArgs.set("entity", entityToValue(componentEntity));
+    addLightForEditArgs.set("component_type", std::string{tooling::DirectionalLightComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addLightForEditArgs)
+             .success) {
+        std::cerr << "scene.add_component did not prepare DirectionalLight edit coverage.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editLightArgs;
+    editLightArgs.set("entity", entityToValue(componentEntity));
+    editLightArgs.set("color_r", 0.25);
+    editLightArgs.set("color_g", 0.5);
+    editLightArgs.set("color_b", 0.75);
+    editLightArgs.set("intensity", -5.0);
+    editLightArgs.set("shadow_enabled", false);
+    editLightArgs.set("shadow_map_size", uint64_t{0});
+    editLightArgs.set("shadow_max_distance", -1.0);
+    editLightArgs.set("shadow_bias", -2.0);
+    editLightArgs.set("shadow_normal_bias", -3.0);
+    editLightArgs.set("shadow_pcf_radius", uint64_t{8});
+    editLightArgs.set("shadow_cascade_count", uint64_t{8});
+    editLightArgs.set("shadow_cascade_split_lambda", 3.0);
+    editLightArgs.set("shadow_cascade_seam_blend", -4.0);
+    editLightArgs.set("shadow_cascade_caster_depth_padding", -5.0);
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::EditDirectionalLightCommandId, context, editLightArgs)
+             .success) {
+        std::cerr << "scene.edit_directional_light failed.\n";
+        return 1;
+    }
+    const auto& editedLight = scene.getComponent<scene::DirectionalLightComponent>(componentEntity);
+    if (!nearlyEqual(editedLight.color, glm::vec3{0.25f, 0.5f, 0.75f}) || !nearlyEqual(editedLight.intensity, 0.0f) ||
+        editedLight.shadow.enabled || editedLight.shadow.map_size != 1 ||
+        !nearlyEqual(editedLight.shadow.max_distance, 0.0f) || !nearlyEqual(editedLight.shadow.bias, 0.0f) ||
+        !nearlyEqual(editedLight.shadow.normal_bias, 0.0f) || editedLight.shadow.pcf_radius != 4 ||
+        editedLight.shadow.cascade_count != 4 || !nearlyEqual(editedLight.shadow.cascade_split_lambda, 1.0f) ||
+        !nearlyEqual(editedLight.shadow.cascade_seam_blend, 0.0f) ||
+        !nearlyEqual(editedLight.shadow.cascade_caster_depth_padding, 0.0f)) {
+        std::cerr << "scene.edit_directional_light did not update and clamp light fields.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editSceneSettingsArgs;
+    editSceneSettingsArgs.set("environment_map", asset::AssetHandle{66});
+    editSceneSettingsArgs.set("environment_intensity", -6.0);
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::EditSceneSettingsCommandId, context, editSceneSettingsArgs)
+             .success ||
+        scene.getSettings().environment_map != asset::AssetHandle{66} ||
+        !nearlyEqual(scene.getSettings().environment_intensity, 0.0f)) {
+        std::cerr << "scene.edit_scene_settings did not update scene settings.\n";
+        return 1;
+    }
+
+    tooling::CommandManager::get().clearHistory();
+    tooling::CommandArgs undoableEditTagArgs;
+    undoableEditTagArgs.set("entity", entityToValue(root));
+    undoableEditTagArgs.set("tag", std::string{"Undoable Root"});
+    if (!tooling::CommandManager::get().execute(tooling::EditTagCommandId, context, undoableEditTagArgs).success ||
+        !tooling::CommandManager::get().canUndo()) {
+        std::cerr << "scene.edit_tag was not recorded as an undoable command.\n";
+        return 1;
+    }
+    if (!tooling::CommandManager::get().undo(context) ||
+        scene.getComponent<scene::TagComponent>(root).tag != "Edited Root") {
+        std::cerr << "Undo did not restore scene.edit_tag.\n";
+        return 1;
+    }
+    tooling::CommandManager::get().clearHistory();
 
     const auto projectRoot = std::filesystem::current_path() / "build" / "scene_commands_test_project";
     std::error_code error;

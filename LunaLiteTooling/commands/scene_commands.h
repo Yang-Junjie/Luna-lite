@@ -116,6 +116,78 @@ public:
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
+class EditTagCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditTransformCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditMeshRendererCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditSpriteRendererCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditScriptCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditCameraCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditDirectionalLightCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class EditSceneSettingsCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
 inline constexpr std::string_view CreateEntityCommandId = "scene.create_entity";
 inline constexpr std::string_view DeleteEntityCommandId = "scene.delete_entity";
 inline constexpr std::string_view SetParentCommandId = "scene.set_parent";
@@ -128,6 +200,14 @@ inline constexpr std::string_view AddMaterialSlotCommandId = "scene.add_material
 inline constexpr std::string_view RemoveMaterialSlotCommandId = "scene.remove_material_slot";
 inline constexpr std::string_view AddScriptBindingCommandId = "scene.add_script_binding";
 inline constexpr std::string_view RemoveScriptBindingCommandId = "scene.remove_script_binding";
+inline constexpr std::string_view EditTagCommandId = "scene.edit_tag";
+inline constexpr std::string_view EditTransformCommandId = "scene.edit_transform";
+inline constexpr std::string_view EditMeshRendererCommandId = "scene.edit_mesh_renderer";
+inline constexpr std::string_view EditSpriteRendererCommandId = "scene.edit_sprite_renderer";
+inline constexpr std::string_view EditScriptCommandId = "scene.edit_script";
+inline constexpr std::string_view EditCameraCommandId = "scene.edit_camera";
+inline constexpr std::string_view EditDirectionalLightCommandId = "scene.edit_directional_light";
+inline constexpr std::string_view EditSceneSettingsCommandId = "scene.edit_scene_settings";
 
 inline constexpr std::string_view MeshRendererComponentType = "MeshRenderer";
 inline constexpr std::string_view SpriteRendererComponentType = "SpriteRenderer";

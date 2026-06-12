@@ -1,6 +1,7 @@
 #include "../../LunaLite/core/log.h"
 #include "asset_commands.h"
 #include "command_registry.h"
+#include "project_commands.h"
 #include "scene_commands.h"
 
 #include <memory>
@@ -17,6 +18,7 @@ void CommandRegistry::registerDefaults()
 
     m_defaults_registered = true;
     registerAssetCommands(*this);
+    registerProjectCommands(*this);
     registerSceneCommands(*this);
 }
 

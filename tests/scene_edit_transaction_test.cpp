@@ -18,6 +18,11 @@ int main()
     tooling::ToolContext context;
     context.setScene(scene);
 
+    if (tooling::CommandManager::get().beginSceneEdit("scene.unregistered_edit", context)) {
+        std::cerr << "Unregistered scene edit command should be rejected.\n";
+        return 1;
+    }
+
     if (!tooling::CommandManager::get().beginSceneEdit("scene.edit_transform", context)) {
         std::cerr << "Failed to begin scene edit transaction.\n";
         return 1;

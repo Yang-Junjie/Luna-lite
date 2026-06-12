@@ -2,6 +2,7 @@ add_library(LunaLiteTooling STATIC
     commands/asset_commands.cpp
     commands/command_registry.cpp
     commands/command_manager.cpp
+    commands/project_commands.cpp
     commands/scene_commands.cpp
 )
 

@@ -1,15 +1,10 @@
 #include "../../LunaLite/asset/asset_manager.h"
-#include "../../LunaLite/core/log.h"
-#include "../../LunaLite/project/project_manager.h"
 #include "../../LunaLite/renderer/interface/material.h"
+#include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "material_editor_panel.h"
 
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <imgui.h>
-#include <system_error>
 
 namespace lunalite::editor {
 namespace {
@@ -72,61 +67,6 @@ bool drawAssetHandleControl(const char* label, asset::AssetType type, asset::Ass
     return changed;
 }
 
-const char* shadingModelToString(renderer::interface::ShadingModel shadingModel)
-{
-    switch (shadingModel) {
-        case renderer::interface::ShadingModel::Unlit:
-            return "Unlit";
-        case renderer::interface::ShadingModel::Lit:
-        default:
-            return "Lit";
-    }
-}
-
-bool saveMaterial(const asset::AssetMetadata& metadata, const renderer::interface::MaterialParameters& parameters)
-{
-    const auto projectRoot =
-        project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());
-    const auto path = projectRoot / metadata.FilePath;
-
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) {
-        LUNA_CORE_ERROR("Failed to create material directory '{}': {}", path.parent_path().string(), error.message());
-        return false;
-    }
-
-    std::ofstream out(path);
-    if (!out.is_open()) {
-        LUNA_CORE_ERROR("Failed to open material file for writing: '{}'", path.string());
-        return false;
-    }
-
-    out << "Material:\n";
-    out << "  ShadingModel: " << shadingModelToString(parameters.shading_model) << "\n";
-    out << "  Albedo: [" << parameters.albedo.r << ", " << parameters.albedo.g << ", " << parameters.albedo.b << ", "
-        << parameters.albedo.a << "]\n";
-    out << "  Metallic: " << parameters.metallic << "\n";
-    out << "  Roughness: " << parameters.roughness << "\n";
-    out << "  Emission: [" << parameters.emission.r << ", " << parameters.emission.g << ", " << parameters.emission.b
-        << "]\n";
-    out << "  EmissionStrength: " << parameters.emission_strength << "\n";
-    out << "  NormalScale: " << parameters.normal_scale << "\n";
-    out << "  OcclusionStrength: " << parameters.occlusion_strength << "\n";
-    out << "  Textures:\n";
-    out << "    Albedo: " << static_cast<uint64_t>(parameters.albedo_texture) << "\n";
-    out << "    Normal: " << static_cast<uint64_t>(parameters.normal_texture) << "\n";
-    out << "    MetallicRoughness: " << static_cast<uint64_t>(parameters.metallic_roughness_texture) << "\n";
-    out << "    Occlusion: " << static_cast<uint64_t>(parameters.occlusion_texture) << "\n";
-    out << "    Emission: " << static_cast<uint64_t>(parameters.emission_texture) << "\n";
-
-    if (!out.good()) {
-        LUNA_CORE_ERROR("Failed to write material file: '{}'", path.string());
-        return false;
-    }
-
-    return true;
-}
 } // namespace
 
 void MaterialEditorPanel::onImGuiRender()
@@ -152,7 +92,7 @@ void MaterialEditorPanel::onImGuiRender()
         return;
     }
 
-    auto& parameters = *material->parameters;
+    auto parameters = *material->parameters;
     bool changed = false;
 
     int shadingModel = parameters.shading_model == renderer::interface::ShadingModel::Unlit ? 1 : 0;
@@ -171,12 +111,6 @@ void MaterialEditorPanel::onImGuiRender()
     changed |= ImGui::DragFloat("Normal Scale", &parameters.normal_scale, 0.01f, 0.0f, 4.0f, "%.3f");
     changed |= ImGui::DragFloat("Occlusion Strength", &parameters.occlusion_strength, 0.01f, 0.0f, 1.0f, "%.3f");
 
-    parameters.metallic = std::clamp(parameters.metallic, 0.0f, 1.0f);
-    parameters.roughness = std::clamp(parameters.roughness, 0.0f, 1.0f);
-    parameters.emission_strength = std::max(parameters.emission_strength, 0.0f);
-    parameters.normal_scale = std::max(parameters.normal_scale, 0.0f);
-    parameters.occlusion_strength = std::clamp(parameters.occlusion_strength, 0.0f, 1.0f);
-
     ImGui::Separator();
     changed |= drawAssetHandleControl("Albedo Texture", asset::AssetType::Texture, parameters.albedo_texture);
     changed |= drawAssetHandleControl("Normal Texture", asset::AssetType::Texture, parameters.normal_texture);
@@ -186,12 +120,12 @@ void MaterialEditorPanel::onImGuiRender()
     changed |= drawAssetHandleControl("Emission Texture", asset::AssetType::Texture, parameters.emission_texture);
 
     if (changed) {
-        m_dirty = true;
+        m_dirty = actions::setMaterialParameters(m_material, parameters) || m_dirty;
     }
 
     ImGui::Separator();
     if (ImGui::Button("Save")) {
-        m_dirty = !saveMaterial(*metadata, parameters);
+        m_dirty = !actions::saveMaterial(m_material);
     }
     ImGui::SameLine();
     ImGui::TextDisabled("%s", m_dirty ? "Modified" : "Saved");

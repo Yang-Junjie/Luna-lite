@@ -453,11 +453,13 @@ void EditorLayer::createProject()
     info.name = projectRoot.filename().string();
     info.assets_path = "Assets";
 
-    if (!project::ProjectManager::instance().createProject(projectRoot, info)) {
+    const auto result = actions::createProject(projectRoot, info.name);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to create project command: {}",
+                        result.message.empty() ? "unknown error" : result.message);
         return;
     }
 
-    asset::AssetManager::get().loadProjectAssets();
     m_scene.clear();
     tooling::CommandManager::get().clearHistory();
     m_selection.clear();
@@ -473,19 +475,20 @@ void EditorLayer::openProject()
         return;
     }
 
-    auto& projectManager = project::ProjectManager::instance();
-    if (!projectManager.loadProject(projectPath)) {
+    const auto result = actions::openProject(projectPath);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to open project command: {}",
+                        result.message.empty() ? "unknown error" : result.message);
         return;
     }
 
-    asset::AssetManager::get().loadProjectAssets();
     m_scene.clear();
     tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
 
-    const auto& projectInfo = projectManager.getProjectInfo();
-    const auto projectRoot = projectManager.getProjectRootPath();
+    const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
+    const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
     if (projectInfo && projectRoot && !projectInfo->start_scene.empty()) {
         loadScene(*projectRoot / projectInfo->start_scene);
     }
@@ -493,7 +496,11 @@ void EditorLayer::openProject()
 
 void EditorLayer::saveProject()
 {
-    project::ProjectManager::instance().saveProject();
+    const auto result = actions::saveProject();
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to save project command: {}",
+                        result.message.empty() ? "unknown error" : result.message);
+    }
 }
 
 void EditorLayer::startRuntime()
@@ -530,22 +537,19 @@ void EditorLayer::createScene()
         scenePath.replace_extension(scene::SceneSerializer::FileExtension);
     }
 
-    m_scene.clear();
-    tooling::CommandManager::get().clearHistory();
-    m_selection.clear();
-    if (!scene::SceneSerializer::serialize(m_scene, scenePath)) {
+    const auto result = actions::createSceneFile(m_scene, scenePath);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to create scene command: {}",
+                        result.message.empty() ? "unknown error" : result.message);
         return;
     }
 
-    m_current_scene_path = scenePath;
-
-    auto& projectManager = project::ProjectManager::instance();
-    const auto& projectInfo = projectManager.getProjectInfo();
-    if (projectInfo) {
-        auto info = *projectInfo;
-        info.start_scene = projectRelativePath(scenePath);
-        projectManager.setProjectInfo(info);
-        projectManager.saveProject();
+    tooling::CommandManager::get().clearHistory();
+    m_selection.clear();
+    if (const auto* savedPath = result.get<std::filesystem::path>("scene_path")) {
+        m_current_scene_path = *savedPath;
+    } else {
+        m_current_scene_path = scenePath;
     }
 }
 
@@ -566,7 +570,10 @@ void EditorLayer::saveScene()
         return;
     }
 
-    scene::SceneSerializer::serialize(m_scene, m_current_scene_path);
+    const auto result = actions::saveSceneFile(m_scene, m_current_scene_path);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to save scene command: {}", result.message.empty() ? "unknown error" : result.message);
+    }
 }
 
 bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
@@ -574,12 +581,18 @@ bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
     stopRuntime();
     tooling::CommandManager::get().clearHistory();
 
-    if (!scene::SceneSerializer::deserialize(m_scene, scene_path)) {
+    const auto result = actions::openSceneFile(m_scene, scene_path);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to open scene command: {}", result.message.empty() ? "unknown error" : result.message);
         return false;
     }
 
     m_selection.clear();
-    m_current_scene_path = scene_path;
+    if (const auto* openedPath = result.get<std::filesystem::path>("scene_path")) {
+        m_current_scene_path = *openedPath;
+    } else {
+        m_current_scene_path = scene_path;
+    }
     return true;
 }
 

@@ -5,9 +5,14 @@
 #include "command_registry.h"
 #include "scene_commands.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -87,6 +92,280 @@ std::optional<asset::AssetType> assetTypeArg(const CommandArgs& args)
         case static_cast<uint64_t>(asset::AssetType::None):
         default:
             return asset::AssetType::None;
+    }
+}
+
+std::optional<float> floatArg(const CommandArgs& args, std::string_view key)
+{
+    if (const auto value = args.get<double>(key)) {
+        return static_cast<float>(*value);
+    }
+    if (const auto value = args.get<int64_t>(key)) {
+        return static_cast<float>(*value);
+    }
+    if (const auto value = args.get<uint64_t>(key)) {
+        return static_cast<float>(*value);
+    }
+    return std::nullopt;
+}
+
+std::optional<int32_t> int32Arg(const CommandArgs& args, std::string_view key)
+{
+    if (const auto value = args.get<int64_t>(key)) {
+        return static_cast<int32_t>(
+            std::clamp<int64_t>(*value, std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()));
+    }
+    if (const auto value = args.get<uint64_t>(key)) {
+        return static_cast<int32_t>(std::min<uint64_t>(*value, std::numeric_limits<int32_t>::max()));
+    }
+    return std::nullopt;
+}
+
+std::optional<uint32_t> uint32Arg(const CommandArgs& args, std::string_view key)
+{
+    if (const auto value = args.get<uint64_t>(key)) {
+        return static_cast<uint32_t>(std::min<uint64_t>(*value, std::numeric_limits<uint32_t>::max()));
+    }
+    if (const auto value = args.get<int64_t>(key)) {
+        return static_cast<uint32_t>(
+            std::clamp<int64_t>(*value, 0, static_cast<int64_t>(std::numeric_limits<uint32_t>::max())));
+    }
+    return std::nullopt;
+}
+
+std::optional<uint64_t> uint64Arg(const CommandArgs& args, std::string_view key)
+{
+    if (const auto value = args.get<uint64_t>(key)) {
+        return *value;
+    }
+    if (const auto value = args.get<int64_t>(key)) {
+        return static_cast<uint64_t>(std::max<int64_t>(*value, 0));
+    }
+    return std::nullopt;
+}
+
+float quatLengthSquared(const glm::quat& rotation)
+{
+    return rotation.w * rotation.w + rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z;
+}
+
+glm::quat safeNormalize(glm::quat rotation)
+{
+    if (quatLengthSquared(rotation) <= 0.000001f) {
+        return glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    return glm::normalize(rotation);
+}
+
+template <typename Component>
+CommandResult
+    componentEditResult(std::string_view commandId, scene::Scene& scene, scene::Entity entity, Component*& component)
+{
+    if (!scene.isValidEntity(entity)) {
+        return CommandResult::fail(std::string{commandId} + " requires a valid entity");
+    }
+    if (!scene.hasComponent<Component>(entity)) {
+        return CommandResult::fail(std::string{commandId} + " requires component");
+    }
+
+    component = &scene.getComponent<Component>(entity);
+    return CommandResult::ok();
+}
+
+template <typename Component>
+CommandResult resolveEditableComponent(ToolContext& context,
+                                       const CommandArgs& args,
+                                       std::string_view commandId,
+                                       scene::Entity& entity,
+                                       Component*& component)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail(std::string{commandId} + " requires an active scene");
+    }
+
+    const auto entityArgValue = entityArg(args, "entity");
+    if (!entityArgValue) {
+        return CommandResult::fail(std::string{commandId} + " requires entity");
+    }
+
+    entity = *entityArgValue;
+    return componentEditResult(commandId, *scene, entity, component);
+}
+
+CommandResult editResult(std::string message, scene::Entity entity)
+{
+    auto result = CommandResult::ok(std::move(message));
+    result.set("entity", entityToValue(entity));
+    result.set("affected_entity", entityToValue(entity));
+    return result;
+}
+
+void applyTransformArgs(scene::TransformComponent& transform, const CommandArgs& args)
+{
+    if (const auto value = floatArg(args, "translation_x")) {
+        transform.translation.x = *value;
+    }
+    if (const auto value = floatArg(args, "translation_y")) {
+        transform.translation.y = *value;
+    }
+    if (const auto value = floatArg(args, "translation_z")) {
+        transform.translation.z = *value;
+    }
+
+    const auto hasQuaternionArg = args.contains("rotation_w") || args.contains("rotation_x") ||
+                                  args.contains("rotation_y") || args.contains("rotation_z");
+    if (hasQuaternionArg) {
+        auto rotation = transform.rotation;
+        if (const auto value = floatArg(args, "rotation_w")) {
+            rotation.w = *value;
+        }
+        if (const auto value = floatArg(args, "rotation_x")) {
+            rotation.x = *value;
+        }
+        if (const auto value = floatArg(args, "rotation_y")) {
+            rotation.y = *value;
+        }
+        if (const auto value = floatArg(args, "rotation_z")) {
+            rotation.z = *value;
+        }
+        transform.rotation = safeNormalize(rotation);
+    }
+
+    if (args.contains("rotation_degrees_x") || args.contains("rotation_degrees_y") ||
+        args.contains("rotation_degrees_z")) {
+        glm::vec3 rotationDegrees = glm::degrees(glm::eulerAngles(safeNormalize(transform.rotation)));
+        if (const auto value = floatArg(args, "rotation_degrees_x")) {
+            rotationDegrees.x = *value;
+        }
+        if (const auto value = floatArg(args, "rotation_degrees_y")) {
+            rotationDegrees.y = *value;
+        }
+        if (const auto value = floatArg(args, "rotation_degrees_z")) {
+            rotationDegrees.z = *value;
+        }
+        transform.rotation = safeNormalize(glm::quat{glm::radians(rotationDegrees)});
+    }
+
+    if (const auto value = floatArg(args, "scale_x")) {
+        transform.scale.x = *value;
+    }
+    if (const auto value = floatArg(args, "scale_y")) {
+        transform.scale.y = *value;
+    }
+    if (const auto value = floatArg(args, "scale_z")) {
+        transform.scale.z = *value;
+    }
+}
+
+void applyMeshRendererArgs(scene::MeshRendererComponent& meshRenderer, const CommandArgs& args)
+{
+    meshRenderer.mesh = assetArg(args, "mesh", meshRenderer.mesh);
+    if (const auto value = args.get<bool>("cast_shadow")) {
+        meshRenderer.cast_shadow = *value;
+    }
+    if (const auto value = uint32Arg(args, "submesh_start")) {
+        meshRenderer.submesh_start = *value;
+    }
+    if (const auto value = uint32Arg(args, "submesh_count")) {
+        meshRenderer.submesh_count = *value;
+    }
+
+    if (const auto index = indexArg(args, "material_index")) {
+        if (*index < meshRenderer.materials.size()) {
+            meshRenderer.materials[*index] = assetArg(args, "material", meshRenderer.materials[*index]);
+        }
+    }
+}
+
+void applySpriteRendererArgs(scene::SpriteRendererComponent& spriteRenderer, const CommandArgs& args)
+{
+    spriteRenderer.sprite = assetArg(args, "sprite", spriteRenderer.sprite);
+    if (const auto value = floatArg(args, "color_r")) {
+        spriteRenderer.color.r = *value;
+    }
+    if (const auto value = floatArg(args, "color_g")) {
+        spriteRenderer.color.g = *value;
+    }
+    if (const auto value = floatArg(args, "color_b")) {
+        spriteRenderer.color.b = *value;
+    }
+    if (const auto value = floatArg(args, "color_a")) {
+        spriteRenderer.color.a = *value;
+    }
+    if (const auto value = int32Arg(args, "sorting_layer")) {
+        spriteRenderer.sorting_layer = *value;
+    }
+    if (const auto value = int32Arg(args, "order_in_layer")) {
+        spriteRenderer.order_in_layer = *value;
+    }
+    if (const auto value = args.get<bool>("depth_test")) {
+        spriteRenderer.depth_test = *value;
+    }
+}
+
+void applyCameraArgs(scene::CameraComponent& camera, const CommandArgs& args)
+{
+    if (const auto value = args.get<bool>("primary")) {
+        camera.primary = *value;
+    }
+    if (const auto value = floatArg(args, "exposure")) {
+        camera.camera.setExposure(*value);
+    }
+    if (const auto value = uint64Arg(args, "projection_type")) {
+        using ProjectionType = renderer::interface::Camera::ProjectionType;
+        if (*value == static_cast<uint64_t>(ProjectionType::Orthographic) || *value == 1u) {
+            camera.camera.setOrthographic(10.0f, 0.1f, 100.0f);
+        } else {
+            camera.camera.setPerspective(glm::radians(45.0f), 0.1f, 100.0f);
+        }
+    }
+}
+
+void applyDirectionalLightArgs(scene::DirectionalLightComponent& light, const CommandArgs& args)
+{
+    if (const auto value = floatArg(args, "color_r")) {
+        light.color.r = *value;
+    }
+    if (const auto value = floatArg(args, "color_g")) {
+        light.color.g = *value;
+    }
+    if (const auto value = floatArg(args, "color_b")) {
+        light.color.b = *value;
+    }
+    if (const auto value = floatArg(args, "intensity")) {
+        light.intensity = std::max(*value, 0.0f);
+    }
+    if (const auto value = args.get<bool>("shadow_enabled")) {
+        light.shadow.enabled = *value;
+    }
+    if (const auto value = uint32Arg(args, "shadow_map_size")) {
+        light.shadow.map_size = std::max(*value, 1u);
+    }
+    if (const auto value = floatArg(args, "shadow_max_distance")) {
+        light.shadow.max_distance = std::max(*value, 0.0f);
+    }
+    if (const auto value = floatArg(args, "shadow_bias")) {
+        light.shadow.bias = std::max(*value, 0.0f);
+    }
+    if (const auto value = floatArg(args, "shadow_normal_bias")) {
+        light.shadow.normal_bias = std::max(*value, 0.0f);
+    }
+    if (const auto value = uint32Arg(args, "shadow_pcf_radius")) {
+        light.shadow.pcf_radius = std::clamp(*value, 0u, 4u);
+    }
+    if (const auto value = uint32Arg(args, "shadow_cascade_count")) {
+        light.shadow.cascade_count = std::clamp(*value, 1u, 4u);
+    }
+    if (const auto value = floatArg(args, "shadow_cascade_split_lambda")) {
+        light.shadow.cascade_split_lambda = std::clamp(*value, 0.0f, 1.0f);
+    }
+    if (const auto value = floatArg(args, "shadow_cascade_seam_blend")) {
+        light.shadow.cascade_seam_blend = std::max(*value, 0.0f);
+    }
+    if (const auto value = floatArg(args, "shadow_cascade_caster_depth_padding")) {
+        light.shadow.cascade_caster_depth_padding = std::max(*value, 0.0f);
     }
 }
 
@@ -611,6 +890,136 @@ CommandResult removeScriptBinding(ToolContext& context, const CommandArgs& args)
     return result;
 }
 
+CommandResult editTag(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::TagComponent* tag = nullptr;
+    auto result = resolveEditableComponent(context, args, EditTagCommandId, entity, tag);
+    if (!result.success) {
+        return result;
+    }
+
+    if (const auto value = args.get<std::string>("tag")) {
+        tag->tag = *value;
+    }
+
+    return editResult("Tag edited", entity);
+}
+
+CommandResult editTransform(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::TransformComponent* transform = nullptr;
+    auto result = resolveEditableComponent(context, args, EditTransformCommandId, entity, transform);
+    if (!result.success) {
+        return result;
+    }
+
+    applyTransformArgs(*transform, args);
+    return editResult("Transform edited", entity);
+}
+
+CommandResult editMeshRenderer(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::MeshRendererComponent* meshRenderer = nullptr;
+    auto result = resolveEditableComponent(context, args, EditMeshRendererCommandId, entity, meshRenderer);
+    if (!result.success) {
+        return result;
+    }
+
+    const auto materialIndex = indexArg(args, "material_index");
+    if (args.contains("material") && !materialIndex) {
+        return CommandResult::fail("scene.edit_mesh_renderer requires material_index when material is set");
+    }
+    if (materialIndex && *materialIndex >= meshRenderer->materials.size()) {
+        return CommandResult::fail("scene.edit_mesh_renderer requires a valid material_index");
+    }
+
+    applyMeshRendererArgs(*meshRenderer, args);
+    return editResult("Mesh renderer edited", entity);
+}
+
+CommandResult editSpriteRenderer(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::SpriteRendererComponent* spriteRenderer = nullptr;
+    auto result = resolveEditableComponent(context, args, EditSpriteRendererCommandId, entity, spriteRenderer);
+    if (!result.success) {
+        return result;
+    }
+
+    applySpriteRendererArgs(*spriteRenderer, args);
+    return editResult("Sprite renderer edited", entity);
+}
+
+CommandResult editScript(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::ScriptComponent* script = nullptr;
+    auto result = resolveEditableComponent(context, args, EditScriptCommandId, entity, script);
+    if (!result.success) {
+        return result;
+    }
+
+    const auto index = indexArg(args, "index");
+    if (!index || *index >= script->scripts.size()) {
+        return CommandResult::fail("scene.edit_script requires a valid index");
+    }
+
+    auto& binding = script->scripts[*index];
+    binding.script = assetArg(args, "script", binding.script);
+    if (const auto value = args.get<bool>("enabled")) {
+        binding.enabled = *value;
+    }
+
+    auto edit = editResult("Script binding edited", entity);
+    edit.set("index", static_cast<uint64_t>(*index));
+    return edit;
+}
+
+CommandResult editCamera(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::CameraComponent* camera = nullptr;
+    auto result = resolveEditableComponent(context, args, EditCameraCommandId, entity, camera);
+    if (!result.success) {
+        return result;
+    }
+
+    applyCameraArgs(*camera, args);
+    return editResult("Camera edited", entity);
+}
+
+CommandResult editDirectionalLight(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::DirectionalLightComponent* light = nullptr;
+    auto result = resolveEditableComponent(context, args, EditDirectionalLightCommandId, entity, light);
+    if (!result.success) {
+        return result;
+    }
+
+    applyDirectionalLightArgs(*light, args);
+    return editResult("Directional light edited", entity);
+}
+
+CommandResult editSceneSettings(ToolContext& context, const CommandArgs& args)
+{
+    auto* scene = activeScene(context);
+    if (scene == nullptr) {
+        return CommandResult::fail("scene.edit_scene_settings requires an active scene");
+    }
+
+    auto& settings = scene->getSettings();
+    settings.environment_map = assetArg(args, "environment_map", settings.environment_map);
+    if (const auto value = floatArg(args, "environment_intensity")) {
+        settings.environment_intensity = std::max(*value, 0.0f);
+    }
+
+    return CommandResult::ok("Scene settings edited");
+}
+
 } // namespace
 
 std::string_view CreateEntityCommand::id() const
@@ -913,6 +1322,206 @@ CommandResult RemoveScriptBindingCommand::execute(ToolContext& context, const Co
     return removeScriptBinding(context, args);
 }
 
+std::string_view EditTagCommand::id() const
+{
+    return EditTagCommandId;
+}
+
+std::string_view EditTagCommand::label() const
+{
+    return "Edit Tag";
+}
+
+std::string_view EditTagCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditTagCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditTagCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editTag(context, args);
+}
+
+std::string_view EditTransformCommand::id() const
+{
+    return EditTransformCommandId;
+}
+
+std::string_view EditTransformCommand::label() const
+{
+    return "Edit Transform";
+}
+
+std::string_view EditTransformCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditTransformCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditTransformCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editTransform(context, args);
+}
+
+std::string_view EditMeshRendererCommand::id() const
+{
+    return EditMeshRendererCommandId;
+}
+
+std::string_view EditMeshRendererCommand::label() const
+{
+    return "Edit Mesh Renderer";
+}
+
+std::string_view EditMeshRendererCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditMeshRendererCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditMeshRendererCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editMeshRenderer(context, args);
+}
+
+std::string_view EditSpriteRendererCommand::id() const
+{
+    return EditSpriteRendererCommandId;
+}
+
+std::string_view EditSpriteRendererCommand::label() const
+{
+    return "Edit Sprite Renderer";
+}
+
+std::string_view EditSpriteRendererCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditSpriteRendererCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditSpriteRendererCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editSpriteRenderer(context, args);
+}
+
+std::string_view EditScriptCommand::id() const
+{
+    return EditScriptCommandId;
+}
+
+std::string_view EditScriptCommand::label() const
+{
+    return "Edit Script";
+}
+
+std::string_view EditScriptCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditScriptCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditScriptCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editScript(context, args);
+}
+
+std::string_view EditCameraCommand::id() const
+{
+    return EditCameraCommandId;
+}
+
+std::string_view EditCameraCommand::label() const
+{
+    return "Edit Camera";
+}
+
+std::string_view EditCameraCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditCameraCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditCameraCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editCamera(context, args);
+}
+
+std::string_view EditDirectionalLightCommand::id() const
+{
+    return EditDirectionalLightCommandId;
+}
+
+std::string_view EditDirectionalLightCommand::label() const
+{
+    return "Edit Directional Light";
+}
+
+std::string_view EditDirectionalLightCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditDirectionalLightCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditDirectionalLightCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editDirectionalLight(context, args);
+}
+
+std::string_view EditSceneSettingsCommand::id() const
+{
+    return EditSceneSettingsCommandId;
+}
+
+std::string_view EditSceneSettingsCommand::label() const
+{
+    return "Edit Scene Settings";
+}
+
+std::string_view EditSceneSettingsCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditSceneSettingsCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditSceneSettingsCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editSceneSettings(context, args);
+}
+
 void registerSceneCommands(CommandRegistry& registry)
 {
     registry.registerCommand(std::make_unique<CreateEntityCommand>());
@@ -927,6 +1536,14 @@ void registerSceneCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<RemoveMaterialSlotCommand>());
     registry.registerCommand(std::make_unique<AddScriptBindingCommand>());
     registry.registerCommand(std::make_unique<RemoveScriptBindingCommand>());
+    registry.registerCommand(std::make_unique<EditTagCommand>());
+    registry.registerCommand(std::make_unique<EditTransformCommand>());
+    registry.registerCommand(std::make_unique<EditMeshRendererCommand>());
+    registry.registerCommand(std::make_unique<EditSpriteRendererCommand>());
+    registry.registerCommand(std::make_unique<EditScriptCommand>());
+    registry.registerCommand(std::make_unique<EditCameraCommand>());
+    registry.registerCommand(std::make_unique<EditDirectionalLightCommand>());
+    registry.registerCommand(std::make_unique<EditSceneSettingsCommand>());
 }
 
 } // namespace lunalite::tooling
