@@ -82,6 +82,7 @@ add_library(LunaLite STATIC
     asset/importers/mesh/obj_mesh_derived_asset_generator.cpp
     asset/importers/mesh/gltf_mesh_derived_asset_generator.cpp
     asset/importers/prefab_asset_importer.cpp
+    asset/importers/scene_asset_importer.cpp
     asset/importers/script_asset_importer.cpp
     asset/importers/sprite_asset_importer.cpp
     asset/importers/texture_asset_importer.cpp

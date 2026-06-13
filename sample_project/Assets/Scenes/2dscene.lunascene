@@ -1,0 +1,72 @@
+Scene: 2dscene
+Settings:
+  EnvironmentMap: 0
+  EnvironmentIntensity: 1
+Entities:
+  - Entity: 1048587
+    TagComponent:
+      Tag: ""
+    TransformComponent:
+      Translation:
+        - 0
+        - 0
+        - 7
+      Rotation:
+        - 1
+        - 0
+        - 0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    CameraComponent:
+      Primary: true
+      ProjectionType: Orthographic
+      Exposure: 1
+  - Entity: 1048588
+    TagComponent:
+      Tag: YuzurihaInori
+    TransformComponent:
+      Translation:
+        - -1.2
+        - 0
+        - 0
+      Rotation:
+        - 1
+        - 0
+        - 0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1
+    SpriteRendererComponent:
+      Sprite: 11523767637006159074
+      Color:
+        - 1
+        - 1
+        - 1
+        - 1
+      SortingLayer: 0
+      OrderInLayer: 0
+      DepthTest: false
+    ParentComponent:
+      Parent: 1048589
+  - Entity: 1048589
+    TagComponent:
+      Tag: ""
+    TransformComponent:
+      Translation:
+        - 0.4
+        - 0
+        - 0
+      Rotation:
+        - 1
+        - 0
+        - 0
+        - 0
+      Scale:
+        - 1
+        - 1
+        - 1

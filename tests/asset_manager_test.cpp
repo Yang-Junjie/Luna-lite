@@ -1,3 +1,4 @@
+#include "../LunaLite/asset/asset_database.h"
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
 #include "../LunaLite/asset/factory/asset_factory_manager.h"
@@ -346,6 +347,16 @@ int main()
         material << "    Emission: " << static_cast<uint64_t>(textureHandle) << "\n";
     }
 
+    const auto sceneAssetPath = projectRoot / info.assets_path / "test.lunascene";
+    {
+        std::ofstream scene(sceneAssetPath);
+        scene << "Scene: TestScene\n";
+        scene << "Settings:\n";
+        scene << "  EnvironmentMap: 0\n";
+        scene << "  EnvironmentIntensity: 1\n";
+        scene << "Entities: []\n";
+    }
+
     const auto gltfTexturePath = projectRoot / info.assets_path / "gltf_texture.png.asset";
     if (!writeTestPngTexture(gltfTexturePath)) {
         std::cerr << "Failed to write glTF test texture.\n";
@@ -461,6 +472,22 @@ int main()
         std::cerr << "Failed to resolve texture metadata for sprite factory.\n";
         return 1;
     }
+
+    const auto sceneHandle = asset::AssetManager::get().getHandleByRelativePath("GameAssets/test.lunascene");
+    if (!sceneHandle.isValid()) {
+        std::cerr << "Failed to resolve imported scene handle.\n";
+        return 1;
+    }
+    const auto* sceneMetadata = asset::AssetManager::get().getMetadata(sceneHandle);
+    if (sceneMetadata == nullptr || sceneMetadata->Type != asset::AssetType::Scene) {
+        std::cerr << "Failed to register scene asset metadata.\n";
+        return 1;
+    }
+    if (asset::AssetDatabase::get().contains(sceneHandle)) {
+        std::cerr << "Scene asset should be deferred instead of loaded into AssetDatabase.\n";
+        return 1;
+    }
+
     const asset::AssetFactoryContext spriteFactoryContext{
         .source = textureMetadata,
         .target_directory = textureMetadata->FilePath.parent_path(),
@@ -661,6 +688,6 @@ int main()
         return 1;
     }
 
-    std::cout << "AssetManager imported and loaded mesh, prefab, material, texture, and sprite assets.\n";
+    std::cout << "AssetManager imported and loaded mesh, prefab, material, texture, sprite, and scene assets.\n";
     return 0;
 }

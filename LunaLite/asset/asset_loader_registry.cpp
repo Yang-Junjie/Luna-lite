@@ -51,9 +51,10 @@ bool AssetLoaderRegistry::loadAsset(const AssetMetadata& metadata) const
         return true;
     }
 
-    if (metadata.Type == AssetType::Script) {
-        LUNA_CORE_DEBUG("Registered script asset '{}' for runtime loading (handle {})",
+    if (metadata.Type == AssetType::Script || metadata.Type == AssetType::Scene) {
+        LUNA_CORE_DEBUG("Registered asset '{}' ({}) for deferred loading (handle {})",
                         metadata.FilePath.string(),
+                        assetTypeToString(metadata.Type),
                         metadata.Handle.toString());
         return true;
     }

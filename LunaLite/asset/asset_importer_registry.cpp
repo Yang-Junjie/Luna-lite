@@ -3,6 +3,7 @@
 #include "importers/material_asset_importer.h"
 #include "importers/mesh/mesh_asset_importer.h"
 #include "importers/prefab_asset_importer.h"
+#include "importers/scene_asset_importer.h"
 #include "importers/script_asset_importer.h"
 #include "importers/sprite_asset_importer.h"
 #include "importers/texture_asset_importer.h"
@@ -21,6 +22,7 @@ void AssetImporterRegistry::registerDefaults()
     m_importers.push_back(std::make_unique<MeshAssetImporter>());
     m_importers.push_back(std::make_unique<MaterialAssetImporter>());
     m_importers.push_back(std::make_unique<PrefabAssetImporter>());
+    m_importers.push_back(std::make_unique<SceneAssetImporter>());
     m_importers.push_back(std::make_unique<ScriptAssetImporter>());
     m_importers.push_back(std::make_unique<TextureAssetImporter>());
     m_importers.push_back(std::make_unique<SpriteAssetImporter>());

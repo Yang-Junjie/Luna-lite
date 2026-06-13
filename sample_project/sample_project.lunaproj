@@ -3,5 +3,5 @@ Project:
   Version: 0.1.0
   Author: Unknown
   Description: A simple Luna sample project.
-  StartScene: Assets/Scenes/test.lunascene
+  StartScene: Assets/Scenes/2dscene.lunascene
   AssetsPath: ./Assets
