@@ -18,6 +18,7 @@
 #include "../LunaLiteTooling/context/tool_context.h"
 #include "editor_actions.h"
 #include "editor_layer.h"
+#include "editor_scene_metadata.h"
 
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
@@ -464,6 +465,7 @@ void EditorLayer::createProject()
     tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
+    m_editor_camera.resetSceneState();
 }
 
 void EditorLayer::openProject()
@@ -486,6 +488,7 @@ void EditorLayer::openProject()
     tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
+    m_editor_camera.resetSceneState();
 
     const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
     const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
@@ -551,6 +554,7 @@ void EditorLayer::createScene()
     } else {
         m_current_scene_path = scenePath;
     }
+    persistEditorSceneCamera(true);
 }
 
 void EditorLayer::openScene()
@@ -573,7 +577,10 @@ void EditorLayer::saveScene()
     const auto result = actions::saveSceneFile(m_scene, m_current_scene_path);
     if (!result.success) {
         LUNA_CORE_ERROR("Failed to save scene command: {}", result.message.empty() ? "unknown error" : result.message);
+        return;
     }
+
+    persistEditorSceneCamera(true);
 }
 
 bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
@@ -593,7 +600,23 @@ bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
     } else {
         m_current_scene_path = scene_path;
     }
+    loadEditorSceneCamera(m_current_scene_path, m_editor_camera);
     return true;
+}
+
+void EditorLayer::persistEditorSceneCamera(bool force)
+{
+    if (m_current_scene_path.empty()) {
+        return;
+    }
+
+    if (!force && !m_editor_camera.hasSceneStateDirty()) {
+        return;
+    }
+
+    if (saveEditorSceneCamera(m_current_scene_path, m_editor_camera)) {
+        m_editor_camera.clearSceneStateDirty();
+    }
 }
 
 void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)

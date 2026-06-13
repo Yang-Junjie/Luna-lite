@@ -14,12 +14,16 @@ public:
     EditorCamera();
     ~EditorCamera() override;
 
+    void resetSceneState();
     void onUpdate(core::Timestep dt, bool viewportHovered);
     void setProjectionType(ProjectionType projection_type);
 
     void setPosition(const glm::vec3& position);
     glm::mat4 getView() const override;
     glm::vec3 getPosition() const override;
+
+    void setExposure(float exposure);
+    float getExposure() const;
 
     void setYaw(float yaw);
     float getYaw() const;
@@ -33,9 +37,13 @@ public:
     void setMouseSensitivity(float mouse_sensitivity);
     float getMouseSensitivity() const;
 
+    bool hasSceneStateDirty() const;
+    void clearSceneStateDirty();
+
 private:
     void lockOrthographicState();
     bool isOrthographic() const;
+    void markSceneStateDirty();
 
     glm::vec3 getForwardDirection() const;
     glm::vec3 getRightDirection() const;
@@ -49,6 +57,7 @@ private:
     float m_move_speed{4.0f};
     float m_mouse_sensitivity{0.12f};
     bool m_is_controlling{false};
+    bool m_scene_state_dirty{false};
 };
 
 } // namespace lunalite::editor

@@ -4,3 +4,15 @@ Asset:
   Name: 2dscene
   FilePath: Assets/Scenes/2dscene.lunascene
   MemoryOnly: false
+  Config:
+    Editors:
+      LunaLite:
+        Camera:
+          ProjectionType: Orthographic
+          Position:
+            - -1.2091366
+            - -4.5150895
+            - 5
+          Yaw: -90
+          Pitch: 0
+          Exposure: 1

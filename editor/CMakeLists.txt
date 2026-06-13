@@ -3,6 +3,7 @@ add_executable(LunaLiteEditor
     editor_camera.cpp
     editor_actions.cpp
     editor_layer.cpp
+    editor_scene_metadata.cpp
     panels/content_browser_panel.cpp
     panels/debug_panel.cpp
     panels/editor_setting_panel.cpp

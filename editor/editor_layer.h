@@ -61,6 +61,7 @@ private:
     void openScene();
     void saveScene();
     bool loadScene(const std::filesystem::path& scene_path);
+    void persistEditorSceneCamera(bool force = false);
 
     void createEntityFromAsset(const AssetDragDropPayload& payload);
     bool onKeyPressedEvent(core::KeyPressedEvent& event);

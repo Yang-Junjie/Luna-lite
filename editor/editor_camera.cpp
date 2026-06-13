@@ -46,6 +46,7 @@ void EditorCamera::onUpdate(core::Timestep dt, bool viewportHovered)
         return;
     }
 
+    bool changed = false;
     float speed = m_move_speed;
     if (core::Input::isKeyPressed(core::KeyCode::LeftShift) || core::Input::isKeyPressed(core::KeyCode::RightShift)) {
         speed *= 3.0f;
@@ -59,18 +60,25 @@ void EditorCamera::onUpdate(core::Timestep dt, bool viewportHovered)
 
         if (core::Input::isKeyPressed(core::KeyCode::W)) {
             m_position += up * distance;
+            changed = true;
         }
         if (core::Input::isKeyPressed(core::KeyCode::S)) {
             m_position -= up * distance;
+            changed = true;
         }
         if (core::Input::isKeyPressed(core::KeyCode::D)) {
             m_position.x += distance;
+            changed = true;
         }
         if (core::Input::isKeyPressed(core::KeyCode::A)) {
             m_position.x -= distance;
+            changed = true;
         }
 
         m_position.z = m_orthographic_locked_z;
+        if (changed) {
+            markSceneStateDirty();
+        }
         return;
     }
 
@@ -86,22 +94,45 @@ void EditorCamera::onUpdate(core::Timestep dt, bool viewportHovered)
 
     if (core::Input::isKeyPressed(core::KeyCode::W)) {
         m_position += forward * distance;
+        changed = true;
     }
     if (core::Input::isKeyPressed(core::KeyCode::S)) {
         m_position -= forward * distance;
+        changed = true;
     }
     if (core::Input::isKeyPressed(core::KeyCode::D)) {
         m_position += right * distance;
+        changed = true;
     }
     if (core::Input::isKeyPressed(core::KeyCode::A)) {
         m_position -= right * distance;
+        changed = true;
     }
     if (core::Input::isKeyPressed(core::KeyCode::E)) {
         m_position += up * distance;
+        changed = true;
     }
     if (core::Input::isKeyPressed(core::KeyCode::Q)) {
         m_position -= up * distance;
+        changed = true;
     }
+
+    if (changed) {
+        markSceneStateDirty();
+    }
+}
+
+void EditorCamera::resetSceneState()
+{
+    m_position = {3.0f, 2.0f, 5.0f};
+    m_yaw = -120.0f;
+    m_pitch = -20.0f;
+    m_perspective_yaw = m_yaw;
+    m_perspective_pitch = m_pitch;
+    m_orthographic_locked_z = m_position.z;
+    setExposure(1.0f);
+    setProjectionType(ProjectionType::Perspective);
+    clearSceneStateDirty();
 }
 
 void EditorCamera::setProjectionType(ProjectionType projection_type)
@@ -115,22 +146,37 @@ void EditorCamera::setProjectionType(ProjectionType projection_type)
 
         setOrthographic(10.0f, 0.1f, 100.0f);
         lockOrthographicState();
+        markSceneStateDirty();
         return;
     }
 
     setPerspective(glm::radians(45.0f), 0.1f, 100.0f);
     m_yaw = m_perspective_yaw;
     m_pitch = m_perspective_pitch;
+    markSceneStateDirty();
 }
 
 void EditorCamera::setPosition(const glm::vec3& position)
 {
     if (isOrthographic()) {
         m_position = {position.x, position.y, m_orthographic_locked_z};
+        markSceneStateDirty();
         return;
     }
 
     m_position = position;
+    markSceneStateDirty();
+}
+
+void EditorCamera::setExposure(float exposure)
+{
+    renderer::interface::Camera::setExposure(exposure);
+    markSceneStateDirty();
+}
+
+float EditorCamera::getExposure() const
+{
+    return renderer::interface::Camera::getExposure();
 }
 
 glm::mat4 EditorCamera::getView() const
@@ -147,11 +193,13 @@ void EditorCamera::setYaw(float yaw)
 {
     if (isOrthographic()) {
         lockOrthographicState();
+        markSceneStateDirty();
         return;
     }
 
     m_yaw = yaw;
     m_perspective_yaw = m_yaw;
+    markSceneStateDirty();
 }
 
 float EditorCamera::getYaw() const
@@ -163,11 +211,13 @@ void EditorCamera::setPitch(float pitch)
 {
     if (isOrthographic()) {
         lockOrthographicState();
+        markSceneStateDirty();
         return;
     }
 
     m_pitch = std::clamp(pitch, -89.0f, 89.0f);
     m_perspective_pitch = m_pitch;
+    markSceneStateDirty();
 }
 
 float EditorCamera::getPitch() const
@@ -195,6 +245,16 @@ float EditorCamera::getMouseSensitivity() const
     return m_mouse_sensitivity;
 }
 
+bool EditorCamera::hasSceneStateDirty() const
+{
+    return m_scene_state_dirty;
+}
+
+void EditorCamera::clearSceneStateDirty()
+{
+    m_scene_state_dirty = false;
+}
+
 void EditorCamera::lockOrthographicState()
 {
     m_position.z = m_orthographic_locked_z;
@@ -205,6 +265,11 @@ void EditorCamera::lockOrthographicState()
 bool EditorCamera::isOrthographic() const
 {
     return getProjectionType() == ProjectionType::Orthographic;
+}
+
+void EditorCamera::markSceneStateDirty()
+{
+    m_scene_state_dirty = true;
 }
 
 glm::vec3 EditorCamera::getForwardDirection() const

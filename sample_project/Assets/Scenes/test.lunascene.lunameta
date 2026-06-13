@@ -4,3 +4,15 @@ Asset:
   Name: test
   FilePath: Assets/Scenes/test.lunascene
   MemoryOnly: false
+  Config:
+    Editors:
+      LunaLite:
+        Camera:
+          ProjectionType: Perspective
+          Position:
+            - -23.85078
+            - 10.743916
+            - 11.082115
+          Yaw: -38.03987
+          Pitch: -11.23999
+          Exposure: 1
