@@ -1,7 +1,7 @@
 #include "../../asset/asset_manager.h"
 #include "../../core/log.h"
 #include "../../project/project_manager.h"
-#include "../../scene/components.h"
+#include "../script_components.h"
 #include "../../scene/scene.h"
 #include "../glue/entity_api.h"
 #include "../glue/input_api.h"

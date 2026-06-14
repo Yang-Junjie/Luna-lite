@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../LunaLite/renderer/components/renderer_component_registry.h"
+#include "../../LunaLite/script/script_component_registry.h"
 #include "command.h"
 
 #include <string_view>
@@ -209,11 +211,11 @@ inline constexpr std::string_view EditCameraCommandId = "scene.edit_camera";
 inline constexpr std::string_view EditDirectionalLightCommandId = "scene.edit_directional_light";
 inline constexpr std::string_view EditSceneSettingsCommandId = "scene.edit_scene_settings";
 
-inline constexpr std::string_view MeshRendererComponentType = "MeshRenderer";
-inline constexpr std::string_view SpriteRendererComponentType = "SpriteRenderer";
-inline constexpr std::string_view ScriptComponentType = "Script";
-inline constexpr std::string_view CameraComponentType = "Camera";
-inline constexpr std::string_view DirectionalLightComponentType = "DirectionalLight";
+inline constexpr std::string_view MeshRendererComponentType = renderer::MeshRendererComponentType;
+inline constexpr std::string_view SpriteRendererComponentType = renderer::SpriteRendererComponentType;
+inline constexpr std::string_view ScriptComponentType = script::ScriptComponentType;
+inline constexpr std::string_view CameraComponentType = renderer::CameraComponentType;
+inline constexpr std::string_view DirectionalLightComponentType = renderer::DirectionalLightComponentType;
 
 void registerSceneCommands(CommandRegistry& registry);
 

@@ -1,6 +1,8 @@
-#include "../LunaLite/scene/components.h"
+#include "../LunaLite/renderer/components/renderer_components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLite/scene/scene_components.h"
 #include "../LunaLite/scene/scene_serializer.h"
+#include "../LunaLite/script/script_components.h"
 
 #include <cmath>
 

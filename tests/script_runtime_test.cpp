@@ -1,7 +1,9 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/project/project_manager.h"
-#include "../LunaLite/scene/components.h"
+#include "../LunaLite/renderer/components/renderer_components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLite/scene/scene_components.h"
+#include "../LunaLite/script/script_components.h"
 
 #include <cmath>
 
@@ -126,7 +128,8 @@ return {
         std::cerr << "Lua on_update did not update transform.\n";
         return 1;
     }
-    if (scene.hasComponent<scene::CameraComponent>(entity) || scene.hasComponent<scene::MeshRendererComponent>(entity)) {
+    if (scene.hasComponent<scene::CameraComponent>(entity) ||
+        scene.hasComponent<scene::MeshRendererComponent>(entity)) {
         std::cerr << "Lua component API did not remove components.\n";
         return 1;
     }

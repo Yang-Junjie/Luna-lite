@@ -1,6 +1,8 @@
 #include "../core/log.h"
-#include "components.h"
+#include "../renderer/components/renderer_components.h"
+#include "../script/script_components.h"
 #include "scene.h"
+#include "scene_components.h"
 #include "scene_serializer.h"
 
 #include <cstdint>

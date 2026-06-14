@@ -12,6 +12,7 @@ struct ProjectInfo {
 
     // relative to project root
     std::filesystem::path start_scene;
+    
     std::filesystem::path assets_path;
 };
 } // namespace lunalite::project

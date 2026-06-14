@@ -1,5 +1,5 @@
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
-#include "../../LunaLite/scene/components.h"
+#include "../../LunaLite/scene/scene_components.h"
 #include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "hierarchy_panel.h"

@@ -60,7 +60,7 @@ bool addMaterialSlot(scene::Scene& scene,
 bool removeMaterialSlot(scene::Scene& scene, scene::Entity entity, size_t index);
 bool addScriptBinding(scene::Scene& scene,
                       scene::Entity entity,
-                      asset::AssetHandle script = {},
+                      asset::AssetHandle script = asset::AssetHandle{0},
                       bool enabled = true,
                       std::optional<size_t> index = std::nullopt);
 bool removeScriptBinding(scene::Scene& scene, scene::Entity entity, size_t index);

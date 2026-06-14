@@ -10,9 +10,9 @@ Asset:
         Camera:
           ProjectionType: Perspective
           Position:
-            - -23.85078
-            - 10.743916
-            - 11.082115
-          Yaw: -38.03987
-          Pitch: -11.23999
+            - 6.110978
+            - 9.676837
+            - 18.768196
+          Yaw: -113.5198
+          Pitch: -22.280003
           Exposure: 1

@@ -1,5 +1,5 @@
-#include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLite/scene/scene_components.h"
 #include "../LunaLiteTooling/commands/command_manager.h"
 #include "../LunaLiteTooling/context/tool_context.h"
 

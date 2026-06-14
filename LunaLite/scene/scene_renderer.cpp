@@ -1,10 +1,11 @@
 #include "../asset/asset_database.h"
 #include "../asset/sprite.h"
 #include "../core/log.h"
+#include "../renderer/components/renderer_components.h"
 #include "../renderer/interface/mesh.h"
 #include "../renderer/interface/sprite_geometry.h"
 #include "../renderer/interface/texture.h"
-#include "components.h"
+#include "scene_components.h"
 #include "scene_renderer.h"
 
 #include <algorithm>

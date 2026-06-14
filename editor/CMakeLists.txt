@@ -1,9 +1,14 @@
 add_executable(LunaLiteEditor
     application.cpp
+    component_inspector_widgets.cpp
     editor_camera.cpp
     editor_actions.cpp
+    editor_component_inspectors.cpp
     editor_layer.cpp
     editor_scene_metadata.cpp
+    modules/renderer/renderer_component_inspectors.cpp
+    modules/scene/scene_component_inspectors.cpp
+    modules/script/script_component_inspectors.cpp
     panels/content_browser_panel.cpp
     panels/debug_panel.cpp
     panels/editor_setting_panel.cpp

@@ -93,9 +93,13 @@ add_library(LunaLite STATIC
     asset/loaders/texture_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
+    renderer/components/renderer_component_registry.cpp
+    scene/component_registry.cpp
+    scene/scene_component_registry.cpp
     scene/scene.cpp
     scene/scene_serializer.cpp
     scene/scene_renderer.cpp
+    script/script_component_registry.cpp
     script/glue/entity_api.cpp
     script/glue/input_api.cpp
     script/glue/log_api.cpp

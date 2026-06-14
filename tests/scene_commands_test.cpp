@@ -1,9 +1,11 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
 #include "../LunaLite/project/project_manager.h"
+#include "../LunaLite/renderer/components/renderer_components.h"
 #include "../LunaLite/renderer/interface/camera.h"
-#include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLite/scene/scene_components.h"
+#include "../LunaLite/script/script_components.h"
 #include "../LunaLiteTooling/commands/command_manager.h"
 #include "../LunaLiteTooling/commands/command_registry.h"
 #include "../LunaLiteTooling/commands/scene_commands.h"
@@ -282,6 +284,7 @@ int main()
              .execute(tooling::AddScriptBindingCommandId, context, addScriptBindingArgs)
              .success ||
         scene.getComponent<scene::ScriptComponent>(componentEntity).scripts.size() != 1 ||
+        scene.getComponent<scene::ScriptComponent>(componentEntity).scripts.front().script != asset::AssetHandle{0} ||
         scene.getComponent<scene::ScriptComponent>(componentEntity).scripts.front().enabled) {
         std::cerr << "scene.add_script_binding did not add the expected binding.\n";
         return 1;

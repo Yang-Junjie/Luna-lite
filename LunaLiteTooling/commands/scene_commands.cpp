@@ -1,7 +1,10 @@
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
-#include "../../LunaLite/scene/components.h"
+#include "../../LunaLite/renderer/components/renderer_components.h"
+#include "../../LunaLite/scene/component_registry.h"
 #include "../../LunaLite/scene/scene.h"
+#include "../../LunaLite/scene/scene_components.h"
+#include "../../LunaLite/script/script_components.h"
 #include "command_registry.h"
 #include "scene_commands.h"
 
@@ -54,7 +57,8 @@ bool boolArg(const CommandArgs& args, std::string_view key, bool fallback)
     return value ? *value : fallback;
 }
 
-asset::AssetHandle assetArg(const CommandArgs& args, std::string_view key, asset::AssetHandle fallback = {})
+asset::AssetHandle
+    assetArg(const CommandArgs& args, std::string_view key, asset::AssetHandle fallback = asset::AssetHandle{0})
 {
     const auto value = args.get<asset::AssetHandle>(key);
     return value ? *value : fallback;
@@ -670,35 +674,15 @@ CommandResult addComponent(ToolContext& context, const CommandArgs& args)
         return CommandResult::fail("scene.add_component requires component_type");
     }
 
-    const std::string_view componentTypeView{*componentType};
-
-    if (componentTypeView == MeshRendererComponentType) {
-        if (scene->hasComponent<scene::MeshRendererComponent>(*entity)) {
-            return CommandResult::fail("Entity already has MeshRenderer component");
-        }
-        scene->addComponent<scene::MeshRendererComponent>(*entity);
-    } else if (componentTypeView == SpriteRendererComponentType) {
-        if (scene->hasComponent<scene::SpriteRendererComponent>(*entity)) {
-            return CommandResult::fail("Entity already has SpriteRenderer component");
-        }
-        scene->addComponent<scene::SpriteRendererComponent>(*entity);
-    } else if (componentTypeView == ScriptComponentType) {
-        if (scene->hasComponent<scene::ScriptComponent>(*entity)) {
-            return CommandResult::fail("Entity already has Script component");
-        }
-        scene->addComponent<scene::ScriptComponent>(*entity);
-    } else if (componentTypeView == CameraComponentType) {
-        if (scene->hasComponent<scene::CameraComponent>(*entity)) {
-            return CommandResult::fail("Entity already has Camera component");
-        }
-        scene->addComponent<scene::CameraComponent>(*entity);
-    } else if (componentTypeView == DirectionalLightComponentType) {
-        if (scene->hasComponent<scene::DirectionalLightComponent>(*entity)) {
-            return CommandResult::fail("Entity already has DirectionalLight component");
-        }
-        scene->addComponent<scene::DirectionalLightComponent>(*entity);
-    } else {
+    const auto* descriptor = scene::ComponentRegistry::get().find(*componentType);
+    if (descriptor == nullptr || descriptor->add == nullptr || descriptor->has == nullptr) {
         return CommandResult::fail("scene.add_component does not support this component_type");
+    }
+    if (descriptor->has(*scene, *entity)) {
+        return CommandResult::fail("Entity already has " + std::string{descriptor->display_name} + " component");
+    }
+    if (!descriptor->add(*scene, *entity)) {
+        return CommandResult::fail("scene.add_component failed");
     }
 
     auto result = CommandResult::ok("Component added");
@@ -724,35 +708,15 @@ CommandResult removeComponent(ToolContext& context, const CommandArgs& args)
         return CommandResult::fail("scene.remove_component requires component_type");
     }
 
-    const std::string_view componentTypeView{*componentType};
-
-    if (componentTypeView == MeshRendererComponentType) {
-        if (!scene->hasComponent<scene::MeshRendererComponent>(*entity)) {
-            return CommandResult::fail("Entity does not have MeshRenderer component");
-        }
-        scene->removeComponent<scene::MeshRendererComponent>(*entity);
-    } else if (componentTypeView == SpriteRendererComponentType) {
-        if (!scene->hasComponent<scene::SpriteRendererComponent>(*entity)) {
-            return CommandResult::fail("Entity does not have SpriteRenderer component");
-        }
-        scene->removeComponent<scene::SpriteRendererComponent>(*entity);
-    } else if (componentTypeView == ScriptComponentType) {
-        if (!scene->hasComponent<scene::ScriptComponent>(*entity)) {
-            return CommandResult::fail("Entity does not have Script component");
-        }
-        scene->removeComponent<scene::ScriptComponent>(*entity);
-    } else if (componentTypeView == CameraComponentType) {
-        if (!scene->hasComponent<scene::CameraComponent>(*entity)) {
-            return CommandResult::fail("Entity does not have Camera component");
-        }
-        scene->removeComponent<scene::CameraComponent>(*entity);
-    } else if (componentTypeView == DirectionalLightComponentType) {
-        if (!scene->hasComponent<scene::DirectionalLightComponent>(*entity)) {
-            return CommandResult::fail("Entity does not have DirectionalLight component");
-        }
-        scene->removeComponent<scene::DirectionalLightComponent>(*entity);
-    } else {
+    const auto* descriptor = scene::ComponentRegistry::get().find(*componentType);
+    if (descriptor == nullptr || descriptor->remove == nullptr || descriptor->has == nullptr) {
         return CommandResult::fail("scene.remove_component does not support this component_type");
+    }
+    if (!descriptor->has(*scene, *entity)) {
+        return CommandResult::fail("Entity does not have " + std::string{descriptor->display_name} + " component");
+    }
+    if (!descriptor->remove(*scene, *entity)) {
+        return CommandResult::fail("scene.remove_component failed");
     }
 
     auto result = CommandResult::ok("Component removed");

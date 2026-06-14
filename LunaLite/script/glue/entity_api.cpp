@@ -1,5 +1,6 @@
-#include "../../scene/components.h"
+#include "../../renderer/components/renderer_components.h"
 #include "../../scene/scene.h"
+#include "../../scene/scene_components.h"
 #include "entity_api.h"
 
 namespace lunalite::script {

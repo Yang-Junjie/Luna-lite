@@ -1,6 +1,6 @@
 #include "../LunaLite/project/project_manager.h"
-#include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLite/scene/scene_components.h"
 #include "../LunaLiteTooling/commands/command_registry.h"
 #include "../LunaLiteTooling/commands/project_commands.h"
 #include "../LunaLiteTooling/context/tool_context.h"

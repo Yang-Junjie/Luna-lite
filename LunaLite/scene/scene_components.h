@@ -1,0 +1,39 @@
+#pragma once
+
+#include <entt/entt.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <string>
+#include <utility>
+
+namespace lunalite::scene {
+struct TagComponent {
+    std::string tag;
+
+    TagComponent() = default;
+
+    explicit TagComponent(std::string tag)
+        : tag(std::move(tag))
+    {}
+};
+
+struct TransformComponent {
+    glm::vec3 translation{0.0f};
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 scale{1.0f};
+
+    glm::mat4 getTransform() const
+    {
+        glm::mat4 transform{1.0f};
+        transform = glm::translate(transform, translation);
+        transform *= glm::mat4_cast(rotation);
+        transform = glm::scale(transform, scale);
+        return transform;
+    }
+};
+
+struct ParentComponent {
+    entt::entity parent{entt::null};
+};
+} // namespace lunalite::scene

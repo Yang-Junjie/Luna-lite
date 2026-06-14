@@ -1,7 +1,7 @@
 #include "../LunaLite/core/log.h"
 #include "../LunaLite/renderer/interface/material.h"
 #include "../LunaLite/renderer/interface/texture.h"
-#include "../LunaLite/scene/components.h"
+#include "../LunaLite/scene/scene_components.h"
 #include "../LunaLiteTooling/commands/asset_commands.h"
 #include "../LunaLiteTooling/commands/command_manager.h"
 #include "../LunaLiteTooling/commands/project_commands.h"

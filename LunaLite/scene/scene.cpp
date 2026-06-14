@@ -1,9 +1,11 @@
 #include "../asset/asset_database.h"
 #include "../asset/prefab.h"
 #include "../core/log.h"
+#include "../renderer/components/renderer_components.h"
+#include "../script/script_components.h"
 #include "../script/script_runtime.h"
-#include "components.h"
 #include "scene.h"
+#include "scene_components.h"
 
 #include <unordered_map>
 #include <unordered_set>

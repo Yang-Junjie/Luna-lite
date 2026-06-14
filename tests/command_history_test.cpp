@@ -1,5 +1,5 @@
-#include "../LunaLite/scene/components.h"
 #include "../LunaLite/scene/scene.h"
+#include "../LunaLite/scene/scene_components.h"
 #include "../LunaLiteTooling/commands/command_manager.h"
 #include "../LunaLiteTooling/commands/scene_commands.h"
 #include "../LunaLiteTooling/context/tool_context.h"
@@ -46,8 +46,7 @@ int main()
     tooling::CommandArgs childArgs;
     childArgs.set("name", std::string{"Child"});
     childArgs.set("parent_entity", entityToValue(entityFromValue(*root)));
-    const auto childResult =
-        tooling::CommandManager::get().execute(tooling::CreateEntityCommandId, context, childArgs);
+    const auto childResult = tooling::CommandManager::get().execute(tooling::CreateEntityCommandId, context, childArgs);
     const auto child = childResult.get<uint64_t>("created_entity");
     if (!childResult.success || child == nullptr) {
         std::cerr << "Failed to create child entity.\n";
