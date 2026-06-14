@@ -81,6 +81,7 @@ bool ProjectManager::serializeProject()
     project["Author"] = m_project_info->author;
     project["Description"] = m_project_info->description;
     project["StartScene"] = m_project_info->start_scene.generic_string();
+    project["LastOpenScene"] = m_project_info->last_open_scene.generic_string();
     project["AssetsPath"] = m_project_info->assets_path.generic_string();
     root["Project"] = project;
 
@@ -129,16 +130,20 @@ bool ProjectManager::deserializeProject()
         if (project["StartScene"]) {
             info.start_scene = project["StartScene"].as<std::string>();
         }
+        if (project["LastOpenScene"]) {
+            info.last_open_scene = project["LastOpenScene"].as<std::string>();
+        }
         if (project["AssetsPath"]) {
             info.assets_path = project["AssetsPath"].as<std::string>();
         }
 
         m_project_info = info;
-        LUNA_CORE_INFO("Loaded project '{}' from '{}' (assets: '{}', start scene: '{}')",
+        LUNA_CORE_INFO("Loaded project '{}' from '{}' (assets: '{}', start scene: '{}', last open scene: '{}')",
                        m_project_info->name,
                        m_project_file_path->string(),
                        m_project_info->assets_path.string(),
-                       m_project_info->start_scene.string());
+                       m_project_info->start_scene.string(),
+                       m_project_info->last_open_scene.string());
         return true;
     } catch (const YAML::Exception& error) {
         LUNA_CORE_ERROR("Failed to deserialize project '{}': {}", m_project_file_path->string(), error.what());
