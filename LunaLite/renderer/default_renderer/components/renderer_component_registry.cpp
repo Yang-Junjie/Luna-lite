@@ -1,5 +1,5 @@
-#include "../../scene/component_registry.h"
-#include "../../scene/component_registry_adapters.h"
+#include "../../../scene/component_registry.h"
+#include "../../../scene/component_registry_adapters.h"
 #include "renderer_component_registry.h"
 #include "renderer_components.h"
 

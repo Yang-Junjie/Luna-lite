@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../LunaLite/renderer/components/renderer_component_registry.h"
+#include "../../LunaLite/renderer/default_renderer/components/renderer_component_registry.h"
 #include "../../LunaLite/script/script_component_registry.h"
 #include "command.h"
 

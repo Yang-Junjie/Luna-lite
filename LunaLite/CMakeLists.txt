@@ -93,7 +93,7 @@ add_library(LunaLite STATIC
     asset/loaders/texture_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
-    renderer/components/renderer_component_registry.cpp
+    renderer/default_renderer/components/renderer_component_registry.cpp
     scene/component_registry.cpp
     scene/scene_component_registry.cpp
     scene/scene.cpp

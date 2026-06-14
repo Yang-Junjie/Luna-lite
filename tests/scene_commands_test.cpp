@@ -1,7 +1,7 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
 #include "../LunaLite/project/project_manager.h"
-#include "../LunaLite/renderer/components/renderer_components.h"
+#include "../LunaLite/renderer/default_renderer/components/renderer_components.h"
 #include "../LunaLite/renderer/interface/camera.h"
 #include "../LunaLite/scene/scene.h"
 #include "../LunaLite/scene/scene_components.h"

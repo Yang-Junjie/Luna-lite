@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../asset/asset.h"
-#include "../interface/camera.h"
+#include "../../../asset/asset.h"
+#include "../../interface/camera.h"
 
 #include <cstdint>
 

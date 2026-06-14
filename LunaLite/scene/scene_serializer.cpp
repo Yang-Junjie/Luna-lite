@@ -1,5 +1,5 @@
 #include "../core/log.h"
-#include "../renderer/components/renderer_components.h"
+#include "../renderer/default_renderer/components/renderer_components.h"
 #include "../script/script_components.h"
 #include "scene.h"
 #include "scene_components.h"

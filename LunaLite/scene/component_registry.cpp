@@ -1,4 +1,4 @@
-#include "../renderer/components/renderer_component_registry.h"
+#include "../renderer/default_renderer/components/renderer_component_registry.h"
 #include "../script/script_component_registry.h"
 #include "component_registry.h"
 #include "scene_component_registry.h"

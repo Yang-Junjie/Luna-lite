@@ -1,7 +1,7 @@
 #include "../asset/asset_database.h"
 #include "../asset/prefab.h"
 #include "../core/log.h"
-#include "../renderer/components/renderer_components.h"
+#include "../renderer/default_renderer/components/renderer_components.h"
 #include "../script/script_components.h"
 #include "../script/script_runtime.h"
 #include "scene.h"

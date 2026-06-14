@@ -1,4 +1,4 @@
-#include "../LunaLite/renderer/components/renderer_components.h"
+#include "../LunaLite/renderer/default_renderer/components/renderer_components.h"
 #include "../LunaLite/scene/scene.h"
 #include "../LunaLite/scene/scene_components.h"
 #include "../LunaLite/scene/scene_serializer.h"
