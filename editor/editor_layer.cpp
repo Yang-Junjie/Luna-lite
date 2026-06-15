@@ -634,7 +634,7 @@ void EditorLayer::persistEditorSceneCamera(bool force)
     }
 }
 
-void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
+void EditorLayer::createEntityFromAsset(const drag_drop::AssetPayload& payload)
 {
     if (!payload.handle.isValid()) {
         return;
@@ -643,6 +643,38 @@ void EditorLayer::createEntityFromAsset(const AssetDragDropPayload& payload)
     if (const auto entity = actions::createEntityFromAsset(m_scene, payload.handle, payload.type)) {
         m_selection.selectEntity(*entity);
     }
+}
+
+void EditorLayer::handleViewportAssetDrop(const drag_drop::AssetPayload& payload)
+{
+    if (payload.type == asset::AssetType::Scene) {
+        loadSceneFromAsset(payload);
+        return;
+    }
+
+    createEntityFromAsset(payload);
+}
+
+bool EditorLayer::loadSceneFromAsset(const drag_drop::AssetPayload& payload)
+{
+    if (!payload.handle.isValid()) {
+        return false;
+    }
+
+    const auto* metadata = asset::AssetManager::get().getMetadata(payload.handle);
+    if (metadata == nullptr || metadata->Type != asset::AssetType::Scene) {
+        LUNA_CORE_ERROR("Failed to load scene from asset: invalid scene asset '{}'", payload.handle.toString());
+        return false;
+    }
+
+    const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
+    if (!projectRoot) {
+        LUNA_CORE_ERROR("Failed to load scene asset '{}': no project is loaded", payload.handle.toString());
+        return false;
+    }
+
+    const auto scenePath = metadata->FilePath.is_absolute() ? metadata->FilePath : *projectRoot / metadata->FilePath;
+    return loadScene(scenePath.lexically_normal());
 }
 
 std::filesystem::path EditorLayer::projectRelativePath(const std::filesystem::path& path) const
@@ -672,13 +704,8 @@ void EditorLayer::drawViewport()
         core::Application::get().getSceneRenderer().setViewportSize(m_viewport_width, m_viewport_height);
         ImGui::Image(texture, available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         m_viewport_hovered = ImGui::IsItemHovered();
-        if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
-                if (payload->DataSize == sizeof(AssetDragDropPayload)) {
-                    createEntityFromAsset(*static_cast<const AssetDragDropPayload*>(payload->Data));
-                }
-            }
-            ImGui::EndDragDropTarget();
+        if (const auto payload = drag_drop::acceptAssetPayload()) {
+            handleViewportAssetDrop(*payload);
         }
     }
 

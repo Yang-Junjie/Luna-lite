@@ -1,5 +1,6 @@
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
 #include "../../LunaLite/scene/components.h"
+#include "../drag_drop.h"
 #include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "hierarchy_panel.h"
@@ -9,46 +10,27 @@
 
 namespace lunalite::editor {
 namespace {
-inline constexpr const char* EntityDragDropPayloadName = "LUNALITE_ENTITY";
-
-struct EntityDragDropPayload {
-    uint32_t handle{0};
-};
-
 bool acceptEntityDrop(scene::Scene& scene, tooling::SelectionContext& selection, scene::Entity targetEntity)
 {
     bool accepted = false;
-    if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(EntityDragDropPayloadName)) {
-            if (payload->DataSize == sizeof(EntityDragDropPayload)) {
-                const auto& entityPayload = *static_cast<const EntityDragDropPayload*>(payload->Data);
-                const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
-                if (scene.isValidEntity(dragged) &&
-                    (!targetEntity || dragged.getHandle() != targetEntity.getHandle()) &&
-                    actions::setParent(scene, dragged, targetEntity, true)) {
-                    selection.selectEntity(dragged);
-                    accepted = true;
-                }
-            }
+    if (const auto entityPayload = drag_drop::acceptEntityPayload()) {
+        const scene::Entity dragged{static_cast<entt::entity>(entityPayload->handle)};
+        if (scene.isValidEntity(dragged) && (!targetEntity || dragged.getHandle() != targetEntity.getHandle()) &&
+            actions::setParent(scene, dragged, targetEntity, true)) {
+            selection.selectEntity(dragged);
+            accepted = true;
         }
-        ImGui::EndDragDropTarget();
     }
     return accepted;
 }
 
 void acceptAssetDrop(scene::Scene& scene, tooling::SelectionContext& selection, scene::Entity targetEntity = {})
 {
-    if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
-            if (payload->DataSize == sizeof(AssetDragDropPayload)) {
-                const auto& assetPayload = *static_cast<const AssetDragDropPayload*>(payload->Data);
-                if (auto entity =
-                        actions::createEntityFromAsset(scene, assetPayload.handle, assetPayload.type, targetEntity)) {
-                    selection.selectEntity(*entity);
-                }
-            }
+    if (const auto assetPayload = drag_drop::acceptAssetPayload()) {
+        if (auto entity =
+                actions::createEntityFromAsset(scene, assetPayload->handle, assetPayload->type, targetEntity)) {
+            selection.selectEntity(*entity);
         }
-        ImGui::EndDragDropTarget();
     }
 }
 
@@ -85,12 +67,7 @@ void drawEntityNode(scene::Scene& scene,
         selection.selectEntity(entity);
     }
 
-    if (ImGui::BeginDragDropSource()) {
-        const EntityDragDropPayload payload{.handle = entityId};
-        ImGui::SetDragDropPayload(EntityDragDropPayloadName, &payload, sizeof(payload));
-        ImGui::TextUnformatted(label.c_str());
-        ImGui::EndDragDropSource();
-    }
+    drag_drop::setEntityPayload({.handle = entityId}, label.c_str());
 
     acceptEntityDrop(scene, selection, entity);
     acceptAssetDrop(scene, selection, entity);
@@ -138,19 +115,13 @@ void HierarchyPanel::onImGuiRender()
     if (available.y > 0.0f) {
         ImGui::Dummy(available);
         acceptAssetDrop(m_scene, m_selection);
-        if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(EntityDragDropPayloadName)) {
-                if (payload->DataSize == sizeof(EntityDragDropPayload)) {
-                    const auto& entityPayload = *static_cast<const EntityDragDropPayload*>(payload->Data);
-                    const scene::Entity dragged{static_cast<entt::entity>(entityPayload.handle)};
-                    if (m_scene.isValidEntity(dragged)) {
-                        if (actions::clearParent(m_scene, dragged, true)) {
-                            m_selection.selectEntity(dragged);
-                        }
-                    }
+        if (const auto entityPayload = drag_drop::acceptEntityPayload()) {
+            const scene::Entity dragged{static_cast<entt::entity>(entityPayload->handle)};
+            if (m_scene.isValidEntity(dragged)) {
+                if (actions::clearParent(m_scene, dragged, true)) {
+                    m_selection.selectEntity(dragged);
                 }
             }
-            ImGui::EndDragDropTarget();
         }
 
         if (ImGui::BeginPopupContextWindow("HierarchyEmptyContext",

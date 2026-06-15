@@ -3,6 +3,7 @@
 #include "../LunaLite/core/layer.h"
 #include "../LunaLite/scene/scene.h"
 #include "../LunaLiteTooling/context/selection_context.h"
+#include "drag_drop.h"
 #include "editor_camera.h"
 #include "panels/content_browser_panel.h"
 #include "panels/debug_panel.h"
@@ -65,7 +66,9 @@ private:
     bool loadScene(const std::filesystem::path& scene_path);
     void persistEditorSceneCamera(bool force = false);
 
-    void createEntityFromAsset(const AssetDragDropPayload& payload);
+    void createEntityFromAsset(const drag_drop::AssetPayload& payload);
+    void handleViewportAssetDrop(const drag_drop::AssetPayload& payload);
+    bool loadSceneFromAsset(const drag_drop::AssetPayload& payload);
     bool onKeyPressedEvent(core::KeyPressedEvent& event);
 
     void createSelectedEntity(std::string name = {}, scene::Entity parent = {});

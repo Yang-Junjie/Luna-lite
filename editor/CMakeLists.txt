@@ -1,5 +1,6 @@
 add_executable(LunaLiteEditor
     application.cpp
+    drag_drop.cpp
     editor_camera.cpp
     editor_actions.cpp
     editor_layer.cpp

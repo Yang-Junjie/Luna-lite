@@ -2,6 +2,7 @@
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
 #include "../../LunaLite/renderer/interface/mesh.h"
 #include "../../LunaLite/scene/components.h"
+#include "../drag_drop.h"
 #include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "inspector_panel.h"
@@ -66,24 +67,6 @@ std::string getAssetDisplayName(asset::AssetHandle handle)
     return "Missing asset " + handle.toString();
 }
 
-bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
-{
-    bool accepted = false;
-    if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
-            if (payload->DataSize == sizeof(AssetDragDropPayload)) {
-                const auto& assetPayload = *static_cast<const AssetDragDropPayload*>(payload->Data);
-                if (assetPayload.type == type && assetPayload.handle.isValid()) {
-                    handle = assetPayload.handle;
-                    accepted = true;
-                }
-            }
-        }
-        ImGui::EndDragDropTarget();
-    }
-    return accepted;
-}
-
 bool drawAssetHandleControl(const char* label,
                             scene::Scene& scene,
                             std::string_view commandId,
@@ -106,7 +89,7 @@ bool drawAssetHandleControl(const char* label,
         });
 
     auto droppedHandle = handle;
-    if (acceptAssetHandleDrop(type, droppedHandle)) {
+    if (drag_drop::acceptAssetHandle(type, droppedHandle)) {
         if (actions::beginSceneEdit(scene, commandId)) {
             handle = droppedHandle;
             actions::commitSceneEdit(scene);
@@ -479,7 +462,7 @@ void InspectorPanel::onImGuiRender()
                         binding.script = asset::AssetHandle{scriptHandle};
                     });
                 auto droppedScript = binding.script;
-                if (acceptAssetHandleDrop(asset::AssetType::Script, droppedScript)) {
+                if (drag_drop::acceptAssetHandle(asset::AssetType::Script, droppedScript)) {
                     if (actions::beginSceneEdit(m_scene, actions::EditScriptCommandId)) {
                         binding.script = droppedScript;
                         actions::commitSceneEdit(m_scene);

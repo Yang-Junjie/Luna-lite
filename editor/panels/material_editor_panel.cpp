@@ -1,5 +1,6 @@
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/renderer/interface/material.h"
+#include "../drag_drop.h"
 #include "../editor_actions.h"
 #include "content_browser_panel.h"
 #include "material_editor_panel.h"
@@ -22,24 +23,6 @@ std::string getAssetDisplayName(asset::AssetHandle handle)
     return "Missing asset " + handle.toString();
 }
 
-bool acceptAssetHandleDrop(asset::AssetType type, asset::AssetHandle& handle)
-{
-    bool accepted = false;
-    if (ImGui::BeginDragDropTarget()) {
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetDragDropPayloadName)) {
-            if (payload->DataSize == sizeof(AssetDragDropPayload)) {
-                const auto& assetPayload = *static_cast<const AssetDragDropPayload*>(payload->Data);
-                if (assetPayload.type == type && assetPayload.handle.isValid()) {
-                    handle = assetPayload.handle;
-                    accepted = true;
-                }
-            }
-        }
-        ImGui::EndDragDropTarget();
-    }
-    return accepted;
-}
-
 bool drawAssetHandleControl(const char* label, asset::AssetType type, asset::AssetHandle& handle)
 {
     bool changed = false;
@@ -51,7 +34,7 @@ bool drawAssetHandleControl(const char* label, asset::AssetType type, asset::Ass
         changed = true;
     }
 
-    if (acceptAssetHandleDrop(type, handle)) {
+    if (drag_drop::acceptAssetHandle(type, handle)) {
         changed = true;
     }
 

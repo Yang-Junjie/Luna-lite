@@ -3,6 +3,7 @@
 #include "../../LunaLite/core/log.h"
 #include "../../LunaLite/project/project_manager.h"
 #include "../../LunaLiteTooling/commands/asset_commands.h"
+#include "../drag_drop.h"
 #include "../editor_actions.h"
 #include "content_browser_panel.h"
 
@@ -54,15 +55,11 @@ void ContentBrowserPanel::onImGuiRender()
             m_selection.selectAsset(metadata.Handle);
         }
 
-        if (ImGui::BeginDragDropSource()) {
-            const AssetDragDropPayload payload{
-                .handle = metadata.Handle,
-                .type = metadata.Type,
-            };
-            ImGui::SetDragDropPayload(AssetDragDropPayloadName, &payload, sizeof(payload));
-            ImGui::TextUnformatted(label.c_str());
-            ImGui::EndDragDropSource();
-        }
+        const drag_drop::AssetPayload payload{
+            .handle = metadata.Handle,
+            .type = metadata.Type,
+        };
+        drag_drop::setAssetPayload(payload, label.c_str());
 
         const asset::AssetFactoryContext factoryContext{
             .source = &metadata,
@@ -91,9 +88,8 @@ void ContentBrowserPanel::onImGuiRender()
     }
 
     if (pendingCommandRequest) {
-        const auto result = actions::executeAssetCommand(pendingCommandRequest->command_id,
-                                                         pendingCommandRequest->source,
-                                                         pendingCommandRequest->target_directory);
+        const auto result = actions::executeAssetCommand(
+            pendingCommandRequest->command_id, pendingCommandRequest->source, pendingCommandRequest->target_directory);
         if (!result.success) {
             LUNA_CORE_ERROR("Failed to execute command '{}': {}",
                             pendingCommandRequest->command_id,
