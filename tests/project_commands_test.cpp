@@ -21,6 +21,7 @@ int main()
     createProjectArgs.set("project_root", projectRoot);
     createProjectArgs.set("name", std::string{"ProjectCommandsTestProject"});
     createProjectArgs.set("assets_path", std::filesystem::path{"Assets"});
+    createProjectArgs.set("start_scene", std::filesystem::path{"Assets/RuntimeStart.lunascene"});
     const auto createProjectResult =
         tooling::CommandRegistry::get().execute(tooling::CreateProjectCommandId, context, createProjectArgs);
     if (!createProjectResult.success) {
@@ -38,7 +39,7 @@ int main()
     auto entity = scene.createEntity();
     scene.getComponent<scene::TagComponent>(entity).tag = "Unsaved";
 
-    const auto scenePath = projectRoot / "Assets" / "StartScene";
+    const auto scenePath = projectRoot / "Assets" / "EditorScene";
     tooling::CommandArgs createSceneArgs;
     createSceneArgs.set("scene_path", scenePath);
     const auto createSceneResult =
@@ -48,15 +49,16 @@ int main()
         return 1;
     }
 
-    const auto savedScenePath = projectRoot / "Assets" / "StartScene.lunascene";
+    const auto savedScenePath = projectRoot / "Assets" / "EditorScene.lunascene";
     if (!std::filesystem::exists(savedScenePath) || !scene.getEntities().empty()) {
         std::cerr << "scene.create_file did not clear and save the scene.\n";
         return 1;
     }
 
     const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
-    if (!projectInfo || projectInfo->start_scene.generic_string() != "Assets/StartScene.lunascene") {
-        std::cerr << "scene.create_file did not update project start scene.\n";
+    if (!projectInfo || projectInfo->start_scene.generic_string() != "Assets/RuntimeStart.lunascene" ||
+        projectInfo->last_open_scene.generic_string() != "Assets/EditorScene.lunascene") {
+        std::cerr << "scene.create_file did not preserve start scene and update last open scene.\n";
         return 1;
     }
 
@@ -91,6 +93,11 @@ int main()
         std::cerr << "scene.open_file did not load the saved scene content.\n";
         return 1;
     }
+    const auto& openedProjectInfo = project::ProjectManager::instance().getProjectInfo();
+    if (!openedProjectInfo || openedProjectInfo->last_open_scene.generic_string() != "Assets/EditorScene.lunascene") {
+        std::cerr << "scene.open_file did not update last open scene.\n";
+        return 1;
+    }
 
     const auto saveProjectResult = tooling::CommandRegistry::get().execute(tooling::SaveProjectCommandId, context);
     if (!saveProjectResult.success) {
@@ -110,7 +117,8 @@ int main()
     const auto reopenedRoot = project::ProjectManager::instance().getProjectRootPath();
     const auto& reopenedInfo = project::ProjectManager::instance().getProjectInfo();
     if (!reopenedRoot || reopenedRoot->lexically_normal() != projectRoot.lexically_normal() || !reopenedInfo ||
-        reopenedInfo->start_scene.generic_string() != "Assets/StartScene.lunascene") {
+        reopenedInfo->start_scene.generic_string() != "Assets/RuntimeStart.lunascene" ||
+        reopenedInfo->last_open_scene.generic_string() != "Assets/EditorScene.lunascene") {
         std::cerr << "project.open did not restore project state.\n";
         return 1;
     }

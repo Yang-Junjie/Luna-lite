@@ -10,6 +10,7 @@
 #include "panels/hierarchy_panel.h"
 #include "panels/inspector_panel.h"
 #include "panels/material_editor_panel.h"
+#include "panels/project_settings_panel.h"
 #include "panels/render_stats_panel.h"
 #include "panels/scene_panel.h"
 
@@ -60,6 +61,7 @@ private:
     void createScene();
     void openScene();
     void saveScene();
+    void restoreProjectScene();
     bool loadScene(const std::filesystem::path& scene_path);
     void persistEditorSceneCamera(bool force = false);
 
@@ -90,6 +92,8 @@ private:
     InspectorPanel m_inspector_panel;
     ScenePanel m_scene_panel;
     MaterialEditorPanel m_material_editor_panel;
+    std::filesystem::path m_current_scene_path;
+    ProjectSettingsPanel m_project_settings_panel;
     RenderStatsPanel m_render_stats_panel;
     ContentBrowserPanel m_content_browser_panel;
     DebugPanel m_debug_panel;
@@ -98,7 +102,6 @@ private:
     uint32_t m_viewport_height{1};
     bool m_viewport_hovered{false};
     DebugCameraSnapshot m_frozen_culling_frustum;
-    std::filesystem::path m_current_scene_path;
 };
 
 } // namespace lunalite::editor

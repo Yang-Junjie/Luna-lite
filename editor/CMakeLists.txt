@@ -10,6 +10,7 @@ add_executable(LunaLiteEditor
     panels/hierarchy_panel.cpp
     panels/inspector_panel.cpp
     panels/material_editor_panel.cpp
+    panels/project_settings_panel.cpp
     panels/render_stats_panel.cpp
     panels/scene_panel.cpp
 )

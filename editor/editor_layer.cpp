@@ -55,6 +55,7 @@ EditorLayer::EditorLayer()
       m_hierarchy_panel(m_scene, m_selection),
       m_inspector_panel(m_scene, m_selection),
       m_scene_panel(m_scene),
+      m_project_settings_panel(m_current_scene_path),
       m_content_browser_panel(m_selection)
 {}
 
@@ -100,6 +101,7 @@ void EditorLayer::onImGuiRender()
     m_inspector_panel.onImGuiRender();
     m_scene_panel.onImGuiRender();
     m_material_editor_panel.onImGuiRender();
+    m_project_settings_panel.onImGuiRender();
     m_editor_setting_panel.onImGuiRender();
     m_render_stats_panel.onImGuiRender();
     m_content_browser_panel.onImGuiRender();
@@ -490,11 +492,7 @@ void EditorLayer::openProject()
     m_current_scene_path.clear();
     m_editor_camera.resetSceneState();
 
-    const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
-    const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
-    if (projectInfo && projectRoot && !projectInfo->start_scene.empty()) {
-        loadScene(*projectRoot / projectInfo->start_scene);
-    }
+    restoreProjectScene();
 }
 
 void EditorLayer::saveProject()
@@ -581,6 +579,23 @@ void EditorLayer::saveScene()
     }
 
     persistEditorSceneCamera(true);
+}
+
+void EditorLayer::restoreProjectScene()
+{
+    const auto& projectInfo = project::ProjectManager::instance().getProjectInfo();
+    const auto projectRoot = project::ProjectManager::instance().getProjectRootPath();
+    if (!projectInfo || !projectRoot) {
+        return;
+    }
+
+    if (!projectInfo->last_open_scene.empty() && loadScene(*projectRoot / projectInfo->last_open_scene)) {
+        return;
+    }
+
+    if (!projectInfo->start_scene.empty()) {
+        loadScene(*projectRoot / projectInfo->start_scene);
+    }
 }
 
 bool EditorLayer::loadScene(const std::filesystem::path& scene_path)

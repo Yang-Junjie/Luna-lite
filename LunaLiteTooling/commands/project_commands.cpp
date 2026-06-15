@@ -41,6 +41,7 @@ CommandResult projectResult(std::string message)
         result.set("project_name", info->name);
         result.set("assets_path", info->assets_path);
         result.set("start_scene", info->start_scene);
+        result.set("last_open_scene", info->last_open_scene);
     }
     return result;
 }
@@ -74,6 +75,9 @@ CommandResult createProject(const CommandArgs& args)
     }
     if (const auto startScene = args.get<std::filesystem::path>("start_scene")) {
         info.start_scene = *startScene;
+    }
+    if (const auto lastOpenScene = args.get<std::filesystem::path>("last_open_scene")) {
+        info.last_open_scene = *lastOpenScene;
     }
 
     if (!project::ProjectManager::instance().createProject(*projectRoot, info)) {
@@ -114,6 +118,17 @@ CommandResult saveProject()
     return projectResult("Project saved");
 }
 
+void updateLastOpenScene(const std::filesystem::path& scenePath)
+{
+    auto& projectManager = project::ProjectManager::instance();
+    if (const auto& projectInfo = projectManager.getProjectInfo()) {
+        auto info = *projectInfo;
+        info.last_open_scene = projectRelativePath(scenePath);
+        projectManager.setProjectInfo(info);
+        projectManager.saveProject();
+    }
+}
+
 CommandResult createSceneFile(ToolContext& context, const CommandArgs& args)
 {
     auto* scene = context.scene();
@@ -132,13 +147,7 @@ CommandResult createSceneFile(ToolContext& context, const CommandArgs& args)
         return CommandResult::fail("Failed to create scene file");
     }
 
-    auto& projectManager = project::ProjectManager::instance();
-    if (const auto& projectInfo = projectManager.getProjectInfo()) {
-        auto info = *projectInfo;
-        info.start_scene = projectRelativePath(scenePath);
-        projectManager.setProjectInfo(info);
-        projectManager.saveProject();
-    }
+    updateLastOpenScene(scenePath);
 
     auto result = CommandResult::ok("Scene file created");
     result.set("scene_path", scenePath);
@@ -160,6 +169,8 @@ CommandResult openSceneFile(ToolContext& context, const CommandArgs& args)
     if (!scene::SceneSerializer::deserialize(*scene, *scenePath)) {
         return CommandResult::fail("Failed to open scene file");
     }
+
+    updateLastOpenScene(*scenePath);
 
     auto result = CommandResult::ok("Scene file opened");
     result.set("scene_path", *scenePath);
