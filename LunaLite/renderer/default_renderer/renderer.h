@@ -2,7 +2,6 @@
 #include "../interface/frame_image.h"
 #include "../interface/frame_render_data.h"
 #include "../interface/render_lighting.h"
-#include "../interface/renderer.h"
 #include "renderer_common.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
@@ -29,16 +28,16 @@ class SkyboxPass;
 class SpritePass;
 class TextureGpuCache;
 
-class Renderer : public interface::Renderer {
+class Renderer {
 public:
     Renderer(rhi::Device& device, rhi::Swapchain& swapchain);
-    ~Renderer() override;
-    void beginFrame() override;
-    void endFrame() override;
-    void resize(uint32_t width, uint32_t height) override;
-    void renderFrame(const interface::FrameRenderData& frame) override;
-    const interface::FrameImage& getFrameImage() const override;
-    const diagnostics::RenderStats& getStats() const override;
+    ~Renderer();
+    void beginFrame();
+    void endFrame();
+    void resize(uint32_t width, uint32_t height);
+    void renderFrame(const interface::FrameRenderData& frame);
+    const interface::FrameImage& getFrameImage() const;
+    const diagnostics::RenderStats& getStats() const;
 
 private:
     void setViewProjection(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraPos, float exposure);

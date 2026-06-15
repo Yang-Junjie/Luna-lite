@@ -85,7 +85,6 @@ void DemoLayer::onAttach()
     } else {
         LUNA_CORE_WARN("Runtime project '{}' has no StartScene; starting with an empty scene", project_info->name);
         m_scene_loaded = true;
-        core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
         m_scene.onRuntimeStart();
         m_runtime_started = true;
         LUNA_CORE_INFO("Runtime started empty scene for project '{}'", project_info->name);
@@ -93,7 +92,6 @@ void DemoLayer::onAttach()
     }
 
     m_scene_loaded = true;
-    core::Application::get().switchRenderer(renderer::interface::RendererKind::Default);
     m_scene.onRuntimeStart();
     m_runtime_started = true;
     const auto scene_path = *project_root_path / project_info->start_scene;
@@ -113,7 +111,7 @@ void DemoLayer::onUpdate(core::Timestep dt)
         m_scene.onUpdateRuntime(dt);
     }
 }
- 
+
 void DemoLayer::onRender()
 {
     if (m_scene_loaded) {

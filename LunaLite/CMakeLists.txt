@@ -19,7 +19,6 @@ add_library(LunaLiteRenderer
     renderer/default_renderer/renderer_pipeline_resources.cpp
     renderer/default_renderer/shadow_map_resource.cpp
     renderer/default_renderer/texture_gpu_cache.cpp
-    renderer/renderer_controller.cpp
     renderer/frame_presenter/rhi_frame_presenter.cpp
 )
 

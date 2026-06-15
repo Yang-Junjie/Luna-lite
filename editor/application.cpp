@@ -15,7 +15,6 @@ Application* createApplication(int argc, char** argv)
     info.width = 1'600;
     info.height = 900;
     info.backend = rhi::BackendType::OpenGL;
-    info.renderer_kind = renderer::interface::RendererKind::Default;
     info.enable_imgui = true;
     info.enable_imgui_viewports = true;
     info.present_scene_to_swapchain = false;

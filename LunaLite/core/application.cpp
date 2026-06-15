@@ -1,9 +1,8 @@
 #include "../imgui/imgui_platform.h"
 #include "../imgui/imgui_renderer.h"
 #include "../renderer/debug_renderer.h"
+#include "../renderer/default_renderer/renderer.h"
 #include "../renderer/frame_presenter/rhi_frame_presenter.h"
-#include "../renderer/interface/renderer.h"
-#include "../renderer/renderer_controller.h"
 #include "../scene/scene_renderer.h"
 #include "application.h"
 #include "application_event.h"
@@ -67,7 +66,7 @@ Application& Application::get()
 void Application::run()
 {
     LUNA_ASSERT(m_window, "Application window is null.");
-    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
+    LUNA_ASSERT(m_renderer, "Renderer is null.");
     LUNA_ASSERT(m_frame_presenter, "Frame presenter is null.");
     LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
     LUNA_ASSERT(m_debug_renderer, "Debug renderer is null.");
@@ -98,10 +97,10 @@ void Application::run()
         m_debug_renderer->endFrame();
         m_scene_renderer->endFrame();
 
-        m_renderer_controller->getRenderer().beginFrame();
-        m_renderer_controller->getRenderer().renderFrame(m_frame_render_data);
-        m_renderer_controller->getRenderer().endFrame();
-        m_stats.setRenderStats(m_renderer_controller->getRenderer().getStats());
+        m_renderer->beginFrame();
+        m_renderer->renderFrame(m_frame_render_data);
+        m_renderer->endFrame();
+        m_stats.setRenderStats(m_renderer->getStats());
 
         if (m_imgui_renderer) {
             rhi::SwapchainFrame frame{};
@@ -110,7 +109,7 @@ void Application::run()
             }
 
             if (m_present_scene_to_swapchain) {
-                m_frame_presenter->renderToSwapchain(m_renderer_controller->getFrameImage(), frame);
+                m_frame_presenter->renderToSwapchain(m_renderer->getFrameImage(), frame);
             }
 
             m_imgui_renderer->beginFrame();
@@ -125,7 +124,7 @@ void Application::run()
             m_stats.setImGuiStats(m_imgui_renderer->getStats());
         } else {
             m_stats.clearImGuiStats();
-            m_frame_presenter->present(m_renderer_controller->getFrameImage());
+            m_frame_presenter->present(m_renderer->getFrameImage());
         }
     }
 
@@ -150,13 +149,6 @@ void Application::pushOverlay(std::unique_ptr<Layer> overlay)
     m_layer_stack.pushOverlay(std::move(overlay));
 }
 
-void Application::switchRenderer(renderer::interface::RendererKind kind)
-{
-    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
-
-    m_renderer_controller->switchRenderer(kind);
-}
-
 scene::SceneRenderer& Application::getSceneRenderer()
 {
     LUNA_ASSERT(m_scene_renderer, "Scene renderer is null.");
@@ -171,8 +163,8 @@ renderer::DebugRenderer& Application::getDebugRenderer()
 
 const renderer::interface::FrameImage& Application::getFrameImage() const
 {
-    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
-    return m_renderer_controller->getFrameImage();
+    LUNA_ASSERT(m_renderer, "Renderer is null.");
+    return m_renderer->getFrameImage();
 }
 
 imgui::ImGuiRenderer& Application::getImGuiRenderer()
@@ -235,8 +227,8 @@ void Application::initialize(const ApplicationCreateInfo& info)
     }
     LUNA_CORE_INFO("RHI swapchain created ({}x{})", m_swapchain->getWidth(), m_swapchain->getHeight());
 
-    m_renderer_controller = std::make_unique<renderer::RendererController>(
-        *m_device, *m_swapchain, info.width, info.height, info.renderer_kind);
+    m_renderer = std::make_unique<renderer::Renderer>(*m_device, *m_swapchain);
+    m_renderer->resize(info.width, info.height);
     m_frame_presenter = std::make_unique<renderer::RHIFramePresenter>(*m_device, m_swapchain_handle);
     m_debug_renderer = std::make_unique<renderer::DebugRenderer>();
     m_scene_renderer.reset(new scene::SceneRenderer());
@@ -290,7 +282,7 @@ void Application::shutdown()
     m_debug_renderer.reset();
     m_scene_renderer.reset();
     m_frame_presenter.reset();
-    m_renderer_controller.reset();
+    m_renderer.reset();
 
     if (m_device != nullptr && m_swapchain_handle) {
         m_device->destroySwapchain(m_swapchain_handle);
@@ -365,11 +357,11 @@ bool Application::onWindowResize(WindowResizeEvent& event)
         }
     }
 
-    LUNA_ASSERT(m_renderer_controller, "Renderer controller is null.");
+    LUNA_ASSERT(m_renderer, "Renderer is null.");
     if (m_swapchain) {
         m_swapchain->resize(event.getWidth(), event.getHeight());
     }
-    m_renderer_controller->resize(event.getWidth(), event.getHeight());
+    m_renderer->resize(event.getWidth(), event.getHeight());
     if (m_scene_renderer) {
         m_scene_renderer->setViewportSize(event.getWidth(), event.getHeight());
     }

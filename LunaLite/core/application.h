@@ -1,7 +1,6 @@
 #pragma once
 #include "../diagnostics/stats.h"
 #include "../renderer/interface/frame_render_data.h"
-#include "../renderer/interface/renderer_kind.h"
 #include "application_event.h"
 #include "event.h"
 #include "layer_stack.h"
@@ -16,7 +15,7 @@
 namespace lunalite::renderer {
 class DebugRenderer;
 class RHIFramePresenter;
-class RendererController;
+class Renderer;
 } // namespace lunalite::renderer
 
 namespace lunalite::renderer::interface {
@@ -46,7 +45,6 @@ struct ApplicationCreateInfo {
     uint32_t width{1'280};
     uint32_t height{720};
     rhi::BackendType backend{rhi::BackendType::OpenGL};
-    renderer::interface::RendererKind renderer_kind{renderer::interface::RendererKind::Default};
     bool enable_imgui{false};
     bool enable_imgui_viewports{true};
     bool present_scene_to_swapchain{true};
@@ -63,7 +61,6 @@ public:
     void close();
     void pushLayer(std::unique_ptr<Layer> layer);
     void pushOverlay(std::unique_ptr<Layer> overlay);
-    void switchRenderer(renderer::interface::RendererKind kind);
 
     scene::SceneRenderer& getSceneRenderer();
     renderer::DebugRenderer& getDebugRenderer();
@@ -92,7 +89,7 @@ private:
     rhi::SurfaceHandle m_surface_handle{};
     rhi::SwapchainHandle m_swapchain_handle{};
 
-    std::unique_ptr<renderer::RendererController> m_renderer_controller;
+    std::unique_ptr<renderer::Renderer> m_renderer;
     std::unique_ptr<renderer::RHIFramePresenter> m_frame_presenter;
     std::unique_ptr<renderer::DebugRenderer> m_debug_renderer;
 
