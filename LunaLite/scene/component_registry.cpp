@@ -1,5 +1,3 @@
-#include "../renderer/default_renderer/components/renderer_component_registry.h"
-#include "../script/script_component_registry.h"
 #include "component_registry.h"
 #include "scene_component_registry.h"
 
@@ -11,7 +9,7 @@ ComponentRegistry& ComponentRegistry::get()
 {
     static ComponentRegistry registry;
     static const bool initialized = []() {
-        registerSceneComponents(registry);
+        registerCoreSceneComponents(registry);
         return true;
     }();
     (void) initialized;
@@ -63,8 +61,6 @@ std::span<const ComponentDescriptor> ComponentRegistry::components() const
 void registerSceneComponents(ComponentRegistry& registry)
 {
     registerCoreSceneComponents(registry);
-    renderer::registerRendererComponents(registry);
-    script::registerScriptComponents(registry);
 }
 
 } // namespace lunalite::scene

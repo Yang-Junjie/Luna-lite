@@ -20,6 +20,7 @@ add_library(LunaLiteRenderer
     renderer/default_renderer/shadow_map_resource.cpp
     renderer/default_renderer/texture_gpu_cache.cpp
     renderer/renderer_controller.cpp
+    renderer/renderer_registry.cpp
     renderer/frame_presenter/rhi_frame_presenter.cpp
 )
 
@@ -93,6 +94,7 @@ add_library(LunaLite STATIC
     asset/loaders/texture_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
+    modules/default_engine_modules.cpp
     renderer/default_renderer/components/renderer_component_registry.cpp
     scene/component_registry.cpp
     scene/scene_component_registry.cpp

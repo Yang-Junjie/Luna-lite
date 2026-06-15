@@ -1,4 +1,5 @@
 #include "../LunaLite/core/application.h"
+#include "../LunaLite/modules/default_engine_modules.h"
 #include "editor_layer.h"
 
 #include <memory>
@@ -9,6 +10,8 @@ Application* createApplication(int argc, char** argv)
 {
     static_cast<void>(argc);
     static_cast<void>(argv);
+
+    modules::registerDefaultEngineModules();
 
     ApplicationCreateInfo info;
     info.name = "LunaLite Editor";

@@ -1,15 +1,21 @@
 #include "../core/log.h"
-#include "default_renderer/renderer.h"
 #include "interface/renderer.h"
 #include "renderer_controller.h"
+#include "renderer_registry.h"
 #include "TinyRHI/interface/device.h"
 #include "TinyRHI/interface/swapchain.h"
+
+#include <string_view>
 
 namespace lunalite::renderer {
 namespace {
 
-const char* rendererKindName(interface::RendererKind kind)
+std::string_view rendererKindName(interface::RendererKind kind)
 {
+    if (const auto* descriptor = RendererRegistry::get().find(kind)) {
+        return descriptor->display_name;
+    }
+
     switch (kind) {
         case interface::RendererKind::Default:
             return "Default";
@@ -91,12 +97,7 @@ const interface::FrameImage& RendererController::getFrameImage() const
 
 std::unique_ptr<interface::Renderer> RendererController::createRenderer(interface::RendererKind kind) const
 {
-    switch (kind) {
-        case interface::RendererKind::Default:
-            return std::make_unique<Renderer>(m_device, m_swapchain);
-    }
-
-    return std::make_unique<Renderer>(m_device, m_swapchain);
+    return RendererRegistry::get().create(kind, m_device, m_swapchain, m_width, m_height);
 }
 
 } // namespace lunalite::renderer

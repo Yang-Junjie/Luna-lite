@@ -1,5 +1,6 @@
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/builtin/builtin_assets.h"
+#include "../LunaLite/modules/default_engine_modules.h"
 #include "../LunaLite/project/project_manager.h"
 #include "../LunaLite/renderer/default_renderer/components/renderer_components.h"
 #include "../LunaLite/renderer/interface/camera.h"
@@ -90,6 +91,8 @@ bool nearlyEqual(const glm::vec4& lhs, const glm::vec4& rhs)
 int main()
 {
     using namespace lunalite;
+
+    modules::registerDefaultEngineModules();
 
     tooling::ToolContext missingContext;
     const auto missingSceneResult =

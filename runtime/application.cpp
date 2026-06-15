@@ -1,4 +1,5 @@
 #include "../LunaLite/core/application.h"
+#include "../LunaLite/modules/default_engine_modules.h"
 #include "demo_layer.h"
 
 #include <filesystem>
@@ -23,6 +24,7 @@ std::filesystem::path getExecutableDirectory(int argc, char** argv)
 
 Application* createApplication(int argc, char** argv)
 {
+    modules::registerDefaultEngineModules();
 
     ApplicationCreateInfo info;
     info.name = "LunaLite";
