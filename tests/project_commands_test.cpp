@@ -72,6 +72,12 @@ int main()
         std::cerr << "scene.save_file failed: " << saveSceneResult.message << "\n";
         return 1;
     }
+    if (!project::ProjectManager::instance().getProjectInfo() ||
+        project::ProjectManager::instance().getProjectInfo()->last_open_scene.generic_string() !=
+            "Assets/EditorScene.lunascene") {
+        std::cerr << "scene.save_file did not update last open scene.\n";
+        return 1;
+    }
 
     scene.clear();
     tooling::CommandArgs openSceneArgs;

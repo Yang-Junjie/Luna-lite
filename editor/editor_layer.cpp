@@ -24,6 +24,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <imgui.h>
 #include <optional>
+#include <string>
 #include <utility>
 
 namespace lunalite::editor {
@@ -57,7 +58,9 @@ EditorLayer::EditorLayer()
       m_scene_panel(m_scene),
       m_project_settings_panel(m_current_scene_path),
       m_content_browser_panel(m_selection)
-{}
+{
+    markSceneSaved();
+}
 
 void EditorLayer::onAttach() {}
 
@@ -107,6 +110,7 @@ void EditorLayer::onImGuiRender()
     m_content_browser_panel.onImGuiRender();
     m_debug_panel.onImGuiRender();
     drawViewport();
+    drawUnsavedSceneModal();
 }
 
 void EditorLayer::drawMenuBar()
@@ -467,6 +471,10 @@ void EditorLayer::createProject()
     tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
+    m_pending_scene_path.clear();
+    m_pending_scene_action = PendingSceneAction::None;
+    m_unsaved_scene_modal_requested = false;
+    markSceneSaved();
     m_editor_camera.resetSceneState();
 }
 
@@ -490,6 +498,10 @@ void EditorLayer::openProject()
     tooling::CommandManager::get().clearHistory();
     m_selection.clear();
     m_current_scene_path.clear();
+    m_pending_scene_path.clear();
+    m_pending_scene_action = PendingSceneAction::None;
+    m_unsaved_scene_modal_requested = false;
+    markSceneSaved();
     m_editor_camera.resetSceneState();
 
     restoreProjectScene();
@@ -538,11 +550,16 @@ void EditorLayer::createScene()
         scenePath.replace_extension(scene::SceneSerializer::FileExtension);
     }
 
-    const auto result = actions::createSceneFile(m_scene, scenePath);
+    requestCreateScene(scenePath);
+}
+
+bool EditorLayer::createSceneFileAt(const std::filesystem::path& scene_path)
+{
+    const auto result = actions::createSceneFile(m_scene, scene_path);
     if (!result.success) {
         LUNA_CORE_ERROR("Failed to create scene command: {}",
                         result.message.empty() ? "unknown error" : result.message);
-        return;
+        return false;
     }
 
     tooling::CommandManager::get().clearHistory();
@@ -550,9 +567,11 @@ void EditorLayer::createScene()
     if (const auto* savedPath = result.get<std::filesystem::path>("scene_path")) {
         m_current_scene_path = *savedPath;
     } else {
-        m_current_scene_path = scenePath;
+        m_current_scene_path = scene_path;
     }
+    markSceneSaved();
     persistEditorSceneCamera(true);
+    return true;
 }
 
 void EditorLayer::openScene()
@@ -562,13 +581,13 @@ void EditorLayer::openScene()
         return;
     }
 
-    loadScene(scenePath);
+    requestLoadScene(scenePath);
 }
 
 void EditorLayer::saveScene()
 {
     if (m_current_scene_path.empty()) {
-        createScene();
+        saveSceneAs();
         return;
     }
 
@@ -578,7 +597,34 @@ void EditorLayer::saveScene()
         return;
     }
 
+    markSceneSaved();
     persistEditorSceneCamera(true);
+}
+
+bool EditorLayer::saveSceneAs()
+{
+    auto scenePath = FileDialogs::saveFile("Luna Scene\0*.lunascene\0", {});
+    if (scenePath.empty()) {
+        return false;
+    }
+    if (scenePath.extension().empty()) {
+        scenePath.replace_extension(scene::SceneSerializer::FileExtension);
+    }
+
+    const auto result = actions::saveSceneFile(m_scene, scenePath);
+    if (!result.success) {
+        LUNA_CORE_ERROR("Failed to save scene command: {}", result.message.empty() ? "unknown error" : result.message);
+        return false;
+    }
+
+    if (const auto* savedPath = result.get<std::filesystem::path>("scene_path")) {
+        m_current_scene_path = *savedPath;
+    } else {
+        m_current_scene_path = scenePath;
+    }
+    markSceneSaved();
+    persistEditorSceneCamera(true);
+    return true;
 }
 
 void EditorLayer::restoreProjectScene()
@@ -616,7 +662,109 @@ bool EditorLayer::loadScene(const std::filesystem::path& scene_path)
         m_current_scene_path = scene_path;
     }
     loadEditorSceneCamera(m_current_scene_path, m_editor_camera);
+    markSceneSaved();
     return true;
+}
+
+void EditorLayer::requestLoadScene(const std::filesystem::path& scene_path)
+{
+    if (hasUnsavedSceneChanges()) {
+        m_pending_scene_path = scene_path;
+        m_pending_scene_action = PendingSceneAction::Load;
+        m_unsaved_scene_modal_requested = true;
+        return;
+    }
+
+    loadScene(scene_path);
+}
+
+void EditorLayer::requestCreateScene(const std::filesystem::path& scene_path)
+{
+    if (hasUnsavedSceneChanges()) {
+        m_pending_scene_path = scene_path;
+        m_pending_scene_action = PendingSceneAction::Create;
+        m_unsaved_scene_modal_requested = true;
+        return;
+    }
+
+    createSceneFileAt(scene_path);
+}
+
+bool EditorLayer::hasUnsavedSceneChanges() const
+{
+    return scene::SceneSerializer::serializeToString(m_scene) != m_saved_scene_snapshot;
+}
+
+void EditorLayer::markSceneSaved()
+{
+    m_saved_scene_snapshot = scene::SceneSerializer::serializeToString(m_scene);
+}
+
+bool EditorLayer::runPendingSceneAction()
+{
+    const auto scenePath = m_pending_scene_path;
+    const auto action = m_pending_scene_action;
+    m_pending_scene_path.clear();
+    m_pending_scene_action = PendingSceneAction::None;
+    m_unsaved_scene_modal_requested = false;
+
+    switch (action) {
+        case PendingSceneAction::Load:
+            return loadScene(scenePath);
+        case PendingSceneAction::Create:
+            return createSceneFileAt(scenePath);
+        case PendingSceneAction::None:
+        default:
+            return false;
+    }
+}
+
+void EditorLayer::drawUnsavedSceneModal()
+{
+    if (m_pending_scene_action == PendingSceneAction::None || m_pending_scene_path.empty()) {
+        return;
+    }
+
+    if (m_unsaved_scene_modal_requested) {
+        ImGui::OpenPopup("Unsaved Scene");
+        m_unsaved_scene_modal_requested = false;
+    }
+
+    bool open = true;
+    if (!ImGui::BeginPopupModal("Unsaved Scene", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    ImGui::TextUnformatted("The current scene has unsaved changes.");
+    ImGui::Separator();
+
+    if (ImGui::Button("Save")) {
+        const bool saved = m_current_scene_path.empty() ? saveSceneAs() : (saveScene(), !hasUnsavedSceneChanges());
+        if (saved) {
+            ImGui::CloseCurrentPopup();
+            runPendingSceneAction();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Discard")) {
+        ImGui::CloseCurrentPopup();
+        runPendingSceneAction();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+        m_pending_scene_path.clear();
+        m_pending_scene_action = PendingSceneAction::None;
+        m_unsaved_scene_modal_requested = false;
+        ImGui::CloseCurrentPopup();
+    }
+
+    if (!open) {
+        m_pending_scene_path.clear();
+        m_pending_scene_action = PendingSceneAction::None;
+        m_unsaved_scene_modal_requested = false;
+    }
+
+    ImGui::EndPopup();
 }
 
 void EditorLayer::persistEditorSceneCamera(bool force)
@@ -674,7 +822,8 @@ bool EditorLayer::loadSceneFromAsset(const drag_drop::AssetPayload& payload)
     }
 
     const auto scenePath = metadata->FilePath.is_absolute() ? metadata->FilePath : *projectRoot / metadata->FilePath;
-    return loadScene(scenePath.lexically_normal());
+    requestLoadScene(scenePath.lexically_normal());
+    return true;
 }
 
 std::filesystem::path EditorLayer::projectRelativePath(const std::filesystem::path& path) const

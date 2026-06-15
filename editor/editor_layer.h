@@ -17,6 +17,7 @@
 
 #include <filesystem>
 #include <glm/glm.hpp>
+#include <string>
 
 namespace lunalite::core {
 class Event;
@@ -28,6 +29,12 @@ namespace lunalite::editor {
 enum class SceneState {
     Edit,
     Play
+};
+
+enum class PendingSceneAction {
+    None,
+    Load,
+    Create
 };
 
 class EditorLayer final : public core::Layer {
@@ -62,8 +69,16 @@ private:
     void createScene();
     void openScene();
     void saveScene();
+    bool saveSceneAs();
     void restoreProjectScene();
     bool loadScene(const std::filesystem::path& scene_path);
+    bool createSceneFileAt(const std::filesystem::path& scene_path);
+    void requestLoadScene(const std::filesystem::path& scene_path);
+    void requestCreateScene(const std::filesystem::path& scene_path);
+    bool hasUnsavedSceneChanges() const;
+    void markSceneSaved();
+    bool runPendingSceneAction();
+    void drawUnsavedSceneModal();
     void persistEditorSceneCamera(bool force = false);
 
     void createEntityFromAsset(const drag_drop::AssetPayload& payload);
@@ -96,6 +111,10 @@ private:
     ScenePanel m_scene_panel;
     MaterialEditorPanel m_material_editor_panel;
     std::filesystem::path m_current_scene_path;
+    std::filesystem::path m_pending_scene_path;
+    std::string m_saved_scene_snapshot;
+    PendingSceneAction m_pending_scene_action{PendingSceneAction::None};
+    bool m_unsaved_scene_modal_requested{false};
     ProjectSettingsPanel m_project_settings_panel;
     RenderStatsPanel m_render_stats_panel;
     ContentBrowserPanel m_content_browser_panel;

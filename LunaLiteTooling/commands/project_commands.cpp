@@ -194,6 +194,8 @@ CommandResult saveSceneFile(ToolContext& context, const CommandArgs& args)
         return CommandResult::fail("Failed to save scene file");
     }
 
+    updateLastOpenScene(scenePath);
+
     auto result = CommandResult::ok("Scene file saved");
     result.set("scene_path", scenePath);
     return result;
