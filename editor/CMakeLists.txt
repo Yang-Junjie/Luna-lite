@@ -5,6 +5,7 @@ add_executable(LunaLiteEditor
     editor_actions.cpp
     editor_layer.cpp
     editor_scene_metadata.cpp
+    modal_dialog.cpp
     panels/content_browser_panel.cpp
     panels/debug_panel.cpp
     panels/editor_setting_panel.cpp

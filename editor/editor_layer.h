@@ -17,6 +17,7 @@
 
 #include <filesystem>
 #include <glm/glm.hpp>
+#include <memory>
 #include <string>
 
 namespace lunalite::core {
@@ -40,6 +41,7 @@ enum class PendingSceneAction {
 class EditorLayer final : public core::Layer {
 public:
     EditorLayer();
+    ~EditorLayer() override;
 
     void onAttach() override;
     void onUpdate(core::Timestep dt) override;
@@ -98,6 +100,8 @@ private:
 
     std::filesystem::path projectRelativePath(const std::filesystem::path& path) const;
 
+    class UnsavedSceneModal;
+
     EditorCamera m_editor_camera;
     EditorSettingPanel m_editor_setting_panel;
 
@@ -114,7 +118,7 @@ private:
     std::filesystem::path m_pending_scene_path;
     std::string m_saved_scene_snapshot;
     PendingSceneAction m_pending_scene_action{PendingSceneAction::None};
-    bool m_unsaved_scene_modal_requested{false};
+    std::unique_ptr<UnsavedSceneModal> m_unsaved_scene_modal;
     ProjectSettingsPanel m_project_settings_panel;
     RenderStatsPanel m_render_stats_panel;
     ContentBrowserPanel m_content_browser_panel;

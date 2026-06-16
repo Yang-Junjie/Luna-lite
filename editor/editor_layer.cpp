@@ -19,15 +19,30 @@
 #include "editor_actions.h"
 #include "editor_layer.h"
 #include "editor_scene_metadata.h"
+#include "modal_dialog.h"
 
 #include <filesystem>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <imgui.h>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 
 namespace lunalite::editor {
+class EditorLayer::UnsavedSceneModal final : public ModalDialog {
+public:
+    explicit UnsavedSceneModal(EditorLayer& editor);
+
+    void draw();
+
+private:
+    void onDrawContent() override;
+    void onDismissed() override;
+
+    EditorLayer& m_editor;
+};
+
 namespace {
 std::optional<renderer::interface::AABB> meshRendererWorldAABB(scene::Scene& scene, scene::Entity entity)
 {
@@ -56,10 +71,55 @@ EditorLayer::EditorLayer()
       m_hierarchy_panel(m_scene, m_selection),
       m_inspector_panel(m_scene, m_selection),
       m_scene_panel(m_scene),
+      m_unsaved_scene_modal(std::make_unique<UnsavedSceneModal>(*this)),
       m_project_settings_panel(m_current_scene_path),
       m_content_browser_panel(m_selection)
 {
     markSceneSaved();
+}
+
+EditorLayer::~EditorLayer() = default;
+
+EditorLayer::UnsavedSceneModal::UnsavedSceneModal(EditorLayer& editor)
+    : ModalDialog("Unsaved Scene", true),
+      m_editor(editor)
+{}
+
+void EditorLayer::UnsavedSceneModal::draw()
+{
+    ModalDialog::draw();
+}
+
+void EditorLayer::UnsavedSceneModal::onDrawContent()
+{
+    ImGui::TextUnformatted("The current scene has unsaved changes.");
+    ImGui::Separator();
+
+    if (ImGui::Button("Save")) {
+        const bool saved = m_editor.m_current_scene_path.empty()
+                               ? m_editor.saveSceneAs()
+                               : (m_editor.saveScene(), !m_editor.hasUnsavedSceneChanges());
+        if (saved) {
+            closeCurrent();
+            m_editor.runPendingSceneAction();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Discard")) {
+        closeCurrent();
+        m_editor.runPendingSceneAction();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+        onDismissed();
+        closeCurrent();
+    }
+}
+
+void EditorLayer::UnsavedSceneModal::onDismissed()
+{
+    m_editor.m_pending_scene_path.clear();
+    m_editor.m_pending_scene_action = PendingSceneAction::None;
 }
 
 void EditorLayer::onAttach() {}
@@ -473,7 +533,7 @@ void EditorLayer::createProject()
     m_current_scene_path.clear();
     m_pending_scene_path.clear();
     m_pending_scene_action = PendingSceneAction::None;
-    m_unsaved_scene_modal_requested = false;
+    m_unsaved_scene_modal->close();
     markSceneSaved();
     m_editor_camera.resetSceneState();
 }
@@ -500,7 +560,7 @@ void EditorLayer::openProject()
     m_current_scene_path.clear();
     m_pending_scene_path.clear();
     m_pending_scene_action = PendingSceneAction::None;
-    m_unsaved_scene_modal_requested = false;
+    m_unsaved_scene_modal->close();
     markSceneSaved();
     m_editor_camera.resetSceneState();
 
@@ -671,7 +731,7 @@ void EditorLayer::requestLoadScene(const std::filesystem::path& scene_path)
     if (hasUnsavedSceneChanges()) {
         m_pending_scene_path = scene_path;
         m_pending_scene_action = PendingSceneAction::Load;
-        m_unsaved_scene_modal_requested = true;
+        m_unsaved_scene_modal->open();
         return;
     }
 
@@ -683,7 +743,7 @@ void EditorLayer::requestCreateScene(const std::filesystem::path& scene_path)
     if (hasUnsavedSceneChanges()) {
         m_pending_scene_path = scene_path;
         m_pending_scene_action = PendingSceneAction::Create;
-        m_unsaved_scene_modal_requested = true;
+        m_unsaved_scene_modal->open();
         return;
     }
 
@@ -706,7 +766,7 @@ bool EditorLayer::runPendingSceneAction()
     const auto action = m_pending_scene_action;
     m_pending_scene_path.clear();
     m_pending_scene_action = PendingSceneAction::None;
-    m_unsaved_scene_modal_requested = false;
+    m_unsaved_scene_modal->close();
 
     switch (action) {
         case PendingSceneAction::Load:
@@ -722,49 +782,11 @@ bool EditorLayer::runPendingSceneAction()
 void EditorLayer::drawUnsavedSceneModal()
 {
     if (m_pending_scene_action == PendingSceneAction::None || m_pending_scene_path.empty()) {
+        m_unsaved_scene_modal->close();
         return;
     }
 
-    if (m_unsaved_scene_modal_requested) {
-        ImGui::OpenPopup("Unsaved Scene");
-        m_unsaved_scene_modal_requested = false;
-    }
-
-    bool open = true;
-    if (!ImGui::BeginPopupModal("Unsaved Scene", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
-        return;
-    }
-
-    ImGui::TextUnformatted("The current scene has unsaved changes.");
-    ImGui::Separator();
-
-    if (ImGui::Button("Save")) {
-        const bool saved = m_current_scene_path.empty() ? saveSceneAs() : (saveScene(), !hasUnsavedSceneChanges());
-        if (saved) {
-            ImGui::CloseCurrentPopup();
-            runPendingSceneAction();
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Discard")) {
-        ImGui::CloseCurrentPopup();
-        runPendingSceneAction();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel")) {
-        m_pending_scene_path.clear();
-        m_pending_scene_action = PendingSceneAction::None;
-        m_unsaved_scene_modal_requested = false;
-        ImGui::CloseCurrentPopup();
-    }
-
-    if (!open) {
-        m_pending_scene_path.clear();
-        m_pending_scene_action = PendingSceneAction::None;
-        m_unsaved_scene_modal_requested = false;
-    }
-
-    ImGui::EndPopup();
+    m_unsaved_scene_modal->draw();
 }
 
 void EditorLayer::persistEditorSceneCamera(bool force)
