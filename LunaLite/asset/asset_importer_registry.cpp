@@ -5,6 +5,8 @@
 #include "importers/prefab_asset_importer.h"
 #include "importers/scene_asset_importer.h"
 #include "importers/script_asset_importer.h"
+#include "importers/sprite_animation_clip_importer.h"
+#include "importers/sprite_animator_controller_importer.h"
 #include "importers/sprite_asset_importer.h"
 #include "importers/texture_asset_importer.h"
 #include "metadata/asset_metadata_store.h"
@@ -26,6 +28,8 @@ void AssetImporterRegistry::registerDefaults()
     m_importers.push_back(std::make_unique<ScriptAssetImporter>());
     m_importers.push_back(std::make_unique<TextureAssetImporter>());
     m_importers.push_back(std::make_unique<SpriteAssetImporter>());
+    m_importers.push_back(std::make_unique<SpriteAnimationClipImporter>());
+    m_importers.push_back(std::make_unique<SpriteAnimatorControllerImporter>());
 }
 
 Importer* AssetImporterRegistry::findImporter(const std::filesystem::path& assetPath) const

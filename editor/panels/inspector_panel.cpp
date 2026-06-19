@@ -203,6 +203,11 @@ void InspectorPanel::onImGuiRender()
             actions::addComponent(m_scene, selectedEntity, tooling::SpriteRendererComponentType);
         }
 
+        if (!m_scene.hasComponent<scene::SpriteAnimatorComponent>(selectedEntity) &&
+            ImGui::MenuItem("Sprite Animator")) {
+            actions::addComponent(m_scene, selectedEntity, tooling::SpriteAnimatorComponentType);
+        }
+
         if (!m_scene.hasComponent<scene::ScriptComponent>(selectedEntity) && ImGui::MenuItem("Script")) {
             actions::addComponent(m_scene, selectedEntity, tooling::ScriptComponentType);
         }
@@ -413,6 +418,86 @@ void InspectorPanel::onImGuiRender()
                 [&]() {
                     spriteRenderer.depth_test = depthTest;
                 });
+        }
+    }
+
+    if (m_scene.hasComponent<scene::SpriteAnimatorComponent>(selectedEntity)) {
+        const bool open = ImGui::CollapsingHeader("Sprite Animator", ImGuiTreeNodeFlags_DefaultOpen);
+        if (ImGui::BeginPopupContextItem("SpriteAnimatorPopup")) {
+            if (ImGui::MenuItem("Delete Component")) {
+                actions::removeComponent(m_scene, selectedEntity, tooling::SpriteAnimatorComponentType);
+            }
+            ImGui::EndPopup();
+        }
+        if (open && m_scene.hasComponent<scene::SpriteAnimatorComponent>(selectedEntity)) {
+            auto& animator = m_scene.getComponent<scene::SpriteAnimatorComponent>(selectedEntity);
+            drawAssetHandleControl("Controller",
+                                   m_scene,
+                                   actions::EditSpriteAnimatorCommandId,
+                                   asset::AssetType::SpriteAnimatorController,
+                                   animator.controller,
+                                   {});
+
+            std::array<char, 256> stateBuffer{};
+            const size_t copySize = animator.current_state.size() < stateBuffer.size() - 1
+                                        ? animator.current_state.size()
+                                        : stateBuffer.size() - 1;
+            std::memcpy(stateBuffer.data(), animator.current_state.data(), copySize);
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteAnimatorCommandId,
+                [&]() {
+                    return ImGui::InputText("Current State", stateBuffer.data(), stateBuffer.size());
+                },
+                [&]() {
+                    animator.current_state = stateBuffer.data();
+                });
+
+            auto stateTime = animator.state_time;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteAnimatorCommandId,
+                [&]() {
+                    return ImGui::DragFloat("State Time", &stateTime, 0.01f, 0.0f, 10'000.0f, "%.3f");
+                },
+                [&]() {
+                    animator.state_time = std::max(stateTime, 0.0f);
+                });
+
+            auto speed = animator.speed;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteAnimatorCommandId,
+                [&]() {
+                    return ImGui::DragFloat("Speed", &speed, 0.01f, -10.0f, 10.0f, "%.3f");
+                },
+                [&]() {
+                    animator.speed = speed;
+                });
+
+            auto playing = animator.playing;
+            drawLiveSceneEdit(
+                m_scene,
+                actions::EditSpriteAnimatorCommandId,
+                [&]() {
+                    return ImGui::Checkbox("Playing", &playing);
+                },
+                [&]() {
+                    animator.playing = playing;
+                });
+
+            if (!animator.parameters.empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
+                for (const auto& [name, value] : animator.parameters) {
+                    ImGui::Text("%s", name.c_str());
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("Bool %s  Float %.3f  Int %d  Trigger %s",
+                                        value.bool_value ? "true" : "false",
+                                        value.float_value,
+                                        value.int_value,
+                                        value.trigger_value ? "true" : "false");
+                }
+                ImGui::TreePop();
+            }
         }
     }
 

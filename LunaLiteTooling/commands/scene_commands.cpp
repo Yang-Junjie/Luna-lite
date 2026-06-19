@@ -1,3 +1,4 @@
+#include "../../LunaLite/animation/sprite_animation.h"
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/asset/builtin/builtin_assets.h"
 #include "../../LunaLite/scene/components.h"
@@ -89,6 +90,12 @@ std::optional<asset::AssetType> assetTypeArg(const CommandArgs& args)
             return asset::AssetType::Texture;
         case static_cast<uint64_t>(asset::AssetType::Sprite):
             return asset::AssetType::Sprite;
+        case static_cast<uint64_t>(asset::AssetType::SpriteAnimationClip):
+            return asset::AssetType::SpriteAnimationClip;
+        case static_cast<uint64_t>(asset::AssetType::SpriteAnimatorController):
+            return asset::AssetType::SpriteAnimatorController;
+        case static_cast<uint64_t>(asset::AssetType::Scene):
+            return asset::AssetType::Scene;
         case static_cast<uint64_t>(asset::AssetType::None):
         default:
             return asset::AssetType::None;
@@ -302,6 +309,25 @@ void applySpriteRendererArgs(scene::SpriteRendererComponent& spriteRenderer, con
     }
     if (const auto value = args.get<bool>("depth_test")) {
         spriteRenderer.depth_test = *value;
+    }
+}
+
+void applySpriteAnimatorArgs(scene::SpriteAnimatorComponent& animator, const CommandArgs& args)
+{
+    if (const auto value = args.get<asset::AssetHandle>("controller")) {
+        animator.controller = *value;
+    }
+    if (const auto value = args.get<std::string>("current_state")) {
+        animator.current_state = *value;
+    }
+    if (const auto value = floatArg(args, "state_time")) {
+        animator.state_time = std::max(*value, 0.0f);
+    }
+    if (const auto value = floatArg(args, "speed")) {
+        animator.speed = *value;
+    }
+    if (const auto value = args.get<bool>("playing")) {
+        animator.playing = *value;
     }
 }
 
@@ -682,6 +708,11 @@ CommandResult addComponent(ToolContext& context, const CommandArgs& args)
             return CommandResult::fail("Entity already has SpriteRenderer component");
         }
         scene->addComponent<scene::SpriteRendererComponent>(*entity);
+    } else if (componentTypeView == SpriteAnimatorComponentType) {
+        if (scene->hasComponent<scene::SpriteAnimatorComponent>(*entity)) {
+            return CommandResult::fail("Entity already has SpriteAnimator component");
+        }
+        scene->addComponent<scene::SpriteAnimatorComponent>(*entity);
     } else if (componentTypeView == ScriptComponentType) {
         if (scene->hasComponent<scene::ScriptComponent>(*entity)) {
             return CommandResult::fail("Entity already has Script component");
@@ -736,6 +767,11 @@ CommandResult removeComponent(ToolContext& context, const CommandArgs& args)
             return CommandResult::fail("Entity does not have SpriteRenderer component");
         }
         scene->removeComponent<scene::SpriteRendererComponent>(*entity);
+    } else if (componentTypeView == SpriteAnimatorComponentType) {
+        if (!scene->hasComponent<scene::SpriteAnimatorComponent>(*entity)) {
+            return CommandResult::fail("Entity does not have SpriteAnimator component");
+        }
+        scene->removeComponent<scene::SpriteAnimatorComponent>(*entity);
     } else if (componentTypeView == ScriptComponentType) {
         if (!scene->hasComponent<scene::ScriptComponent>(*entity)) {
             return CommandResult::fail("Entity does not have Script component");
@@ -951,6 +987,19 @@ CommandResult editSpriteRenderer(ToolContext& context, const CommandArgs& args)
 
     applySpriteRendererArgs(*spriteRenderer, args);
     return editResult("Sprite renderer edited", entity);
+}
+
+CommandResult editSpriteAnimator(ToolContext& context, const CommandArgs& args)
+{
+    scene::Entity entity;
+    scene::SpriteAnimatorComponent* animator = nullptr;
+    auto result = resolveEditableComponent(context, args, EditSpriteAnimatorCommandId, entity, animator);
+    if (!result.success) {
+        return result;
+    }
+
+    applySpriteAnimatorArgs(*animator, args);
+    return editResult("Sprite animator edited", entity);
 }
 
 CommandResult editScript(ToolContext& context, const CommandArgs& args)
@@ -1407,6 +1456,31 @@ std::string_view EditSpriteRendererCommand::label() const
     return "Edit Sprite Renderer";
 }
 
+std::string_view EditSpriteAnimatorCommand::id() const
+{
+    return EditSpriteAnimatorCommandId;
+}
+
+std::string_view EditSpriteAnimatorCommand::label() const
+{
+    return "Edit Sprite Animator";
+}
+
+std::string_view EditSpriteAnimatorCommand::category() const
+{
+    return "Scene";
+}
+
+bool EditSpriteAnimatorCommand::canUndo() const
+{
+    return true;
+}
+
+CommandResult EditSpriteAnimatorCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    return editSpriteAnimator(context, args);
+}
+
 std::string_view EditSpriteRendererCommand::category() const
 {
     return "Scene";
@@ -1540,6 +1614,7 @@ void registerSceneCommands(CommandRegistry& registry)
     registry.registerCommand(std::make_unique<EditTransformCommand>());
     registry.registerCommand(std::make_unique<EditMeshRendererCommand>());
     registry.registerCommand(std::make_unique<EditSpriteRendererCommand>());
+    registry.registerCommand(std::make_unique<EditSpriteAnimatorCommand>());
     registry.registerCommand(std::make_unique<EditScriptCommand>());
     registry.registerCommand(std::make_unique<EditCameraCommand>());
     registry.registerCommand(std::make_unique<EditDirectionalLightCommand>());

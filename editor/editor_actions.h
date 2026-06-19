@@ -23,6 +23,7 @@ inline constexpr std::string_view EditTagCommandId = tooling::EditTagCommandId;
 inline constexpr std::string_view EditTransformCommandId = tooling::EditTransformCommandId;
 inline constexpr std::string_view EditMeshRendererCommandId = tooling::EditMeshRendererCommandId;
 inline constexpr std::string_view EditSpriteRendererCommandId = tooling::EditSpriteRendererCommandId;
+inline constexpr std::string_view EditSpriteAnimatorCommandId = tooling::EditSpriteAnimatorCommandId;
 inline constexpr std::string_view EditScriptCommandId = tooling::EditScriptCommandId;
 inline constexpr std::string_view EditCameraCommandId = tooling::EditCameraCommandId;
 inline constexpr std::string_view EditDirectionalLightCommandId = tooling::EditDirectionalLightCommandId;

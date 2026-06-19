@@ -191,6 +191,23 @@ bool isSingleFolderName(std::string_view name)
     const std::filesystem::path path{name};
     return !path.is_absolute() && !path.has_parent_path() && path.filename() == path && !hasParentTraversal(path);
 }
+
+void drawAssetCreateMenu(const std::filesystem::path& targetDirectory,
+                         std::optional<PendingCommandRequest>& pendingCommandRequest)
+{
+    if (ImGui::MenuItem("Sprite Animation Clip")) {
+        pendingCommandRequest = PendingCommandRequest{
+            .command_id = std::string{tooling::CreateSpriteAnimationClipCommandId},
+            .target_directory = targetDirectory,
+        };
+    }
+    if (ImGui::MenuItem("Sprite Animator Controller")) {
+        pendingCommandRequest = PendingCommandRequest{
+            .command_id = std::string{tooling::CreateSpriteAnimatorControllerCommandId},
+            .target_directory = targetDirectory,
+        };
+    }
+}
 } // namespace
 
 ContentBrowserPanel::ContentBrowserPanel(tooling::SelectionContext& selection)
@@ -372,6 +389,10 @@ void ContentBrowserPanel::onImGuiRender()
             if (ImGui::MenuItem("Create Folder")) {
                 startCreateFolder(relative);
             }
+            if (ImGui::BeginMenu("Create Asset")) {
+                drawAssetCreateMenu(relative, pendingCommandRequest);
+                ImGui::EndMenu();
+            }
             ImGui::EndPopup();
         }
 
@@ -408,6 +429,10 @@ void ContentBrowserPanel::onImGuiRender()
         if (ImGui::BeginPopupContextItem()) {
             if (ImGui::MenuItem("Create Folder")) {
                 startCreateFolder(relative);
+            }
+            if (ImGui::BeginMenu("Create Asset")) {
+                drawAssetCreateMenu(relative, pendingCommandRequest);
+                ImGui::EndMenu();
             }
             ImGui::EndPopup();
         }
@@ -462,6 +487,10 @@ void ContentBrowserPanel::onImGuiRender()
         if (ImGui::MenuItem("Create Folder")) {
             startCreateFolder(m_current_directory);
         }
+        if (ImGui::BeginMenu("Create Asset")) {
+            drawAssetCreateMenu(m_current_directory, pendingCommandRequest);
+            ImGui::EndMenu();
+        }
         ImGui::EndPopup();
     }
     const auto available = ImGui::GetContentRegionAvail();
@@ -474,8 +503,12 @@ void ContentBrowserPanel::onImGuiRender()
     m_create_folder_modal->draw(context->project_root, context->assets_relative);
 
     if (pendingCommandRequest) {
-        const auto result = actions::executeAssetCommand(
-            pendingCommandRequest->command_id, pendingCommandRequest->source, pendingCommandRequest->target_directory);
+        tooling::CommandArgs args;
+        args.set("target_directory", pendingCommandRequest->target_directory);
+        if (pendingCommandRequest->source.isValid()) {
+            args.set("source_asset", pendingCommandRequest->source);
+        }
+        const auto result = actions::executeAssetCommand(pendingCommandRequest->command_id, args);
         if (!result.success) {
             LUNA_CORE_ERROR("Failed to execute command '{}': {}",
                             pendingCommandRequest->command_id,

@@ -152,6 +152,15 @@ public:
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
+class EditSpriteAnimatorCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    bool canUndo() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
 class EditScriptCommand final : public Command {
 public:
     std::string_view id() const override;
@@ -204,6 +213,7 @@ inline constexpr std::string_view EditTagCommandId = "scene.edit_tag";
 inline constexpr std::string_view EditTransformCommandId = "scene.edit_transform";
 inline constexpr std::string_view EditMeshRendererCommandId = "scene.edit_mesh_renderer";
 inline constexpr std::string_view EditSpriteRendererCommandId = "scene.edit_sprite_renderer";
+inline constexpr std::string_view EditSpriteAnimatorCommandId = "scene.edit_sprite_animator";
 inline constexpr std::string_view EditScriptCommandId = "scene.edit_script";
 inline constexpr std::string_view EditCameraCommandId = "scene.edit_camera";
 inline constexpr std::string_view EditDirectionalLightCommandId = "scene.edit_directional_light";
@@ -211,6 +221,7 @@ inline constexpr std::string_view EditSceneSettingsCommandId = "scene.edit_scene
 
 inline constexpr std::string_view MeshRendererComponentType = "MeshRenderer";
 inline constexpr std::string_view SpriteRendererComponentType = "SpriteRenderer";
+inline constexpr std::string_view SpriteAnimatorComponentType = "SpriteAnimator";
 inline constexpr std::string_view ScriptComponentType = "Script";
 inline constexpr std::string_view CameraComponentType = "Camera";
 inline constexpr std::string_view DirectionalLightComponentType = "DirectionalLight";

@@ -1,3 +1,4 @@
+#include "../../LunaLite/animation/sprite_animation.h"
 #include "../../LunaLite/asset/asset_manager.h"
 #include "../../LunaLite/asset/factory/asset_factory.h"
 #include "../../LunaLite/asset/metadata/asset_metadata_serializer.h"
@@ -14,6 +15,7 @@
 #include <fstream>
 #include <memory>
 #include <system_error>
+#include <utility>
 #include <yaml-cpp/yaml.h>
 
 namespace lunalite::tooling {
@@ -52,6 +54,103 @@ asset::AssetHandle assetArg(const CommandArgs& args, std::string_view key, asset
 {
     const auto value = args.get<asset::AssetHandle>(key);
     return value ? *value : fallback;
+}
+
+std::string stringArg(const CommandArgs& args, std::string_view key, std::string fallback)
+{
+    const auto value = args.get<std::string>(key);
+    return value ? *value : std::move(fallback);
+}
+
+std::filesystem::path projectRootPath()
+{
+    return project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());
+}
+
+std::filesystem::path resolveProjectPath(const std::filesystem::path& path)
+{
+    const auto projectRoot = projectRootPath();
+    return (path.is_absolute() ? path : projectRoot / path).lexically_normal();
+}
+
+std::filesystem::path
+    uniqueAssetPath(const std::filesystem::path& directory, std::string_view baseName, std::string_view extension)
+{
+    for (uint32_t index = 0; index < 1'000; ++index) {
+        const auto name = index == 0 ? std::string{baseName} : std::string{baseName} + "_" + std::to_string(index);
+        auto path = directory / name;
+        path.replace_extension(extension);
+        if (!std::filesystem::exists(path)) {
+            return path;
+        }
+    }
+    return {};
+}
+
+std::string sanitizeAssetBaseName(std::string name, std::string fallback)
+{
+    if (name.empty()) {
+        name = std::move(fallback);
+    }
+
+    for (auto& ch : name) {
+        switch (ch) {
+            case '<':
+            case '>':
+            case ':':
+            case '"':
+            case '/':
+            case '\\':
+            case '|':
+            case '?':
+            case '*':
+                ch = '_';
+                break;
+            default:
+                break;
+        }
+    }
+
+    while (!name.empty() && (name.back() == '.' || name.back() == ' ')) {
+        name.pop_back();
+    }
+    return name.empty() ? std::move(fallback) : name;
+}
+
+bool writeYamlFile(const std::filesystem::path& path, const YAML::Node& root)
+{
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) {
+        LUNA_CORE_ERROR("Failed to create asset directory '{}': {}", path.parent_path().string(), error.message());
+        return false;
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        LUNA_CORE_ERROR("Failed to open asset file for writing: '{}'", path.string());
+        return false;
+    }
+
+    out << root;
+    if (!out.good()) {
+        LUNA_CORE_ERROR("Failed to write asset file: '{}'", path.string());
+        return false;
+    }
+    return true;
+}
+
+CommandResult importCreatedAsset(ToolContext& context, const std::filesystem::path& path, std::string message)
+{
+    const auto handle = context.assetManager().importAndLoadAsset(path);
+    if (!handle || !handle->isValid()) {
+        return CommandResult::fail("Failed to import and load created asset");
+    }
+
+    auto result = CommandResult::ok(std::move(message));
+    result.set("created_asset", *handle);
+    result.set("created_path", path);
+    return result;
 }
 
 renderer::interface::ShadingModel shadingModelFromValue(uint64_t value)
@@ -354,9 +453,7 @@ CommandResult resolveLoadedTexture(ToolContext& context,
 
 bool writeMaterialFile(const asset::AssetMetadata& metadata, const renderer::interface::MaterialParameters& parameters)
 {
-    const auto projectRoot =
-        project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());
-    const auto path = projectRoot / metadata.FilePath;
+    const auto path = projectRootPath() / metadata.FilePath;
 
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
@@ -399,9 +496,7 @@ bool writeMaterialFile(const asset::AssetMetadata& metadata, const renderer::int
 
 bool writeSpriteFile(const asset::AssetMetadata& metadata, const asset::Sprite& sprite)
 {
-    const auto projectRoot =
-        project::ProjectManager::instance().getProjectRootPath().value_or(std::filesystem::current_path());
-    const auto path = projectRoot / metadata.FilePath;
+    const auto path = projectRootPath() / metadata.FilePath;
 
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
@@ -459,6 +554,42 @@ bool writeTextureMetadata(const asset::AssetMetadata& metadata,
     updatedMetadata.SpecializedConfig = textureImportSettingsToConfig(settings, metadata.SpecializedConfig);
     return asset::AssetMetadataSerializer{}.write(updatedMetadata);
 }
+
+CommandResult writeSpriteAnimationClipFile(ToolContext& context,
+                                           const std::filesystem::path& path,
+                                           float fps,
+                                           bool loop,
+                                           const std::vector<asset::AssetHandle>& frames)
+{
+    const auto defaultDuration = 1.0f / std::max(fps, 0.0001f);
+
+    YAML::Node root;
+    root["SpriteAnimation"]["FPS"] = fps;
+    root["SpriteAnimation"]["Loop"] = loop;
+    YAML::Node framesNode(YAML::NodeType::Sequence);
+    for (const auto frame : frames) {
+        if (!frame.isValid()) {
+            return CommandResult::fail("Sprite animation frames must be valid sprite handles");
+        }
+
+        const auto* metadata = context.assetManager().getMetadata(frame);
+        if (metadata == nullptr || metadata->Type != asset::AssetType::Sprite) {
+            return CommandResult::fail("Sprite animation frames must reference sprite assets");
+        }
+
+        YAML::Node frameNode;
+        frameNode["Sprite"] = static_cast<uint64_t>(frame);
+        frameNode["Duration"] = defaultDuration;
+        framesNode.push_back(frameNode);
+    }
+    root["SpriteAnimation"]["Frames"] = framesNode;
+
+    if (!writeYamlFile(path, root)) {
+        return CommandResult::fail("Failed to write sprite animation asset");
+    }
+
+    return CommandResult::ok();
+}
 } // namespace
 
 std::string_view CreateSpriteCommand::id() const
@@ -505,6 +636,158 @@ CommandResult CreateSpriteCommand::execute(ToolContext& context, const CommandAr
     auto result = CommandResult::ok("Sprite asset created");
     result.set("created_asset", factoryResult.handle);
     result.set("created_path", factoryResult.path);
+    return result;
+}
+
+std::string_view CreateSpriteAnimationClipCommand::id() const
+{
+    return CreateSpriteAnimationClipCommandId;
+}
+
+std::string_view CreateSpriteAnimationClipCommand::label() const
+{
+    return "Create Sprite Animation Clip";
+}
+
+std::string_view CreateSpriteAnimationClipCommand::category() const
+{
+    return "Asset";
+}
+
+CommandResult CreateSpriteAnimationClipCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    const auto targetDirectory = args.get<std::filesystem::path>("target_directory");
+    if (!targetDirectory || targetDirectory->empty()) {
+        return CommandResult::fail("asset.create_sprite_animation_clip requires target_directory");
+    }
+
+    const auto targetDirectoryPath = resolveProjectPath(*targetDirectory);
+    const auto clipName = sanitizeAssetBaseName(stringArg(args, "name", "NewSpriteAnimation"), "NewSpriteAnimation");
+    const auto path = uniqueAssetPath(targetDirectoryPath, clipName, ".lunaanim");
+    if (path.empty()) {
+        return CommandResult::fail("No available sprite animation asset file name");
+    }
+
+    const auto fps = std::max(floatArg(args, "fps").value_or(12.0f), 0.0001f);
+    const auto loop = boolArg(args, "loop").value_or(true);
+    const auto frames = args.get<std::vector<asset::AssetHandle>>("frames").value_or({});
+    const auto writeResult = writeSpriteAnimationClipFile(context, path, fps, loop, frames);
+    if (!writeResult.success) {
+        return writeResult;
+    }
+
+    return importCreatedAsset(context, path, "Sprite animation clip asset created");
+}
+
+std::string_view CreateSpriteAnimatorControllerCommand::id() const
+{
+    return CreateSpriteAnimatorControllerCommandId;
+}
+
+std::string_view CreateSpriteAnimatorControllerCommand::label() const
+{
+    return "Create Sprite Animator Controller";
+}
+
+std::string_view CreateSpriteAnimatorControllerCommand::category() const
+{
+    return "Asset";
+}
+
+CommandResult CreateSpriteAnimatorControllerCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    const auto targetDirectory = args.get<std::filesystem::path>("target_directory");
+    if (!targetDirectory || targetDirectory->empty()) {
+        return CommandResult::fail("asset.create_sprite_animator_controller requires target_directory");
+    }
+
+    const auto targetDirectoryPath = resolveProjectPath(*targetDirectory);
+    const auto controllerName =
+        sanitizeAssetBaseName(stringArg(args, "name", "NewSpriteAnimator"), "NewSpriteAnimator");
+    const auto path = uniqueAssetPath(targetDirectoryPath, controllerName, ".lunaanimator");
+    if (path.empty()) {
+        return CommandResult::fail("No available sprite animator asset file name");
+    }
+
+    const auto clip = assetArg(args, "clip", asset::AssetHandle{0});
+    if (clip.isValid()) {
+        const auto* metadata = context.assetManager().getMetadata(clip);
+        if (metadata == nullptr || metadata->Type != asset::AssetType::SpriteAnimationClip) {
+            return CommandResult::fail("Sprite animator controller clip must reference a sprite animation clip asset");
+        }
+    }
+
+    const auto stateName = sanitizeAssetBaseName(stringArg(args, "state_name", "Default"), "Default");
+    const auto loop = boolArg(args, "loop").value_or(true);
+
+    YAML::Node state;
+    state["Name"] = stateName;
+    state["Clip"] = static_cast<uint64_t>(clip);
+    state["Loop"] = loop;
+
+    YAML::Node states(YAML::NodeType::Sequence);
+    states.push_back(state);
+
+    YAML::Node root;
+    root["SpriteAnimatorController"]["EntryState"] = stateName;
+    root["SpriteAnimatorController"]["Parameters"] = YAML::Node(YAML::NodeType::Sequence);
+    root["SpriteAnimatorController"]["States"] = states;
+    root["SpriteAnimatorController"]["Transitions"] = YAML::Node(YAML::NodeType::Sequence);
+    if (!writeYamlFile(path, root)) {
+        return CommandResult::fail("Failed to write sprite animator controller asset");
+    }
+
+    return importCreatedAsset(context, path, "Sprite animator controller asset created");
+}
+
+std::string_view SaveSpriteAnimationClipCommand::id() const
+{
+    return SaveSpriteAnimationClipCommandId;
+}
+
+std::string_view SaveSpriteAnimationClipCommand::label() const
+{
+    return "Save Sprite Animation Clip";
+}
+
+std::string_view SaveSpriteAnimationClipCommand::category() const
+{
+    return "Asset";
+}
+
+CommandResult SaveSpriteAnimationClipCommand::execute(ToolContext& context, const CommandArgs& args)
+{
+    const auto clip = args.get<asset::AssetHandle>("clip");
+    if (!clip || !clip->isValid()) {
+        return CommandResult::fail("asset.save_sprite_animation_clip requires a valid clip");
+    }
+
+    const auto* metadata = context.assetManager().getMetadata(*clip);
+    if (metadata == nullptr || metadata->Type != asset::AssetType::SpriteAnimationClip) {
+        return CommandResult::fail("asset.save_sprite_animation_clip requires a sprite animation clip asset");
+    }
+    if (metadata->MemoryOnly) {
+        return CommandResult::fail("Cannot save a memory-only sprite animation clip asset");
+    }
+
+    const auto fps = std::max(floatArg(args, "fps").value_or(12.0f), 0.0001f);
+    const auto loop = boolArg(args, "loop").value_or(true);
+    const auto frames = args.get<std::vector<asset::AssetHandle>>("frames").value_or({});
+    const auto savedPath = metadata->FilePath;
+    const auto path = projectRootPath() / metadata->FilePath;
+
+    const auto writeResult = writeSpriteAnimationClipFile(context, path, fps, loop, frames);
+    if (!writeResult.success) {
+        return writeResult;
+    }
+
+    if (!context.assetManager().loadProjectAssets()) {
+        return CommandResult::fail("Failed to reload saved sprite animation clip");
+    }
+
+    auto result = CommandResult::ok("Sprite animation clip saved");
+    result.set("clip", *clip);
+    result.set("saved_path", savedPath);
     return result;
 }
 
@@ -726,6 +1009,9 @@ std::optional<std::string_view> commandIdForAssetFactory(std::string_view factor
 void registerAssetCommands(CommandRegistry& registry)
 {
     registry.registerCommand(std::make_unique<CreateSpriteCommand>());
+    registry.registerCommand(std::make_unique<CreateSpriteAnimationClipCommand>());
+    registry.registerCommand(std::make_unique<CreateSpriteAnimatorControllerCommand>());
+    registry.registerCommand(std::make_unique<SaveSpriteAnimationClipCommand>());
     registry.registerCommand(std::make_unique<SetMaterialParametersCommand>());
     registry.registerCommand(std::make_unique<SaveMaterialCommand>());
     registry.registerCommand(std::make_unique<SetSpriteParametersCommand>());

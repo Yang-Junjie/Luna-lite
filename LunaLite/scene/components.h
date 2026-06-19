@@ -10,6 +10,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace lunalite::scene {
@@ -52,6 +53,22 @@ struct SpriteRendererComponent {
     int32_t sorting_layer{0};
     int32_t order_in_layer{0};
     bool depth_test{false};
+};
+
+struct SpriteAnimatorParameterValue {
+    bool bool_value{false};
+    float float_value{0.0f};
+    int32_t int_value{0};
+    bool trigger_value{false};
+};
+
+struct SpriteAnimatorComponent {
+    asset::AssetHandle controller{0};
+    std::string current_state;
+    float state_time{0.0f};
+    float speed{1.0f};
+    bool playing{true};
+    std::unordered_map<std::string, SpriteAnimatorParameterValue> parameters;
 };
 
 struct ParentComponent {

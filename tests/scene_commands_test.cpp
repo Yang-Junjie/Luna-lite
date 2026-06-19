@@ -227,6 +227,28 @@ int main()
         return 1;
     }
 
+    tooling::CommandArgs addAnimatorComponentArgs;
+    addAnimatorComponentArgs.set("entity", entityToValue(componentEntity));
+    addAnimatorComponentArgs.set("component_type", std::string{tooling::SpriteAnimatorComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addAnimatorComponentArgs)
+             .success ||
+        !scene.hasComponent<scene::SpriteAnimatorComponent>(componentEntity)) {
+        std::cerr << "scene.add_component did not add SpriteAnimator.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs removeAnimatorComponentArgs;
+    removeAnimatorComponentArgs.set("entity", entityToValue(componentEntity));
+    removeAnimatorComponentArgs.set("component_type", std::string{tooling::SpriteAnimatorComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::RemoveComponentCommandId, context, removeAnimatorComponentArgs)
+             .success ||
+        scene.hasComponent<scene::SpriteAnimatorComponent>(componentEntity)) {
+        std::cerr << "scene.remove_component did not remove SpriteAnimator.\n";
+        return 1;
+    }
+
     tooling::CommandArgs addMeshRendererArgs;
     addMeshRendererArgs.set("entity", entityToValue(componentEntity));
     addMeshRendererArgs.set("component_type", std::string{tooling::MeshRendererComponentType});
@@ -408,6 +430,37 @@ int main()
         editedSpriteRenderer.sorting_layer != -3 || editedSpriteRenderer.order_in_layer != 12 ||
         !editedSpriteRenderer.depth_test) {
         std::cerr << "scene.edit_sprite_renderer did not update sprite renderer fields.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs addAnimatorForEditArgs;
+    addAnimatorForEditArgs.set("entity", entityToValue(componentEntity));
+    addAnimatorForEditArgs.set("component_type", std::string{tooling::SpriteAnimatorComponentType});
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::AddComponentCommandId, context, addAnimatorForEditArgs)
+             .success) {
+        std::cerr << "scene.add_component did not prepare SpriteAnimator edit coverage.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs editSpriteAnimatorArgs;
+    editSpriteAnimatorArgs.set("entity", entityToValue(componentEntity));
+    editSpriteAnimatorArgs.set("controller", asset::AssetHandle{123});
+    editSpriteAnimatorArgs.set("current_state", std::string{"Run"});
+    editSpriteAnimatorArgs.set("state_time", -1.0);
+    editSpriteAnimatorArgs.set("speed", 1.5);
+    editSpriteAnimatorArgs.set("playing", false);
+    if (!tooling::CommandRegistry::get()
+             .execute(tooling::EditSpriteAnimatorCommandId, context, editSpriteAnimatorArgs)
+             .success) {
+        std::cerr << "scene.edit_sprite_animator failed.\n";
+        return 1;
+    }
+    const auto& editedAnimator = scene.getComponent<scene::SpriteAnimatorComponent>(componentEntity);
+    if (editedAnimator.controller != asset::AssetHandle{123} || editedAnimator.current_state != "Run" ||
+        !nearlyEqual(editedAnimator.state_time, 0.0f) || !nearlyEqual(editedAnimator.speed, 1.5f) ||
+        editedAnimator.playing) {
+        std::cerr << "scene.edit_sprite_animator did not update animator fields.\n";
         return 1;
     }
 

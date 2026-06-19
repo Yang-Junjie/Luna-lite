@@ -64,6 +64,17 @@ int main()
         spriteRenderer.order_in_layer = 7;
         spriteRenderer.depth_test = true;
 
+        auto& animator = scene.addComponent<scene::SpriteAnimatorComponent>(entity);
+        animator.controller = asset::AssetHandle{91};
+        animator.current_state = "Run";
+        animator.state_time = 1.25f;
+        animator.speed = 1.5f;
+        animator.playing = false;
+        animator.parameters["Grounded"].bool_value = true;
+        animator.parameters["Speed"].float_value = 3.5f;
+        animator.parameters["Direction"].int_value = -1;
+        animator.parameters["Jump"].trigger_value = true;
+
         auto& script = scene.addComponent<scene::ScriptComponent>(entity);
         script.scripts.push_back({asset::AssetHandle{84}, true});
     }
@@ -126,6 +137,23 @@ int main()
         std::cerr << "Scene copy changed sprite renderer component data.\n";
         return 1;
     }
+    const auto copiedAnimatorView = copiedScene.getRegistry().view<const lunalite::scene::SpriteAnimatorComponent>();
+    if (countView(copiedAnimatorView) != 1) {
+        std::cerr << "Scene copy lost sprite animator component.\n";
+        return 1;
+    }
+    const auto& copiedAnimator =
+        copiedAnimatorView.get<const lunalite::scene::SpriteAnimatorComponent>(*copiedAnimatorView.begin());
+    if (copiedAnimator.controller != asset::AssetHandle{91} || copiedAnimator.current_state != "Run" ||
+        !nearlyEqual(copiedAnimator.state_time, 1.25f) || !nearlyEqual(copiedAnimator.speed, 1.5f) ||
+        copiedAnimator.playing || copiedAnimator.parameters.size() != 4 ||
+        !copiedAnimator.parameters.at("Grounded").bool_value ||
+        !nearlyEqual(copiedAnimator.parameters.at("Speed").float_value, 3.5f) ||
+        copiedAnimator.parameters.at("Direction").int_value != -1 ||
+        !copiedAnimator.parameters.at("Jump").trigger_value) {
+        std::cerr << "Scene copy changed sprite animator component data.\n";
+        return 1;
+    }
 
     const auto scenePath = std::filesystem::current_path() / "build" / "scene_serializer_test.lunascene";
     if (!scene::SceneSerializer::serialize(scene, scenePath)) {
@@ -162,6 +190,23 @@ int main()
     if (loadedSprite.sprite != asset::AssetHandle{21} || loadedSprite.color != glm::vec4{0.25f, 0.5f, 0.75f, 0.8f} ||
         loadedSprite.sorting_layer != 2 || loadedSprite.order_in_layer != 7 || !loadedSprite.depth_test) {
         std::cerr << "Unexpected sprite renderer component data.\n";
+        return 1;
+    }
+
+    const auto animatorView = loadedScene.getRegistry().view<const scene::SpriteAnimatorComponent>();
+    if (countView(animatorView) != 1) {
+        std::cerr << "Unexpected sprite animator entity count.\n";
+        return 1;
+    }
+    const auto& loadedAnimator = animatorView.get<const scene::SpriteAnimatorComponent>(*animatorView.begin());
+    if (loadedAnimator.controller != asset::AssetHandle{91} || loadedAnimator.current_state != "Run" ||
+        !nearlyEqual(loadedAnimator.state_time, 1.25f) || !nearlyEqual(loadedAnimator.speed, 1.5f) ||
+        loadedAnimator.playing || loadedAnimator.parameters.size() != 4 ||
+        !loadedAnimator.parameters.at("Grounded").bool_value ||
+        !nearlyEqual(loadedAnimator.parameters.at("Speed").float_value, 3.5f) ||
+        loadedAnimator.parameters.at("Direction").int_value != -1 ||
+        !loadedAnimator.parameters.at("Jump").trigger_value) {
+        std::cerr << "Unexpected sprite animator component data.\n";
         return 1;
     }
 

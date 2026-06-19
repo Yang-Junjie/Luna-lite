@@ -61,6 +61,8 @@ add_library(LunaLite STATIC
     core/layer_stack.cpp
     core/log.cpp
     core/uuid.cpp
+    animation/sprite_animation.cpp
+    animation/sprite_animator.cpp
     asset/asset_cache.cpp
     asset/asset_importer.cpp
     asset/asset_importer_registry.cpp
@@ -83,16 +85,21 @@ add_library(LunaLite STATIC
     asset/importers/prefab_asset_importer.cpp
     asset/importers/scene_asset_importer.cpp
     asset/importers/script_asset_importer.cpp
+    asset/importers/sprite_animation_clip_importer.cpp
+    asset/importers/sprite_animator_controller_importer.cpp
     asset/importers/sprite_asset_importer.cpp
     asset/importers/texture_asset_importer.cpp
     asset/loaders/material_asset_loader.cpp
     asset/loaders/mesh_asset_loader.cpp
     asset/loaders/prefab_asset_loader.cpp
+    asset/loaders/sprite_animation_clip_loader.cpp
+    asset/loaders/sprite_animator_controller_loader.cpp
     asset/loaders/sprite_asset_loader.cpp
     asset/loaders/texture_asset_loader.cpp
     platform/common/file_dialogs.h
     project/project_manager.cpp
     scene/scene.cpp
+    scene/sprite_animation_system.cpp
     scene/scene_serializer.cpp
     scene/scene_renderer.cpp
     script/glue/entity_api.cpp

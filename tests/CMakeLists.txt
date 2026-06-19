@@ -64,6 +64,17 @@ target_link_libraries(SpriteCullingTest
 
 add_test(NAME SpriteCullingTest COMMAND SpriteCullingTest)
 
+add_executable(SpriteAnimationSystemTest
+    sprite_animation_system_test.cpp
+)
+
+target_link_libraries(SpriteAnimationSystemTest
+    PRIVATE
+        LunaLite
+)
+
+add_test(NAME SpriteAnimationSystemTest COMMAND SpriteAnimationSystemTest)
+
 add_executable(ToolingCommandTest
     tooling_command_test.cpp
 )

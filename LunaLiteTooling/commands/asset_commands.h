@@ -17,6 +17,30 @@ public:
     CommandResult execute(ToolContext& context, const CommandArgs& args) override;
 };
 
+class CreateSpriteAnimationClipCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class CreateSpriteAnimatorControllerCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
+class SaveSpriteAnimationClipCommand final : public Command {
+public:
+    std::string_view id() const override;
+    std::string_view label() const override;
+    std::string_view category() const override;
+    CommandResult execute(ToolContext& context, const CommandArgs& args) override;
+};
+
 class SetMaterialParametersCommand final : public Command {
 public:
     std::string_view id() const override;
@@ -66,6 +90,9 @@ public:
 };
 
 inline constexpr std::string_view CreateSpriteCommandId = "asset.create_sprite";
+inline constexpr std::string_view CreateSpriteAnimationClipCommandId = "asset.create_sprite_animation_clip";
+inline constexpr std::string_view CreateSpriteAnimatorControllerCommandId = "asset.create_sprite_animator_controller";
+inline constexpr std::string_view SaveSpriteAnimationClipCommandId = "asset.save_sprite_animation_clip";
 inline constexpr std::string_view SetMaterialParametersCommandId = "asset.set_material_parameters";
 inline constexpr std::string_view SaveMaterialCommandId = "asset.save_material";
 inline constexpr std::string_view SetSpriteParametersCommandId = "asset.set_sprite_parameters";

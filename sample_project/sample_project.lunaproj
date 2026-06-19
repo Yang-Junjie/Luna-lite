@@ -4,5 +4,5 @@ Project:
   Author: Unknown
   Description: A simple Luna sample project.
   StartScene: Assets/Scenes/2dscene.lunascene
-  LastOpenScene: Assets/Scenes/test.lunascene
+  LastOpenScene: Assets/Scenes/2dscene.lunascene
   AssetsPath: ./Assets

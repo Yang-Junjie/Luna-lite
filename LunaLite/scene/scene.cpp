@@ -4,6 +4,7 @@
 #include "../script/script_runtime.h"
 #include "components.h"
 #include "scene.h"
+#include "sprite_animation_system.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -267,6 +268,11 @@ void Scene::copyFrom(const Scene& other)
                 other.getComponent<SpriteRendererComponent>(sourceEntity);
         }
 
+        if (other.hasComponent<SpriteAnimatorComponent>(sourceEntity)) {
+            addComponent<SpriteAnimatorComponent>(targetEntity) =
+                other.getComponent<SpriteAnimatorComponent>(sourceEntity);
+        }
+
         if (other.hasComponent<ScriptComponent>(sourceEntity)) {
             addComponent<ScriptComponent>(targetEntity) = other.getComponent<ScriptComponent>(sourceEntity);
         }
@@ -328,6 +334,8 @@ void Scene::onUpdateEditor(core::Timestep dt)
 
 void Scene::onUpdateRuntime(core::Timestep dt)
 {
+    updateSpriteAnimators(*this, dt);
+
     if (m_script_runtime) {
         m_script_runtime->onRuntimeUpdate(dt);
     }

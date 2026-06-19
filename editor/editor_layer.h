@@ -5,6 +5,7 @@
 #include "../LunaLiteTooling/context/selection_context.h"
 #include "drag_drop.h"
 #include "editor_camera.h"
+#include "panels/animation_builder_panel.h"
 #include "panels/content_browser_panel.h"
 #include "panels/debug_panel.h"
 #include "panels/editor_setting_panel.h"
@@ -114,6 +115,7 @@ private:
     InspectorPanel m_inspector_panel;
     ScenePanel m_scene_panel;
     MaterialEditorPanel m_material_editor_panel;
+    AnimationBuilderPanel m_animation_builder_panel;
     std::filesystem::path m_current_scene_path;
     std::filesystem::path m_pending_scene_path;
     std::string m_saved_scene_snapshot;
@@ -127,6 +129,7 @@ private:
     uint32_t m_viewport_width{1};
     uint32_t m_viewport_height{1};
     bool m_viewport_hovered{false};
+    bool m_show_animation_builder_panel{true};
     DebugCameraSnapshot m_frozen_culling_frustum;
 };
 

@@ -1,3 +1,4 @@
+#include "../LunaLite/animation/sprite_animation.h"
 #include "../LunaLite/asset/asset_manager.h"
 #include "../LunaLite/asset/sprite.h"
 #include "../LunaLite/project/project_manager.h"
@@ -197,6 +198,111 @@ int main()
         sprite->source_rect.height != 2 || sprite->pivot.x != 0.5f || sprite->pivot.y != 0.5f ||
         sprite->pixels_per_unit != 100.0f || !sprite->flip_y || sprite->color_space != asset::SpriteColorSpace::SRGB) {
         std::cerr << "asset.create_sprite created an unexpected sprite asset.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs createClipArgs;
+    createClipArgs.set("target_directory", std::filesystem::path{"Assets"});
+    const auto createClipResult =
+        tooling::CommandRegistry::get().execute(tooling::CreateSpriteAnimationClipCommandId, context, createClipArgs);
+    if (!createClipResult.success) {
+        std::cerr << "asset.create_sprite_animation_clip failed: " << createClipResult.message << "\n";
+        return 1;
+    }
+    const auto* clipAsset = createClipResult.get<asset::AssetHandle>("created_asset");
+    const auto* clipPath = createClipResult.get<std::filesystem::path>("created_path");
+    if (clipAsset == nullptr || !clipAsset->isValid() || clipPath == nullptr || !std::filesystem::exists(*clipPath) ||
+        asset::AssetManager::get().getAsset<animation::SpriteAnimationClip>(*clipAsset) == nullptr) {
+        std::cerr << "asset.create_sprite_animation_clip did not create a loadable clip asset.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs createFilledClipArgs;
+    createFilledClipArgs.set("target_directory", std::filesystem::path{"Assets"});
+    createFilledClipArgs.set("name", std::string{"Idle"});
+    createFilledClipArgs.set("fps", 8.0);
+    createFilledClipArgs.set("loop", false);
+    createFilledClipArgs.set("frames", std::vector<asset::AssetHandle>{*createdAsset, *createdAsset});
+    const auto createFilledClipResult = tooling::CommandRegistry::get().execute(
+        tooling::CreateSpriteAnimationClipCommandId, context, createFilledClipArgs);
+    if (!createFilledClipResult.success) {
+        std::cerr << "asset.create_sprite_animation_clip with frames failed: " << createFilledClipResult.message
+                  << "\n";
+        return 1;
+    }
+    const auto* filledClipAsset = createFilledClipResult.get<asset::AssetHandle>("created_asset");
+    if (filledClipAsset == nullptr || !filledClipAsset->isValid()) {
+        std::cerr << "asset.create_sprite_animation_clip with frames did not report a created asset.\n";
+        return 1;
+    }
+    const auto* filledClip = asset::AssetManager::get().getAsset<animation::SpriteAnimationClip>(*filledClipAsset);
+    if (filledClip == nullptr || filledClip->frames.size() != 2 || !nearlyEqual(filledClip->fps, 8.0f) ||
+        filledClip->loop || filledClip->frames[0].sprite != *createdAsset ||
+        !nearlyEqual(filledClip->frames[0].duration, 0.125f)) {
+        std::cerr << "asset.create_sprite_animation_clip with frames created unexpected clip data.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs saveClipArgs;
+    saveClipArgs.set("clip", *filledClipAsset);
+    saveClipArgs.set("fps", 4.0);
+    saveClipArgs.set("loop", true);
+    saveClipArgs.set("frames", std::vector<asset::AssetHandle>{*createdAsset});
+    const auto saveClipResult =
+        tooling::CommandRegistry::get().execute(tooling::SaveSpriteAnimationClipCommandId, context, saveClipArgs);
+    if (!saveClipResult.success) {
+        std::cerr << "asset.save_sprite_animation_clip failed: " << saveClipResult.message << "\n";
+        return 1;
+    }
+    filledClip = asset::AssetManager::get().getAsset<animation::SpriteAnimationClip>(*filledClipAsset);
+    if (filledClip == nullptr || filledClip->frames.size() != 1 || !nearlyEqual(filledClip->fps, 4.0f) ||
+        !filledClip->loop || filledClip->frames[0].sprite != *createdAsset ||
+        !nearlyEqual(filledClip->frames[0].duration, 0.25f)) {
+        std::cerr << "asset.save_sprite_animation_clip did not persist updated clip data.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs createControllerArgs;
+    createControllerArgs.set("target_directory", std::filesystem::path{"Assets"});
+    const auto createControllerResult = tooling::CommandRegistry::get().execute(
+        tooling::CreateSpriteAnimatorControllerCommandId, context, createControllerArgs);
+    if (!createControllerResult.success) {
+        std::cerr << "asset.create_sprite_animator_controller failed: " << createControllerResult.message << "\n";
+        return 1;
+    }
+    const auto* controllerAsset = createControllerResult.get<asset::AssetHandle>("created_asset");
+    const auto* controllerPath = createControllerResult.get<std::filesystem::path>("created_path");
+    if (controllerAsset == nullptr || !controllerAsset->isValid() || controllerPath == nullptr ||
+        !std::filesystem::exists(*controllerPath) ||
+        asset::AssetManager::get().getAsset<animation::SpriteAnimatorController>(*controllerAsset) == nullptr) {
+        std::cerr << "asset.create_sprite_animator_controller did not create a loadable controller asset.\n";
+        return 1;
+    }
+
+    tooling::CommandArgs createFilledControllerArgs;
+    createFilledControllerArgs.set("target_directory", std::filesystem::path{"Assets"});
+    createFilledControllerArgs.set("name", std::string{"IdleAnimator"});
+    createFilledControllerArgs.set("state_name", std::string{"Idle"});
+    createFilledControllerArgs.set("clip", *filledClipAsset);
+    createFilledControllerArgs.set("loop", false);
+    const auto createFilledControllerResult = tooling::CommandRegistry::get().execute(
+        tooling::CreateSpriteAnimatorControllerCommandId, context, createFilledControllerArgs);
+    if (!createFilledControllerResult.success) {
+        std::cerr << "asset.create_sprite_animator_controller with clip failed: "
+                  << createFilledControllerResult.message << "\n";
+        return 1;
+    }
+    const auto* filledControllerAsset = createFilledControllerResult.get<asset::AssetHandle>("created_asset");
+    if (filledControllerAsset == nullptr || !filledControllerAsset->isValid()) {
+        std::cerr << "asset.create_sprite_animator_controller with clip did not report a created asset.\n";
+        return 1;
+    }
+    const auto* filledController =
+        asset::AssetManager::get().getAsset<animation::SpriteAnimatorController>(*filledControllerAsset);
+    if (filledController == nullptr || filledController->entry_state != "Idle" ||
+        filledController->states.size() != 1 || filledController->states[0].clip != *filledClipAsset ||
+        filledController->states[0].loop) {
+        std::cerr << "asset.create_sprite_animator_controller with clip created unexpected controller data.\n";
         return 1;
     }
 

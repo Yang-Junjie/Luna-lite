@@ -143,6 +143,9 @@ YAML::Node serializeSceneNode(const Scene& scene, std::string_view scene_name)
     for (const auto entity : registry.view<const SpriteRendererComponent>()) {
         addEntity(entity);
     }
+    for (const auto entity : registry.view<const SpriteAnimatorComponent>()) {
+        addEntity(entity);
+    }
     for (const auto entity : registry.view<const ScriptComponent>()) {
         addEntity(entity);
     }
@@ -208,6 +211,30 @@ YAML::Node serializeSceneNode(const Scene& scene, std::string_view scene_name)
             node["OrderInLayer"] = spriteRenderer.order_in_layer;
             node["DepthTest"] = spriteRenderer.depth_test;
             serializedEntity["SpriteRendererComponent"] = node;
+        }
+
+        if (registry.all_of<SpriteAnimatorComponent>(entity)) {
+            const auto& animator = registry.get<SpriteAnimatorComponent>(entity);
+            YAML::Node node;
+            node["Controller"] = static_cast<uint64_t>(animator.controller);
+            node["CurrentState"] = animator.current_state;
+            node["StateTime"] = animator.state_time;
+            node["Speed"] = animator.speed;
+            node["Playing"] = animator.playing;
+            if (!animator.parameters.empty()) {
+                YAML::Node parameters(YAML::NodeType::Sequence);
+                for (const auto& [name, value] : animator.parameters) {
+                    YAML::Node parameterNode;
+                    parameterNode["Name"] = name;
+                    parameterNode["Bool"] = value.bool_value;
+                    parameterNode["Float"] = value.float_value;
+                    parameterNode["Int"] = value.int_value;
+                    parameterNode["Trigger"] = value.trigger_value;
+                    parameters.push_back(parameterNode);
+                }
+                node["Parameters"] = parameters;
+            }
+            serializedEntity["SpriteAnimatorComponent"] = node;
         }
 
         if (registry.all_of<ScriptComponent>(entity)) {
@@ -335,6 +362,30 @@ bool deserializeSceneNode(Scene& scene, const YAML::Node& root, std::string_view
                 spriteRenderer.sorting_layer = spriteNode["SortingLayer"].as<int32_t>(0);
                 spriteRenderer.order_in_layer = spriteNode["OrderInLayer"].as<int32_t>(0);
                 spriteRenderer.depth_test = spriteNode["DepthTest"].as<bool>(false);
+            }
+
+            if (const auto animatorNode = serializedEntity["SpriteAnimatorComponent"]) {
+                auto& animator = scene.addComponent<SpriteAnimatorComponent>(entity);
+                animator.controller = asset::AssetHandle{animatorNode["Controller"].as<uint64_t>(0)};
+                animator.current_state = animatorNode["CurrentState"].as<std::string>("");
+                animator.state_time = std::max(animatorNode["StateTime"].as<float>(0.0f), 0.0f);
+                animator.speed = animatorNode["Speed"].as<float>(1.0f);
+                animator.playing = animatorNode["Playing"].as<bool>(true);
+                if (const auto parametersNode = animatorNode["Parameters"];
+                    parametersNode && parametersNode.IsSequence()) {
+                    for (const auto& parameterNode : parametersNode) {
+                        const auto name = parameterNode["Name"].as<std::string>("");
+                        if (name.empty()) {
+                            continue;
+                        }
+                        SpriteAnimatorParameterValue value;
+                        value.bool_value = parameterNode["Bool"].as<bool>(false);
+                        value.float_value = parameterNode["Float"].as<float>(0.0f);
+                        value.int_value = parameterNode["Int"].as<int32_t>(0);
+                        value.trigger_value = parameterNode["Trigger"].as<bool>(false);
+                        animator.parameters[name] = value;
+                    }
+                }
             }
 
             if (const auto scriptNode = serializedEntity["ScriptComponent"]) {

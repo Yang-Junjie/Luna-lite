@@ -10,6 +10,8 @@ enum class AssetType {
     Script,
     Texture,
     Sprite,
+    SpriteAnimationClip,
+    SpriteAnimatorController,
     Scene,
 };
 
@@ -30,6 +32,10 @@ inline std::string assetTypeToString(AssetType type)
             return "Texture";
         case AssetType::Sprite:
             return "Sprite";
+        case AssetType::SpriteAnimationClip:
+            return "SpriteAnimationClip";
+        case AssetType::SpriteAnimatorController:
+            return "SpriteAnimatorController";
         case AssetType::Scene:
             return "Scene";
         default:
@@ -56,6 +62,12 @@ inline AssetType stringToAssetType(const std::string& type)
     }
     if (type == "Sprite") {
         return AssetType::Sprite;
+    }
+    if (type == "SpriteAnimationClip") {
+        return AssetType::SpriteAnimationClip;
+    }
+    if (type == "SpriteAnimatorController") {
+        return AssetType::SpriteAnimatorController;
     }
     if (type == "Scene") {
         return AssetType::Scene;

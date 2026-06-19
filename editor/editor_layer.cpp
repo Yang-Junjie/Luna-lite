@@ -164,6 +164,9 @@ void EditorLayer::onImGuiRender()
     m_inspector_panel.onImGuiRender();
     m_scene_panel.onImGuiRender();
     m_material_editor_panel.onImGuiRender();
+    if (m_show_animation_builder_panel) {
+        m_animation_builder_panel.onImGuiRender(&m_show_animation_builder_panel);
+    }
     m_project_settings_panel.onImGuiRender();
     m_editor_setting_panel.onImGuiRender();
     m_render_stats_panel.onImGuiRender();
@@ -240,6 +243,11 @@ void EditorLayer::drawMenuBar()
         if (ImGui::MenuItem("Stop", "F5", false, m_scene_state == SceneState::Play)) {
             stopRuntime();
         }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Window")) {
+        ImGui::MenuItem("Animation Builder", nullptr, &m_show_animation_builder_panel);
         ImGui::EndMenu();
     }
 

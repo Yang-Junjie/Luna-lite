@@ -3,14 +3,14 @@ Settings:
   EnvironmentMap: 0
   EnvironmentIntensity: 1
 Entities:
-  - Entity: 1048587
+  - Entity: 1048589
     TagComponent:
       Tag: ""
     TransformComponent:
       Translation:
+        - 0.4
         - 0
         - 0
-        - 7
       Rotation:
         - 1
         - 0
@@ -20,10 +20,6 @@ Entities:
         - 1
         - 1
         - 1
-    CameraComponent:
-      Primary: true
-      ProjectionType: Orthographic
-      Exposure: 1
   - Entity: 1048588
     TagComponent:
       Tag: YuzurihaInori
@@ -53,14 +49,14 @@ Entities:
       DepthTest: false
     ParentComponent:
       Parent: 1048589
-  - Entity: 1048589
+  - Entity: 1048587
     TagComponent:
       Tag: ""
     TransformComponent:
       Translation:
-        - 0.4
         - 0
         - 0
+        - 7
       Rotation:
         - 1
         - 0
@@ -70,3 +66,7 @@ Entities:
         - 1
         - 1
         - 1
+    CameraComponent:
+      Primary: true
+      ProjectionType: Orthographic
+      Exposure: 1

@@ -4,6 +4,8 @@
 #include "loaders/material_asset_loader.h"
 #include "loaders/mesh_asset_loader.h"
 #include "loaders/prefab_asset_loader.h"
+#include "loaders/sprite_animation_clip_loader.h"
+#include "loaders/sprite_animator_controller_loader.h"
 #include "loaders/sprite_asset_loader.h"
 #include "loaders/texture_asset_loader.h"
 
@@ -20,6 +22,8 @@ void AssetLoaderRegistry::registerDefaults()
     registerLoader(AssetType::Prefab, PrefabAssetLoader::load);
     registerLoader(AssetType::Texture, TextureAssetLoader::load);
     registerLoader(AssetType::Sprite, SpriteAssetLoader::load);
+    registerLoader(AssetType::SpriteAnimationClip, SpriteAnimationClipLoader::load);
+    registerLoader(AssetType::SpriteAnimatorController, SpriteAnimatorControllerLoader::load);
 }
 
 bool AssetLoaderRegistry::loadAll(const std::unordered_map<AssetHandle, AssetMetadata>& metadataRegistry) const
